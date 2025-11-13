@@ -14,14 +14,14 @@ app = FastAPI()
 
 @app.get("/")
 def read_root():
-    return {"message": "DocTalk AI Backend is Liverrr!"}
+    return {"message": "DocTalk AI Backend is Live!"}
 
 load_dotenv()  # Loads from .env file
 
 # Ollama configuration - ADD THIS
 OLLAMA_URL = "http://localhost:11434"
 
-# Then your Supabase client
+# supabase client
 supabase: Client = create_client(
     os.getenv("SUPABASE_URL"),
     os.getenv("SUPABASE_KEY")
@@ -30,14 +30,13 @@ supabase: Client = create_client(
 @app.get("/test-db")
 def test_db():
     try:
-        # Simple test query
         response = supabase.table('documents').select("*").limit(1).execute()
         return {"status": "Database connected!", "data": response.data}
     except Exception as e:
         return {"error": str(e)}
 
 
-# Embedding function - ADD THIS
+# embedding func
 def get_embedding(text: str) -> list:
     """Get embedding vector from Ollama"""
     payload = {
@@ -48,7 +47,6 @@ def get_embedding(text: str) -> list:
     response.raise_for_status()
     return response.json()["embedding"]
 
-# The core PDF processing pipeline
 @app.post("/upload")
 async def upload_pdf(file: UploadFile = File(...)):
     print(f"📥 Received file: {file.filename}")
@@ -73,18 +71,42 @@ async def upload_pdf(file: UploadFile = File(...)):
     
     print(f"✂️ Split into {len(chunks)} chunks")
     
-    # 4. Generate embeddings for first 2 chunks (for testing) - ADD THIS SECTION
-    print("🧠 Generating embeddings...")
-    for i, chunk in enumerate(chunks[:2]):  # Test with just 2 chunks first
+    # 4. Store document in Supabase
+    print("💾 Storing document in database...")
+    document_data = {
+        "file_name": file.filename
+    }
+    document_response = supabase.table("documents").insert(document_data).execute()
+    document_id = document_response.data[0]["id"]
+    print(f"   Document stored with ID: {document_id}")
+    
+    # 5. Generate embeddings and store chunks
+    print("🧠 Generating embeddings and storing chunks...")
+    stored_chunks = 0
+    for i, chunk in enumerate(chunks):
         embedding = get_embedding(chunk)
-        print(f"   Chunk {i+1}: Generated embedding with {len(embedding)} dimensions")
-        print(f"   First 5 values: {embedding[:5]}...")
+        
+        chunk_data = {
+            "document_id": document_id,
+            "chunk_text": chunk,
+            "embedding": embedding
+        }
+        supabase.table("document_chunks").insert(chunk_data).execute()
+        stored_chunks += 1
+        
+        # Print progress for first few chunks
+        if i < 2:
+            print(f"   Chunk {i+1}: {len(embedding)} dimensions - {embedding[:3]}...")
+    
+    print(f"💾 Successfully stored {stored_chunks} chunks in database")
     
     return {
         "filename": file.filename,
         "text_length": len(pdf_text),
         "chunk_count": len(chunks),
-        "embedding_test": f"Generated embeddings for first 2 chunks - each has {len(embedding)} dimensions"  # UPDATE THIS
+        "document_id": document_id,
+        "stored_chunks": stored_chunks,
+        "message": "PDF successfully processed and stored in database!"
     }
 
 if __name__ == "__main__":
