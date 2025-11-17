@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()  # Loads from .env file
 import supabase
 from supabase import create_client, Client  # <-- Make sure this is imported
+import google.generativeai as genai
 import os
 import io
 import requests  # <-- ADD THIS
@@ -27,6 +28,7 @@ supabase: Client = create_client(
     os.getenv("SUPABASE_KEY")
 )
 
+
 @app.get("/test-db")
 def test_db():
     try:
@@ -36,16 +38,18 @@ def test_db():
         return {"error": str(e)}
 
 
-# embedding func
 def get_embedding(text: str) -> list:
-    """Get embedding vector from Ollama"""
-    payload = {
-        "model": "nomic-embed-text", 
-        "prompt": text
-    }
-    response = requests.post(f"{OLLAMA_URL}/api/embeddings", json=payload)
-    response.raise_for_status()
-    return response.json()["embedding"]
+    """Get embedding vector using Google's embedding model"""
+    try:
+        result = genai.embed_content(
+            model="models/embedding-001",
+            content=text
+            # No task_type needed - works for both documents and queries
+        )
+        return result['embedding']
+    except Exception as e:
+        print(f"Error getting embedding: {e}")
+        return [0.0] * 768
 
 @app.post("/upload")
 async def upload_pdf(file: UploadFile = File(...)):
@@ -152,26 +156,41 @@ async def chat_with_document(question: str, document_id: str):
         "answer": answer
     }
 
-def generate_answer(question: str, context: str) -> str:
-    """Generate answer using Ollama chat model"""
-    prompt = f"""Based on the following context, answer the user's question.
+genai.configure(api_key=os.getenv("GEN_AI_KEY"))
 
-Context:
+def generate_answer(question: str, context: str) -> str:
+    """Generate answer using Google Gemini with RAG optimization"""
+    
+    # More specific prompt for better RAG performance
+    prompt = f"""You are a helpful AI assistant. Answer the question based ONLY on the provided context.
+
+CONTEXT:
 {context}
 
-Question: {question}
+QUESTION: {question}
 
-Answer:"""
+INSTRUCTIONS:
+- Answer using only the information from the context above
+- If the context doesn't contain the answer, say "I don't have enough information to answer this question"
+- Keep your response concise and relevant to the question
+- Do not make up information or use external knowledge
+
+ANSWER:"""
     
-    payload = {
-        "model": "deepseek-r1:14b",
-        "prompt": prompt,
-        "stream": False
-    }
-    
-    response = requests.post(f"{OLLAMA_URL}/api/generate", json=payload)
-    response.raise_for_status()
-    return response.json()["response"]
+    try:
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        response = model.generate_content(prompt)
+        
+        # Handle empty responses gracefully
+        if response.text:
+            return response.text
+        else:
+            return "No response generated from the AI model."
+            
+    except Exception as e:
+        # Log the error and return a user-friendly message
+        print(f"Gemini API error: {e}")
+        return f"Error generating response: {str(e)}"
 
 if __name__ == "__main__":
     import uvicorn

@@ -1,7 +1,9 @@
 --start ollama server - from anywhere
 ollama serve
 
---run uvicorn app from backend
+--run uvicorn app -- diff commands for mac/windows -- prompt vs ps
 cd backend
-source venv/bin/activate  
-uvicorn main:app --reload --port 8000
+source venv/bin/activate   --run if on mac
+.\venv\Scripts\Activate.ps1 --run this if on windows ps
+.\venv\Scripts\activate.bat -- or this if on windows prompt
+uvicorn main:app --reload --port 8000 -- this runs uvicorn
