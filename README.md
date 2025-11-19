@@ -95,9 +95,9 @@
 <h4>Setup Instructions</h4>
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/doctalk-ai/doctalk-ai.git
-cd doctalk-ai
+# 1. Fork and clone the repository
+# First, click "Fork" on GitHub, then:
+git clone https://github.com/YOUR_USERNAME/doctalk-ai.git
 
 # 2. Set up API Keys
 ## Google AI Studio (Gemini API)
