@@ -67,30 +67,23 @@ async def upload_pdf(file: UploadFile = File(...)):
     # 1. Read file contents
     contents = await file.read()
     
-    # 2. Extract text with pypdf or plain text
+    # 2. Extract text with pypdf 
     if file.content_type == "application/pdf":
-        file_text = "" # Initialize empty string to hold text andf avoid reference before assignment
+        pdf_text = "" # Initialize empty string to hold text andf avoid reference before assignment
         reader = PdfReader(io.BytesIO(contents))
         for page in reader.pages: 
-            file_text += page.extract_text() + "\n"
-            print(f" Extracted {len(file_text)} characters of text")
-    elif file.content_type == "text/plain":
-        # Try UTF-8 first, if that fails, try Turkish Windows encoding
-        try:
-            file_text = contents.decode("utf-8")
-        except UnicodeDecodeError:
-            file_text = contents.decode("cp1254")  # Common for Turkish Windows files
-            print(f" Extracted {len(file_text)} characters of text")
+            pdf_text += page.extract_text() + "\n"
+            print(f" Extracted {len(pdf_text)} characters of text")
     else:
-        return {"error": "Unsupported file type. Please upload a PDF or TXT file."}
+        return {"error": "Unsupported file type. Please upload a PDF file."}
             
-    print(f"Extracted {len(file_text)} characters from TXT")   
+    print(f"Extracted {len(pdf_text)} characters from pdf")   
     # 3. Chunk text with LangChain
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=2000, # chunk size can be change as needed based on use case and model limits
         chunk_overlap=200 # overlap to maintain context between chunks 
     )
-    chunks = text_splitter.split_text(file_text)
+    chunks = text_splitter.split_text(pdf_text)
     
     print(f" Split into {len(chunks)} chunks")
     
@@ -135,7 +128,7 @@ async def upload_pdf(file: UploadFile = File(...)):
     
     return {
         "filename": file.filename,
-        "text_length": len(file_text),
+        "text_length": len(pdf_text),
         "chunk_count": len(chunks),
         "document_id": document_id,
         "stored_chunks": stored_chunks,
