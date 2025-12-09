@@ -102,7 +102,7 @@ async def upload_pdf(file: UploadFile = File(...)):
     for i, chunk in enumerate(chunks):
         if i > 0:
             await asyncio.sleep(2)  # To avoid rate limits
-        embedding = get_embedding(chunk)
+        embedding = await get_embedding(chunk)
         if not any(embedding): # Check for zero vector indicating an error
             print(f"  Skipping chunk {i+1} due to embedding error")
             continue
@@ -141,7 +141,7 @@ async def chat_with_document(question: str, document_id: str):
     print(f"querying document: {document_id}")
     
     # 1. embed the question
-    question_embedding = get_embedding(question)
+    question_embedding = await get_embedding(question)
     print(f"🧠 Question embedded with {len(question_embedding)} dimensions")
     
     # 2. locate similar chunks using vector search
