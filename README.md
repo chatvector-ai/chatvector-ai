@@ -1,6 +1,6 @@
-# Doctalk-AI: Open Source Document Intelligence
+# ChatVector-AI: Open Source Document Intelligence
 
-> **Have conversations with your documents.** Doctalk-AI is a RAG (Retrieval-Augmented Generation) platform that lets you upload PDFs and ask questions in natural language.
+> **Have conversations with your documents.** ChatVector-AI is a RAG (Retrieval-Augmented Generation) platform that lets you upload PDFs and ask questions in natural language.
 
 <p align="center">
   <img src="https://img.shields.io/badge/Status-MVP%20Ready-brightgreen" alt="Status">
@@ -8,6 +8,13 @@
   <img src="https://img.shields.io/badge/Python-FastAPI-blue" alt="Python FastAPI">
   <img src="https://img.shields.io/badge/AI-RAG%20Pipeline-orange" alt="AI RAG">
 </p>
+
+
+## 🔗 Quick Links
+- **🚀 View Open [Issues](https://github.com/chatvector-ai/chatvector-ai/issues) & [Project Board](https://github.com/orgs/chatvector-ai/projects/2)**  
+- **[📘 Contributing Guide](CONTRIBUTING.md)** - How to submit your first PR.
+- **[🎥 Setup Video](YOUR_LOOM_LINK_HERE)** - Get the project running in 5 minutes.
+- **[💬 Join Discussions](https://github.com/chatvector-ai/chatvector-ai/discussions)** - Say hello!
 `
 <h3>🚀 Current Status: Basic Backend/MVP!</h3>
 
@@ -97,7 +104,7 @@
 ```bash
 # 1. Fork and clone the repository
 # First, click "Fork" on GitHub, then:
-git clone https://github.com/YOUR_USERNAME/doctalk-ai.git
+git clone https://github.com/YOUR_USERNAME/chatvector-ai.git
 
 # 2. Set up API Keys
 ## Google AI Studio (Gemini API)
@@ -244,7 +251,7 @@ The frontend will run on http://localhost:3000
 
 </div>
 
-<br> <h2><Strong>🤝 Contribute to Doctalk-AI</Strong></h2>
+<br> <h2><Strong>🤝 Contribute to ChatVector-AI</Strong></h2>
 
 We are actively seeking contributors of all types and skill levels! This is your chance to get involved with a cutting-edge AI project and help build something amazing from the ground up.
 
@@ -261,7 +268,7 @@ We are actively seeking contributors of all types and skill levels! This is your
 
 📥 Get Started Now!
 
-<ol> <li>📖 <strong>Check out our <a href="CONTRIBUTING.md">Contributing Guide</a></strong></li> <li>🎯 <strong>Look for issues labeled <a href="https://github.com/doctalk-ai/doctalk-ai/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22">good first issue</a></strong></li> <li>👋 <strong>Introduce yourself in the <a href="https://github.com/doctalk-ai/doctalk-ai/discussions">project discussions</a></strong></li> <li>🚀 <strong>Submit your first PR and join the team!</strong></li> </ol><p align="center"> <strong>No contribution is too small! Whether you're fixing a typo or building a major feature, we welcome your help.</strong> </p>
+<ol> <li>📖 <strong>Check out our <a href="CONTRIBUTING.md">Contributing Guide</a></strong></li> <li>🎯 <strong>Look for issues labeled <a href="https://github.com/chatvector-ai/chatvector-ai/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22">good first issue</a></strong></li> <li>👋 <strong>Introduce yourself in the <a href="https://github.com/chatvector-ai/chatvector-ai/discussions">project discussions</a></strong></li> <li>🚀 <strong>Submit your first PR and join the team!</strong></li> </ol><p align="center"> <strong>No contribution is too small! Whether you're fixing a typo or building a major feature, we welcome your help.</strong> </p>
 
 <div align="center">
 
