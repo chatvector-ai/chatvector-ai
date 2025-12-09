@@ -17,7 +17,7 @@ app = FastAPI()
 
 @app.get("/")
 def read_root():
-    return {"message": "DocTalk AI Backend is Live!"}
+    return {"message": "ChatVector AI Backend is Live!"}
 
 load_dotenv()  # Loads from .env file
 

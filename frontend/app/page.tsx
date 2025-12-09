@@ -5,7 +5,7 @@ export default function Home() {
         {/* Giant Header */}
         <div className="text-center mb-16">
           <h1 className="text-7xl md:text-9xl font-black bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-6">
-            DocTalk AI
+            ChatVector AI
           </h1>
           <p className="text-2xl md:text-3xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto">
             Have conversations with your documents
@@ -30,7 +30,7 @@ export default function Home() {
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <a
-                  href="https://github.com/doctalk-ai/doctalk-ai"
+                  href="https://github.com/chatvector-ai/chatvector-ai"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-semibold hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors"
@@ -38,7 +38,7 @@ export default function Home() {
                   📁 View on GitHub
                 </a>
                 <a
-                  href="https://github.com/doctalk-ai/doctalk-ai/issues"
+                  href="https://github.com/chatvector-ai/chatvector-ai/issues"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center px-6 py-3 border-2 border-gray-900 dark:border-white text-gray-900 dark:text-white rounded-lg font-semibold hover:bg-gray-900 hover:text-white dark:hover:bg-white dark:hover:text-gray-900 transition-colors"

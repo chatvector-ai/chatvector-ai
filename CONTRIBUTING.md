@@ -1,143 +1,121 @@
-# Contributing to Doctalk-AI
+# Contributing to ChatVector-AI
 
 ## 🤝 First Time Contributing? Welcome!
 
-**It's normal to feel intimidated** - we've all been there! This guide will walk you through the process step-by-step.
+There is a range of tasks for beginners to more advanced developers
 
-## 🚀 How to Find Something to Do
+This guide will walk you through the process step-by-step.
 
 ### Start Here:
 
-1. **Look for [`good first issue`](https://github.com/doctalk-ai/doctalk-ai/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)** - These are specially tagged for beginners
-2. **Check the [Project Board](https://github.com/doctalk-ai/doctalk-ai/projects/1)** - See what's being worked on
+1. **Check the issues tab: [`good first issue`](https://github.com/chatvector-ai/chatvector-ai/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)** - These are specially tagged for beginners
+2. **Check the [Project Board](https://github.com/orgs/chatvector-ai/projects/2)** - See what's being worked on
 3. **Found a bug?** Open an issue and fix it!
-4. **Have an idea?** Start a discussion first
+4. **Have an idea?** Start a [Discussion](https://github.com/chatvector-ai/chatvector-ai/discussions/landing) first
 
 ### Still Unsure?
 
-- **Comment on an issue** "I'd like to work on this!"
-- **Ask in Discussions** "What's a good starting point?"
-- **We'll help you** find the perfect first contribution
+1. Comment on an issue
+2. Ask for help in - [Discussions](https://github.com/chatvector-ai/chatvector-ai/discussions/landing)
+3. We'll help you - find the perfect first contribution
 
-## 📝 Branch Naming Convention
+  ---
 
-**Please use this format:** `type/description`
+## 📝 Branch and Commit Naming Convention
 
-### Types:
+**Format:** `type/description`
 
+**Types:**
 - `feat/` - New features (e.g., `feat/add-dark-mode`)
 - `fix/` - Bug fixes (e.g., `fix/upload-error-handling`)
 - `docs/` - Documentation (e.g., `docs/update-readme`)
-- `style/` - Code style/formatting
-- `refactor/` - Code restructuring
+- `refactor/` - Code restructuring (e.g., `refactor/backend-modules`)
 
-### Examples:
 
-```bash
-git checkout -b feat/add-txt-file-support
-git checkout -b fix/chat-endpoint-error
-git checkout -b docs/improve-setup-guide
-✅ Commit Message Convention
-Use this format: type: description
 
-Types:
-feat: - New feature
+Quick checklist:
+- Branch name follows convention
+- Commits are focused and descriptive
 
-fix: - Bug fix
+Maintainers should review and merge according to project policy.
 
-docs: - Documentation
+---
 
-style: - Formatting, missing semi-colons
+## Variable Naming 
 
-refactor: - Code restructuring
-
-test: - Adding tests
-
-Examples:
-bash
-git commit -m "feat: add support for .txt file uploads"
-git commit -m "fix: handle empty PDF files gracefully"
-git commit -m "docs: update API endpoint examples"
-💡 Code Quality Tips
-Variable Naming:
-typescript
-// 👍 Good
+**TypeScript/JavaScript:**
+```javascript
+// 👍 Good - Clear and descriptive
 const uploadedDocuments = []
 const handleFileUpload = () => {}
 
-// 👎 Avoid
+// 👎 Avoid - Too vague
 const docs = []
 const upload = () => {}
-Python Best Practices:
-python
-# 👍 Good
+```
+
+**Python:**
+```python
+# 👍 Good - Type hints and docstrings
 def process_document_chunks(document_text: str) -> List[str]:
     """Split document into chunks for processing."""
     pass
 
-# 👎 Avoid
-def chunk(doc):
-    pass
-🔄 Pull Request Process
-Fork the repository
+# 👎 Avoid - Unclear purpose
+def chunk(
+```
 
-Create your feature branch (git checkout -b feat/amazing-feature)
+---
 
-Commit your changes (git commit -m 'feat: add amazing feature')
+## PR Process
+**Check the [Readme](https://github.com/chatvector-ai/chatvector-ai/blob/main/README.md)** - For instructions on project setup
 
-Push to the branch (git push origin feat/amazing-feature)
+### 1. Create Your Feature Branch
+```
+**First, fork & clone the repo.** Then, from your local clone:
+# Add the main project as "upstream" (do this once)
+git remote add upstream https://github.com/chatvector-ai/chatvector-ai.git
 
-Open a Pull Request
+# Get latest changes from the main project
+git checkout main
+git pull upstream main
 
-PR Description Template:
-markdown
+# Create and switch to your feature branch
+git checkout -b type/your-feature-name
+```
+### 2. Make & Commit Your Changes
+```
+# Make your code changes...
+
+# Stage and commit
+git add .
+git commit -m "feat: add your feature description"
+```
+### 3. Push to Your Fork
+```
+# Push to YOUR fork (origin)
+git push origin feat/your-feature-name
+```
+
+### 4. Open Pull Request
+1. Go to YOUR fork: github.com/YOUR_USERNAME/chatvector-ai
+2. Look for: "Your recently pushed branches: feat/your-feature-name"
+3. Click "Compare & pull request"
+4. This creates PR from your fork → original repo
+
+### 5. Fill PR Description
+```
 ## What does this PR do?
-- [ ] Adds feature X
-- [ ] Fixes bug Y
 
 ## How was it tested?
-- [ ] Tested locally
-- [ ] Added unit tests
+- [ ] Tested locally with FastAPI `/docs`
+- [ ] Checked existing functionality still works
 
 ## Screenshots (if UI changes):
-🎥 Watch & Learn
-Check out our video tutorial showing:
-
-How to pick your first issue
-
-The complete PR process from start to finish
-
-What we look for in code reviews
-
-🗂️ Project Board
-We use a Kanban-style board to track progress:
-
-Backlog - Ideas and future features
-
-To Do - Ready for development
-
-In Progress - Currently being worked on
-
-Review - PRs waiting for review
-
-Done - Completed and merged
-
-🆘 Getting Help
-Stuck? Don't suffer in silence!
-
-💬 Comment on the issue - we'll help you through it
-
-💬 Start a Discussion - ask general questions
-
-🔔 Tag @admaloch - for direct assistance
-
-🌟 Your First PR
-We celebrate first-time contributors! Your PR will get:
-
-⚡ Quick review and feedback
-
-🎉 Welcome message and shout-out
-
-📚 Gentle guidance if needed
-
 ```
+
+🎯 Before Submitting
+1. Test your changes manually using FastAPI /docs
+2. Verify existing functionality still works
+3. Check your code runs without errors
+4. Update documentation if needed
