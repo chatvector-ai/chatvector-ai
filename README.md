@@ -12,9 +12,10 @@
 
 ## 🔗 Quick Links
 - **🚀 View Open [Issues](https://github.com/chatvector-ai/chatvector-ai/issues) & [Project Board](https://github.com/orgs/chatvector-ai/projects/2)**  
-- **[📘 Contributing Guide](CONTRIBUTING.md)** - How to submit your first PR.
-- **[🎥 Setup Video](YOUR_LOOM_LINK_HERE)** - Get the project running in 5 minutes.
+- [🎥 Setup Video](https://www.loom.com/share/8635d7e0a5a64953a4bf028360b74e25) -- get up and running in 10 minutes
+- **[📘 Contributing Guide](CONTRIBUTING.md)** - **[Video](https://www.loom.com/share/c41bdbff541f47d49efcb48920cba382) - How to submit your first PR.
 - **[💬 Join Discussions](https://github.com/chatvector-ai/chatvector-ai/discussions)** - Say hello!
+- **[📘 Development notes](DEVELOPMENT.md)** - Quick notes/reminders while working on a feature
 `
 <h3>🚀 Current Status: Basic Backend/MVP!</h3>
 
@@ -187,8 +188,9 @@ BEGIN
 END;
 $$;
 
-# 7. Launch the backend
-uvicorn main:app --reload --port 8000
+# 7. Return to project root and launch the backend
+cd..
+uvicorn backend.main:app --reload --port 8000
 ```
 
 <h3>Test the API</h3>
@@ -266,11 +268,8 @@ We are actively seeking contributors of all types and skill levels! This is your
 
 <ul> <li>🏗️ <strong>Refactor backend architecture</strong> - Split the monolith into clean modules</li> <li>🔐 <strong>Implement Supabase authentication</strong> - Add user accounts and security</li> <li>🐳 <strong>Add Docker & deployment scripts</strong> - Make deployment seamless</li> <li>🧠 <strong>Advanced RAG optimizations</strong> - Improve AI response quality</li> <li>⚡ <strong>Performance optimization</strong> - Speed up vector search and processing</li> </ul>
 
-📥 Get Started Now!
 
-<ol> <li>📖 <strong>Check out our <a href="CONTRIBUTING.md">Contributing Guide</a></strong></li> <li>🎯 <strong>Look for issues labeled <a href="https://github.com/chatvector-ai/chatvector-ai/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22">good first issue</a></strong></li> <li>👋 <strong>Introduce yourself in the <a href="https://github.com/chatvector-ai/chatvector-ai/discussions">project discussions</a></strong></li> <li>🚀 <strong>Submit your first PR and join the team!</strong></li> </ol><p align="center"> <strong>No contribution is too small! Whether you're fixing a typo or building a major feature, we welcome your help.</strong> </p>
-
-<div align="center">
+<div >
 
 ⭐ Star the repo to show your interest and stay updated!
 

@@ -6,6 +6,9 @@ There is a range of tasks for beginners to more advanced developers
 
 This guide will walk you through the process step-by-step.
 
+- Watch our [Contributor Video Guide](https://www.loom.com/share/c41bdbff541f47d49efcb48920cba382) 
+- For initial project setup see -- **[📘 Readme](README.md) -- [🎥 Setup Video](https://www.loom.com/share/8635d7e0a5a64953a4bf028360b74e25)
+
 ### Start Here:
 
 1. **Check the issues tab: [`good first issue`](https://github.com/chatvector-ai/chatvector-ai/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)** - These are specially tagged for beginners
@@ -76,12 +79,16 @@ def chunk(
 # Add the main project as "upstream" (do this once)
 git remote add upstream https://github.com/chatvector-ai/chatvector-ai.git
 
-# Get latest changes from the main project
+# Sync your local main with the latest upstream code
 git checkout main
-git pull upstream main
+git fetch upstream
+git merge upstream/main
+
+# Update your fork's main so it stays in sync
+git push origin main
 
 # Create and switch to your feature branch
-git checkout -b type/your-feature-name
+git checkout -b feat/your-feature-name
 ```
 ### 2. Make & Commit Your Changes
 ```
