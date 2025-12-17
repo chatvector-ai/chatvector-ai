@@ -2,7 +2,7 @@
 
 ## notes on running backend
 - cd backend
-- python -m venv venv
+- python -m venv venv                 
 - source venv/bin/activate            # On Mac
 - venv\Scripts\activate               # On Windows
 - pip install -r requirements.txt     # run if pr merged
