@@ -9,10 +9,6 @@
 - cd..                                # start backend from project root
 - uvicorn backend.main:app --reload --port 8000
 
-## notes on running frontend
-- cd frontend
-- npm install                         # run if pr merged
-- npm run dev
 
 ## notes on creating a new feature branch
 - git checkout main                   # switch to main
@@ -27,3 +23,8 @@
 - git commit -m "type: add your comment description"
 - git push origin type/your-feature-name
 - #go to fork and finalize PR request
+
+## notes on running frontend
+- cd frontend-demo
+- npm install                         # run if pr merged
+- npm run dev

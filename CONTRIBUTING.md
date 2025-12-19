@@ -46,17 +46,6 @@ Maintainers should review and merge according to project policy.
 
 ## Variable Naming 
 
-**TypeScript/JavaScript:**
-```javascript
-// 👍 Good - Clear and descriptive
-const uploadedDocuments = []
-const handleFileUpload = () => {}
-
-// 👎 Avoid - Too vague
-const docs = []
-const upload = () => {}
-```
-
 **Python:**
 ```python
 # 👍 Good - Type hints and docstrings
