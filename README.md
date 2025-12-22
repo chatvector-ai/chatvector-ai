@@ -15,6 +15,59 @@ Think of it as an engine developers can use to build document-aware applications
 ---
 
 ## 🔗 Quick Links
+- **🚀 View Open [Issues](https://github.com/chatvector-ai/chatvector-ai/issues) & [Project Board](https://github.com/orgs/chatvector-ai/projects/2)**  
+- [🎥 Setup Video](https://www.loom.com/share/8635d7e0a5a64953a4bf028360b74e25) -- get up and running in 10 minutes
+- **[📘 Contributing Guide](CONTRIBUTING.md)** - **[Video](https://www.loom.com/share/c41bdbff541f47d49efcb48920cba382) - How to submit your first PR.
+- **[💬 Join Discussions](https://github.com/chatvector-ai/chatvector-ai/discussions)** - Say hello!
+- **[📘 Development notes](DEVELOPMENT.md)** - Quick notes/reminders while working on a feature
+`
+<h3>🚀 Current Status: Basic Backend/MVP!</h3>
+
+**The core RAG engine is complete and working!** We have a functional FastAPI backend that handles PDF uploads, vectorization, and AI-powered Q&A.
+
+<table>
+  <tr>
+    <td><strong>What's Working (MVP)</strong></td>
+    <td><strong>Backend Improvements Needed</strong></td>
+    <td><strong>Frontend & Features</strong></td>
+  </tr>
+  <tr>
+    <td>
+      ✅ PDF Text Extraction<br>
+      ✅ Basic Text Chunking<br>
+      ✅ Vector Embeddings<br>
+      ✅ Semantic Search<br>
+      ✅ AI-Powered Answers<br>
+      ✅ Supabase Integration
+    </td>
+    <td>
+      🚧 Advanced Chunking Strategies<br>
+      🚧 Error Handling & Logging<br>
+      🚧 API Rate Limiting<br>
+      🚧 Backend Refactoring<br>
+      🚧 Performance Optimization<br>
+      🚧 Proper Authentication
+    </td>
+    <td>
+      🚧 Beautiful Frontend<br>
+      🚧 User Authentication UI<br>
+      🚧 Multiple File Types<br>
+      🚧 Chat Interface<br>
+      🚧 Deployment Ready
+    </td>
+  </tr>
+</table>
+
+**Now, we need your help to build the rest!** This is a community-driven project from the ground up.
+
+## 🛠 Technology Stack Architecture
+
+<h3>Frontend Layer</h3>
+<ul>
+  <li><strong>Next.js</strong> - React framework with App Router, SSR, and optimal performance</li>
+  <li><strong>Deployment:</strong> Vercel for seamless CI/CD and global edge network</li>
+  <li><strong>Features:</strong> Responsive UI, real-time chat interface, drag-and-drop uploads</li>
+</ul>
 
 * **🚀 View Open [Issues](https://github.com/chatvector-ai/chatvector-ai/issues) & [Project Board](https://github.com/orgs/chatvector-ai/projects/2)**
 * [🎥 Demo Video](https://www.loom.com/share/b7be8b165031450aad650144a71c1a10)
@@ -284,11 +337,8 @@ Frontend contributions are welcome but considered **non-core**.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
----
 
-## 📄 License
-
-MIT License
+<div >
 
 ⭐ Star the repo to follow progress and support the project.
 
