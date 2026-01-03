@@ -149,9 +149,14 @@ GEN_AI_KEY=your_google_ai_studio_api_key_here
 # Replace each placeholder with the actual values from Step #2
 
 # 4. Create and activate virtual environment
-python -m venv venv
-# On Mac: source venv/bin/activate
+
+# On Mac/Linux: 
+python3 -m venv venv   #create env
+source venv/bin/activate  #activate env
+
 # On Windows: venv\Scripts\activate
+python -m venv venv   #create env 
+venv\Scripts\activate  #activate env
 
 # 5. Install dependencies
 pip install -r requirements.txt
