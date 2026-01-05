@@ -1,6 +1,7 @@
 # backend/services/db_service.py
 from backend.core.clients import supabase_client
 import logging
+from backend.services.embedding_service import get_embedding
 
 logger = logging.getLogger(__name__)
 
@@ -15,16 +16,25 @@ async def create_document(file_name: str):
         logger.error(f"Failed to create document: {e}")
         raise
 
-async def insert_chunk(document_id: str, chunk_text: str, embedding):
-    """Insert a single chunk for a document."""
+async def insert_chunk(doc_id: str, chunk_text: str, embedding):
+    """
+    Inserts a single document chunk into persistent storage.
+    -  low-level does not perform embedding generation, batching, retries, or orchestration.
+    """
     try:
-        supabase_client.table("document_chunks").insert({
-            "document_id": document_id,
+        result = supabase_client.table("document_chunks").insert({
+            "document_id": doc_id,
             "chunk_text": chunk_text,
             "embedding": embedding
         }).execute()
-        logger.debug(f"Inserted chunk for document ID {document_id}")
+
+        return result.data[0]["id"]
+
     except Exception as e:
-        logger.error(f"Failed to insert chunk for document {document_id}: {e}")
+        logger.error(f"Failed to create chunk for document {doc_id}: {e}")
         raise
+
+
+
+
 

@@ -8,7 +8,6 @@ logger = logging.getLogger(__name__)
 
 genai.configure(api_key=config.GEN_AI_KEY)
 
-
 async def get_embedding(text: str):
     for attempt in range(3):
         logger.debug(f"Attempt {attempt + 1} to get embedding for text.")
