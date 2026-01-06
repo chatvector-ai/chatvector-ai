@@ -9,28 +9,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.post("/chat")
-async def chat(question: str, doc_id: str):
-    
+async def chat(question: str, doc_id: str):   
     logger.info(f"Starting chat for file doc id {doc_id})")
-
     # step 1: Embed query
     query_embedding = await get_embedding(question)
-
     # step 2: vector search
     matching_chunks = await locate_matching_chunks(doc_id, query_embedding, match_count=5)
-
     # step 3: prepare context for llm
-    chunks = matching_chunks.data
-    context = build_context_from_chunks(chunks)
-
+    context = build_context_from_chunks(matching_chunks)
     # step 4: generate answer
     answer = await generate_answer(question, context)
-
     logger.info(f"Answer generated successfully for doc id {doc_id}.")
-
     return {
         "question": question,
-        "chunks": len(chunks),
+        "chunks": len(matching_chunks),
         "answer": answer
     }
 
