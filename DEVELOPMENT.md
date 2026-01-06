@@ -1,29 +1,56 @@
-# Development notes
+# Development Guide
 
-## notes on running backend
-- cd backend
-- python -m venv venv
-- source venv/bin/activate            # On Mac
-- venv\Scripts\activate               # On Windows
-- pip install -r requirements.txt     # run if pr merged
-- cd..                                # start backend from project root
-- uvicorn backend.main:app --reload --port 8000
+This guide is intended as a quick reference for common development workflows
+(e.g. starting servers, creating branches, submitting PRs). Initial setup is
+covered in the main README.
 
-## notes on running frontend
-- cd frontend
-- npm install                         # run if pr merged
-- npm run dev
 
-## notes on creating a new feature branch
-- git checkout main                   # switch to main
-- git fetch upstream                  # get latest from upstream
-- git merge upstream/main             # update your local main
-- git push origin main                # update your fork’s main
-- git checkout -b type/your-feature-name
-- git branch                          #confirm you are in the new branch
+## 1. Running the backend
 
-## notes on submitting pr request
-- git add .                   
-- git commit -m "type: add your comment description"
-- git push origin type/your-feature-name
-- #go to fork and finalize PR request
+```
+cd backend
+## mac/linux source venv/bin/activate
+or    
+## venv\Scripts\activate
+pip install -r requirements.txt        # run if dependencies changed
+cd ..
+uvicorn backend.main:app --reload --port 8000
+``` 
+
+## 2. Running the frontend
+
+```
+cd frontend
+npm install
+npm run dev
+```
+
+## 3. Creating a new feature branch (OSS workflow)
+Always branch from an up-to-date main.
+
+```
+git checkout main
+git fetch upstream
+git pull upstream main
+git push origin main
+git checkout -b type/your-feature-name
+git branch
+```
+
+## 4. Submitting a pull request
+Before committing, ensure your branch is rebased on the latest main:
+
+```
+git fetch upstream
+git rebase upstream/main
+
+# Resolve any conflicts, then:
+git add .
+git commit -m "type: concise description of change"
+git push --force-with-lease origin type/your-feature-name
+```
+
+## Open a pull request from:
+```
+your-fork:type/your-feature-name → upstream:main
+```

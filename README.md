@@ -139,17 +139,19 @@ git clone https://github.com/YOUR_USERNAME/chatvector-ai.git
 # - Get API key - project settings > API Keys > Click "Create new api keys" > Publishable Key
 
 # 3. Set up environment
-
 # Navigate to the backend folder
 cd backend
-# Create a .env file and add the following lines:
+
+# Create a .env file in backend/ and add the following lines:
 SUPABASE_URL=your_supabase_project_url_here
 SUPABASE_KEY=your_supabase_anon_public_key_here
 GEN_AI_KEY=your_google_ai_studio_api_key_here
+LOG_LEVEL=INFO
+LOG_USE_UTC=false
+
 # Replace each placeholder with the actual values from Step #2
 
 # 4. Create and activate virtual environment
-
 # On Mac/Linux: 
 python3 -m venv venv   #create env
 source venv/bin/activate  #activate env

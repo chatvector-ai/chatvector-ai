@@ -64,20 +64,11 @@ def chunk(
 
 ### 1. Create Your Feature Branch
 ```
-**First, fork & clone the repo.** Then, from your local clone:
-# Add the main project as "upstream" (do this once)
-git remote add upstream https://github.com/chatvector-ai/chatvector-ai.git
+Follow the branching workflow described here:
 
-# Sync your local main with the latest upstream code
-git checkout main
-git fetch upstream
-git merge upstream/main
+📄 See: `development.md → Creating a new feature branch`
 
-# Update your fork's main so it stays in sync
-git push origin main
-
-# Create and switch to your feature branch
-git checkout -b feat/your-feature-name
+This document focuses on contribution rules and expectations.
 ```
 ### 2. Make & Commit Your Changes
 ```
