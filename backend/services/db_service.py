@@ -1,7 +1,5 @@
-# backend/services/db_service.py
 from backend.core.clients import supabase_client
 import logging
-from backend.services.embedding_service import get_embedding
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +30,21 @@ async def insert_chunk(doc_id: str, chunk_text: str, embedding):
 
     except Exception as e:
         logger.error(f"Failed to create chunk for document {doc_id}: {e}")
+        raise
+
+
+async def locate_matching_chunks(doc_id: int, query_embedding, match_count = 5):
+    """Insert a new document and return its ID."""
+    try:
+        result = supabase_client.rpc("match_chunks", {
+            "query_embedding": query_embedding,
+            "match_count": 5,
+            "filter_document_id": doc_id
+        }).execute()
+        logger.debug(f"Vector search returned {len(result.data)} chunks for document ID {doc_id}")
+        return result.data
+    except Exception as e:
+        logger.error(f"Failed to create document: {e}")
         raise
 
 

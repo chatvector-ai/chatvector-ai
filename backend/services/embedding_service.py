@@ -1,7 +1,6 @@
 import asyncio
 import google.generativeai as genai
 from backend.core.config import config
-from backend.core.logging_config import setup_logging
 import logging
 
 logger = logging.getLogger(__name__)
