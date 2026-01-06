@@ -70,27 +70,14 @@ Follow the branching workflow described here:
 
 This document focuses on contribution rules and expectations.
 ```
-### 2. Make & Commit Your Changes
-```
-# Make your code changes...
 
-# Stage and commit
-git add .
-git commit -m "feat: add your feature description"
-```
-### 3. Push to Your Fork
-```
-# Push to YOUR fork (origin)
-git push origin feat/your-feature-name
-```
-
-### 4. Open Pull Request
+### 2. Open Pull Request
 1. Go to YOUR fork: github.com/YOUR_USERNAME/chatvector-ai
 2. Look for: "Your recently pushed branches: feat/your-feature-name"
 3. Click "Compare & pull request"
 4. This creates PR from your fork → original repo
 
-### 5. Fill PR Description
+### 3. Fill PR Description
 ```
 ## What does this PR do?
 
