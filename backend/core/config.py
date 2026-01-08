@@ -1,20 +1,21 @@
-import os
 from pathlib import Path
 from dotenv import load_dotenv
 import logging
+import sys, os
 
 logger = logging.getLogger(__name__)
 
-# Load environment variables from a .env file located next to this config module
-dotenv_path = Path(__file__).resolve().parent / ".env"
-if dotenv_path.exists():
-    load_dotenv(dotenv_path)
-    logger.debug(f"Loaded environment variables from {dotenv_path}")
-else:
-    # Fall back to the default behavior (cwd .env or system envs)
-    load_dotenv()
-    logger.debug("No local .env found next to config.py; falling back to default load_dotenv()")
+# Backend root is the expected location of .env
+ROOT_DIR = Path(__file__).resolve().parent.parent  # core/ -> backend/
+dotenv_path = ROOT_DIR / ".env"
 
+if not dotenv_path.exists():
+    logger.error(f".env file not found at expected location: {dotenv_path}")
+    sys.exit(1)  # fail fast, so contributors know immediately
+
+# Load environment variables from backend root/.env
+load_dotenv(dotenv_path)
+logger.debug(f"Loaded environment variables from {dotenv_path}")
 
 class Settings:
     SUPABASE_URL: str = os.getenv("SUPABASE_URL")
@@ -31,7 +32,5 @@ class Settings:
     @property
     def supabase_key(self) -> str:
         return self.SUPABASE_KEY
-
-
 
 config = Settings()
