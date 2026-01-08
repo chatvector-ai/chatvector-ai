@@ -14,6 +14,25 @@ Think of it as an engine developers can use to build document-aware applications
 
 ---
 
+## 📌 Table of Contents
+
+- [Quick Links](#-quick-links)
+- [What is ChatVector-AI?](#-what-is-chatvector-ai)
+- [Who is this for?](#-who-is-this-for)
+- [Current Status](#-current-status)
+- [Architecture Overview](#-architecture-overview)
+  - [Backend Layer (Core)](#backend-layer-core)
+  - [AI & Retrieval Layer](#ai--retrieval-layer)
+  - [Data Layer](#data-layer)
+  - [Reference Frontend (Non-Core)](#reference-frontend-non-core)
+- [Quick Start: Run in 5 Minutes](#-quick-start-run-in-5-minutes)
+  - [Backend Setup](#-backend-setup)
+  - [Frontend Setup](#-frontend-setup)
+- [Contributing](#-contributing)
+- [License](#-license)
+
+---
+
 ## 🔗 Quick Links
 
 * **🚀 View Open [Issues](https://github.com/chatvector-ai/chatvector-ai/issues) & [Project Board](https://github.com/orgs/chatvector-ai/projects/2)**
