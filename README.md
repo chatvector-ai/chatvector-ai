@@ -19,6 +19,7 @@ Think of it as an engine developers can use to build document-aware applications
 
 - [Quick Links](#-quick-links)
 - [What is ChatVector-AI?](#-what-is-chatvector-ai)
+- [ChatVector-AI vs Frameworks](#built-for-production-not-just-another-framework)
 - [Who is this for?](#-who-is-this-for)
 - [Current Status](#-current-status)
 - [Architecture Overview](#-architecture-overview)
@@ -56,6 +57,33 @@ ChatVector-AI provides a **clean, extensible backend foundation for RAG-based do
 - LLM-powered answer generation
 
 The goal is to offer a **developer-focused RAG engine** that can be embedded into other applications, tools, or products — not a polished end-user SaaS.
+
+
+````mermaid
+flowchart LR
+    A[Your PDF/TXT Documents] --> B[ChatVectorAI Engine]
+    B -- "Clean API<br>(/upload, /chat)" --> C[Your Application]
+    subgraph B [ChatVectorAI - The Engine]
+        direction TB
+        B1[Ingestion & Chunking]
+        B2[Vector Embedding & Storage]
+        B3[Semantic Search & LLM]
+    end
+
+
+---
+
+## 🏗️ Built for Production: Not Just Another Framework
+
+ChatVector-AI is designed as a **production-ready backend engine**, not a general-purpose framework. If you need a running, reliable API for document Q&A, this project provides a complete, opinionated solution. Here's how it compares to the approach of using a modular framework:
+
+| Aspect                        | **ChatVector-AI (This Project)**                                                                                 | **General AI Framework (e.g., LangChain)**                                                                          |
+| :---------------------------- | :--------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------ |
+| **Primary Goal**              | Deliver a **deployable backend service** for document intelligence.                                              | Provide **modular components** to build a wide variety of AI applications.                                          |
+| **Out-of-the-Box Experience** | A fully functional FastAPI service with logging, testing, and a clean API.                                       | A collection of tools and abstractions you must wire together and productionize.                                    |
+| **Architecture**              | **Batteries-included, opinionated engine.** Get a working system for one use case.                               | **Modular building blocks.** Assemble and customize components for many use cases.                                  |
+| **Best For**                  | Developers, startups, or teams who need a **document Q&A API now** and want to focus on their application layer. | Developers and researchers building novel, complex AI agents or exploring multiple LLM patterns from the ground up. |
+| **Path to Production**        | **Short.** Configure, deploy, and integrate via API. Built-in observability and scaling patterns.                | **Long.** Requires significant additional work on API layers, monitoring, deployment, and performance tuning.       |
 
 ---
 
@@ -235,7 +263,7 @@ $$;
 # 7. Return to project root and launch the backend
 cd..
 uvicorn backend.main:app --reload --port 8000
-```
+````
 
 <h3>Test the API</h3>
 <p><em>There is no Frontend yet - test everything directly in your browser!</em></p>
