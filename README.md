@@ -19,7 +19,7 @@ Think of it as an engine developers can use to build document-aware applications
 
 - [Quick Links](#-quick-links)
 - [What is ChatVector-AI?](#-what-is-chatvector-ai)
-- [ChatVector-AI vs Frameworks](#built-for-production-not-just-another-framework)
+- [ChatVector-AI vs Frameworks](#chatvector-vs-frameworks)
 - [Who is this for?](#-who-is-this-for)
 - [Current Status](#-current-status)
 - [Architecture Overview](#-architecture-overview)
@@ -41,6 +41,7 @@ Think of it as an engine developers can use to build document-aware applications
 - [🎥 Demo Video](https://www.loom.com/share/b7be8b165031450aad650144a71c1a10)
 - [🎥 Setup Video](https://www.loom.com/share/8635d7e0a5a64953a4bf028360b74e25) — get running in ~10 minutes
 - **[📘 Contributing Guide](CONTRIBUTING.md)** — **[Video](https://www.loom.com/share/c41bdbff541f47d49efcb48920cba382)**
+- **[🚀 Development Roadmap](ROADMAP.md)**
 - **[💬 Discussions](https://github.com/chatvector-ai/chatvector-ai/discussions)** — say hello
 - **[📘 Development Notes](DEVELOPMENT.md)** — maintainer notes & reminders
 
@@ -58,22 +59,9 @@ ChatVector-AI provides a **clean, extensible backend foundation for RAG-based do
 
 The goal is to offer a **developer-focused RAG engine** that can be embedded into other applications, tools, or products — not a polished end-user SaaS.
 
-
-````mermaid
-flowchart LR
-    A[Your PDF/TXT Documents] --> B[ChatVectorAI Engine]
-    B -- "Clean API<br>(/upload, /chat)" --> C[Your Application]
-    subgraph B [ChatVectorAI - The Engine]
-        direction TB
-        B1[Ingestion & Chunking]
-        B2[Vector Embedding & Storage]
-        B3[Semantic Search & LLM]
-    end
-
-
 ---
 
-## 🏗️ Built for Production: Not Just Another Framework
+## ChatVector vs Frameworks
 
 ChatVector-AI is designed as a **production-ready backend engine**, not a general-purpose framework. If you need a running, reliable API for document Q&A, this project provides a complete, opinionated solution. Here's how it compares to the approach of using a modular framework:
 
@@ -263,7 +251,7 @@ $$;
 # 7. Return to project root and launch the backend
 cd..
 uvicorn backend.main:app --reload --port 8000
-````
+```
 
 <h3>Test the API</h3>
 <p><em>There is no Frontend yet - test everything directly in your browser!</em></p>
