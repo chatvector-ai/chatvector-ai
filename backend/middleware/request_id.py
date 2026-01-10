@@ -12,7 +12,6 @@ def get_request_id() -> str | None:
     """
     return request_id_var.get()
 
-
 def register_request_id_middleware(app: FastAPI) -> None:
     """
     Register HTTP middleware that attaches a request-scoped correlation ID.

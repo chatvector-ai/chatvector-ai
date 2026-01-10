@@ -1,71 +1,79 @@
 import logging
-import logging.handlers
-from backend.core.config import config
-from backend.core.logging_utils import RequestIDFilter, RequestIDFormatter
-import sys
-import time
-from pathlib import Path
-import logging
+from logging.handlers import RotatingFileHandler
+from core.logging_filters import (
+    RequestIDFilter,
+    AppOnlyFilter,
+    UvicornOnlyFilter,
+)
 
-
-
-
-def setup_logging():
-    """Configure application logging.
-
-    - Creates a `logs/` directory at the repository root (two parents above this file).
-    - Adds a rotating file handler (max 5MB, 5 backups).
-    - Adds a console handler (stdout).
-    - Wires `uvicorn` loggers separately.
-    - Adds request_id only to app-level logs.
-    - Timestamps use local time by default; set `LOG_USE_UTC=true` to use UTC.
+def setup_logging(log_file: str = "logs/app.log") -> None:
+    """
+    Configure application logging with request-level correlation IDs.
+    Logging strategy:
+    - Application logs → file only (include request_id)
+    - Uvicorn / access logs → console only (no request_id)
+    - Prevent duplicate logs by controlling propagation explicitly
     """
 
-    # --- Logs directory ---
-    repo_root = Path(__file__).resolve().parents[2]
-    logs_dir = repo_root / "logs"
-    logs_dir.mkdir(parents=True, exist_ok=True)
+    # Route Python warnings (e.g. deprecations) through logging
+    logging.captureWarnings(True)
 
-    log_level = getattr(logging, config.LOG_LEVEL, logging.INFO)
-
-    # --- Timestamp conversion ---
-    if getattr(config, "LOG_USE_UTC", False):
-        logging.Formatter.converter = time.gmtime
-    else:
-        logging.Formatter.converter = time.localtime
-
-    # --- App log format ---
-    app_fmt = "%(asctime)s - %(name)s - %(levelname)s - %(request_id_part)s - %(message)s"
-
-    # --- Handlers ---
-    # Console
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setFormatter(logging.Formatter(app_fmt))
-    stream_handler.setLevel(log_level)
-    stream_handler.addFilter(RequestIDFilter())
-
-    # Rotating file
-    file_path = logs_dir / "app.log"
-    file_handler = logging.handlers.RotatingFileHandler(
-        str(file_path), maxBytes=5_000_000, backupCount=5, encoding="utf-8"
+    # ============= FORMATTERS =============
+    # App logs include request_id for correlation across a single request
+    app_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - "
+        "[request_id=%(request_id)s] - %(message)s"
     )
-    file_handler.setFormatter(logging.Formatter(app_fmt))
-    file_handler.setLevel(log_level)
-    file_handler.addFilter(RequestIDFilter())
 
-    # --- Root logger (app-level logs only) ---
-    logging.basicConfig(level=log_level, handlers=[stream_handler, file_handler], force=True)
+    # Uvicorn logs stay minimal and human-readable
+    # (request_id is intentionally excluded)
+    uvicorn_formatter = logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(message)s"
+    )
 
-    # --- Uvicorn loggers (no request_id filter) ---
-    uvicorn_fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    uvicorn_formatter = logging.Formatter(uvicorn_fmt)
+    # ============= HANDLERS =============
+    # File handler:
+    # - Receives ONLY application logs
+    # - Injects request_id via RequestIDFilter
+    # - Rotates to prevent unbounded growth
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=10_000_000,
+        backupCount=5,
+    )
+    file_handler.setFormatter(app_formatter)
+    file_handler.addFilter(RequestIDFilter())   # inject request_id
+    file_handler.addFilter(AppOnlyFilter())     # drop uvicorn logs
 
-    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
-        lg = logging.getLogger(name)
-        for h in lg.handlers:
-            h.setFormatter(uvicorn_formatter)  # reformat existing handlers
-        lg.setLevel(log_level)
-        lg.propagate = False
+    # Console handler:
+    # - Receives ONLY uvicorn logs (startup, access, shutdown)
+    # - Keeps local dev output clean and familiar
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(uvicorn_formatter)
+    console_handler.addFilter(UvicornOnlyFilter())
 
-    logging.getLogger(__name__).debug(f"Logging configured. logs_dir={logs_dir} level={log_level}")
+    # ============= ROOT LOGGER =============
+    # All logs flow through the root logger first.
+    # Handlers + filters decide where each record ultimately goes.
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    # Clear any existing handlers to avoid duplicate output
+    root_logger.handlers.clear()
+
+    # Attach both handlers once at the root
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
+
+    # ============= UVICORN LOGGER =============
+    # Allow uvicorn logs to propagate to root
+    # (filters on handlers determine their final destination)
+    for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        logger = logging.getLogger(logger_name)
+        logger.handlers.clear()
+        logger.propagate = True
+
+
+
+
 
