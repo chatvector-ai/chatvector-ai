@@ -4,6 +4,7 @@ from backend.routes.upload import router as upload_router
 from backend.routes.chat import router as chat_router
 from backend.core.config import Settings
 from backend.core.logging_config import setup_logging
+from backend.middleware.request_id import register_request_id_middleware
 import logging
 
 
@@ -11,6 +12,9 @@ app = FastAPI()
 
 logger = logging.getLogger(__name__)
 setup_logging()
+
+# request id middleware
+register_request_id_middleware(app)
 
 @app.get("/")
 def root():

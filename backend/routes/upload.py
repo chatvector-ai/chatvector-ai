@@ -2,6 +2,8 @@ from fastapi import APIRouter, UploadFile, File
 from backend.services.extraction_service import extract_text_from_file
 from backend.services.db_service import create_document
 from backend.services.ingestion_service import ingest_chunks
+from backend.middleware.request_id import get_request_id
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import logging
 
@@ -11,6 +13,8 @@ router = APIRouter()
 @router.post("/upload")
 async def upload(file: UploadFile = File(...)):
     logger.info(f"Starting upload for file: {file.filename} ({file.content_type})")
+    logger.info(f"Current request ID inside endpoint: {get_request_id()}")
+
     # Step 1: Extract text from the file
     file_text = await extract_text_from_file(file)
     # Step 2: Split text into chunks
