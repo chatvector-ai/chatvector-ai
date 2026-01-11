@@ -1,55 +1,67 @@
-# ChatVectorAI Development Roadmap
+# ChatVector-AI Development Roadmap
 
-This document outlines the current development focus and future direction of the ChatVectorAI project. It is intended for contributors to understand our priorities and where they can help.
+This document outlines the current development focus and future direction of the ChatVector-AI project. It is intended for contributors to quickly understand priorities and pick up tasks.
 
-## 🎯 Current Phase: Stabilize & Optimize the Core Engine *(Now)*
-Our immediate focus is on hardening the foundational RAG backend for reliability, observability, and performance. **This work blocks all Phase 2 features.**
+---
 
-### 🔴 **Critical Path** (Blockers for Phase 2):
-These issues must be resolved before we can move to Phase 2:
+## 🎯 Phase 1: Stabilize & Optimize Core Engine (Current)
 
-| Priority | Issue | Description | Blocks | Status |
-|----------|-------|-------------|--------|--------|
-| **🔴 Blocking** | #44 | Enhance `insert_chunk` with Retry Logic | #43, #46 | **Needs Owner** |
-| **🔴 Blocking** | #27 | Implement Batch Chunk Insertions | #28 | **Needs Owner** |
-| **🔴 Blocking** | #43 | Validation & Error Handling in Upload Pipeline | #46 | Blocked by #44 |
+- **Focus:** Hardening the RAG backend for **reliability, observability, and performance**. 
+- **Emphasis:** Advanced logging, ingestion pipeline robustness, asynchronous and batch processing foundations, chunking quality, and comprehensive error handling. 
+- Completion of these tasks is critical before starting Phase 2.
 
-### 🟡 **High Priority** (Performance & Observability):
-Important enhancements that can progress in parallel:
+### 🔴 Critical / Blocking Issues
 
-| Area | Issue | Description | Good For | Status |
-|------|-------|-------------|----------|--------|
-| **Observability** | #20 | Implement JSON Logging Format | Good First Issue | **Ready** |
-| **Observability** | #21 | Add Request/Correlation IDs | Good First Issue | **Ready** |
-| **Observability** | #22 | Research Centralized Logging | Research | Blocked |
-| **Performance** | #31 | Async/Batch Retrieval | Advanced | **Ready (Design)** |
-| **Performance** | #28 | Implement Async Embedding Queue | Advanced | Blocked by #27 |
+* [#44 Enhance `insert_chunk` with retry logic](https://github.com/chatvector-ai/chatvector-ai/issues/44) – blocks #43, #46
+* [#27 Implement batch chunk insertions](https://github.com/chatvector-ai/chatvector-ai/issues/27) – blocks #28
+* [#43 Validation & error handling in upload pipeline](https://github.com/chatvector-ai/chatvector-ai/issues/43) – blocks #46
 
-### 🟢 **Ready for Development** (Answer Quality):
-These improve the core RAG experience and are ready for contributors:
+### 🟡 Performance & Observability Enhancements
 
-| Issue | Description | Skill Level | Impact |
-|-------|-------------|-------------|--------|
-| #23 | Enhance Chunk Metadata Storage | Good First Issue | High |
-| #24 | Normalize PDF Text in Ingestion | Good First Issue | Medium |
-| #25 | Tune Chunk Size and Overlap | Good First Issue | High |
-| #26 | Add Source Citation Support | Good First Issue | High |
+* [#20 Implement JSON logging format](https://github.com/chatvector-ai/chatvector-ai/issues/20) – Good First Issue
+* [#21 Add request / correlation IDs](https://github.com/chatvector-ai/chatvector-ai/issues/21) – Good First Issue
+* [#22 Research centralized logging integration](https://github.com/chatvector-ai/chatvector-ai/issues/22) – Research / Blocked
+* [#31 Async / batch retrieval for chat endpoint](https://github.com/chatvector-ai/chatvector-ai/issues/31) – Advanced / Ready (design)
+* [#28 Implement async embedding queue](https://github.com/chatvector-ai/chatvector-ai/issues/28) – Advanced / Blocked by #27
 
-### 📝 **Documentation & Polish**:
-| Issue | Description | Skill Level |
-|-------|-------------|-------------|
-| #45 | Align Terminology: "Ingestion" vs "Upload" | Good First Issue |
-| #2, #4, #5 | Frontend Demo Improvements | Frontend |
+### 🟢 Ready for Development (Answer Quality / RAG Enhancements)
 
-## 🔮 Next Phase: Enhance the Developer Experience *(Next)*
-Once the core is stable, we will focus on making ChatVectorAI easier to adopt and integrate.
-- **Developer Tools:** Create client SDKs and improve deployment (e.g., Docker).
-- **Advanced Caching:** Implement Redis for embedding and response caching.
-- **Extended RAG Features:** Explore advanced chunking strategies, query transformations, and prompt tuning.
+* [#23 Enhance chunk metadata storage](https://github.com/chatvector-ai/chatvector-ai/issues/23) – Good First Issue
+* [#24 Normalize PDF text in ingestion pipeline](https://github.com/chatvector-ai/chatvector-ai/issues/24) – Good First Issue
+* [#25 Tune chunk size & overlap](https://github.com/chatvector-ai/chatvector-ai/issues/25) – Good First Issue
+* [#26 Add source citation support](https://github.com/chatvector-ai/chatvector-ai/issues/26) – Good First Issue
 
-## 🚀 Future Vision: Scale & Specialize *(Later)*
-Looking ahead, we aim to position ChatVectorAI as a versatile platform for production document intelligence.
-- **Enterprise Features:** Authentication, multi-tenancy, advanced monitoring.
-- **Specialized Pipelines:** Optimizations for specific document types (legal, academic, code).
-- **Ecosystem Growth:** Foster a community of integrations and example applications.
+### 📝 Documentation & Polish
 
+* [#45 Align terminology: “Ingestion” vs “Upload”](https://github.com/chatvector-ai/chatvector-ai/issues/45) – Good First Issue
+* [#2 Frontend demo improvements](https://github.com/chatvector-ai/chatvector-ai/issues/2)
+* [#4 Frontend demo improvements](https://github.com/chatvector-ai/chatvector-ai/issues/4)
+* [#5 Frontend demo improvements](https://github.com/chatvector-ai/chatvector-ai/issues/5)
+
+---
+
+## 🔮 Phase 2: Enhance Developer Experience (Next)
+
+Focus: Make ChatVector-AI easier to adopt, extend, and integrate.
+
+* Developer tools: Client SDKs, deployment improvements (e.g., Docker)
+* Advanced caching: Redis for embedding and response caching
+* Extended RAG features: Advanced chunking, query transformations, prompt tuning
+
+---
+
+## 🚀 Phase 3: Scale & Specialize (Later)
+
+Focus: Production-ready document intelligence platform.
+
+* Enterprise features: Authentication, multi-tenancy, monitoring
+* Specialized pipelines: Legal, academic, or code documents
+* Ecosystem growth: Community integrations, example applications
+
+---
+
+### ✅ Notes
+
+* Critical / Blocking issues must be resolved before Phase 2 features can progress.
+* “Good First Issue” tags highlight tasks suitable for new contributors.
+* This roadmap is intended to provide a quick overview; contributors can click the links to jump directly to the GitHub issues.
