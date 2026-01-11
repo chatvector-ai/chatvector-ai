@@ -1,11 +1,8 @@
 from supabase import create_client
 from backend.core.config import config
-from backend.core.logging_config import setup_logging
 import logging
 
-setup_logging()
 logger = logging.getLogger(__name__)
-
 class _LazySupabaseClient:
     """Lazy-initializing supabase client proxy.
 
@@ -31,7 +28,6 @@ class _LazySupabaseClient:
     def __getattr__(self, name):
         self._ensure_client()
         return getattr(self._client, name)
-
 
 # Export an object with the same name as before for backwards compatibility
 supabase_client = _LazySupabaseClient()
