@@ -1,97 +1,150 @@
-# ChatVector-AI: Open Source Document Intelligence
+# ChatVector-AI
 
-> **Have conversations with your documents.** ChatVector-AI is a RAG (Retrieval-Augmented Generation) platform that lets you upload PDFs and ask questions in natural language.
+### Open-Source Backend-First RAG Engine for Document Intelligence
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Status-MVP%20Ready-brightgreen" alt="Status">
+ChatVector-AI is an open-source Retrieval-Augmented Generation (RAG) engine for ingesting, indexing, and querying unstructured documents such as PDFs and text files.
+
+Think of it as an engine developers can use to build document-aware applications — such as research assistants, contract analysis tools, or internal knowledge systems — without having to reinvent the RAG pipeline.
+
+<p>
+  <img src="https://img.shields.io/badge/Status-Backend%20MVP-brightgreen" alt="Status">
   <img src="https://img.shields.io/badge/PRs-Welcome-brightgreen" alt="PRs Welcome">
   <img src="https://img.shields.io/badge/Python-FastAPI-blue" alt="Python FastAPI">
-  <img src="https://img.shields.io/badge/AI-RAG%20Pipeline-orange" alt="AI RAG">
+  <img src="https://img.shields.io/badge/AI-RAG%20Engine-orange" alt="AI RAG">
 </p>
 
+---
+
+## 📌 Table of Contents
+
+- [Quick Links](#-quick-links)
+- [What is ChatVector-AI?](#-what-is-chatvector-ai)
+- [ChatVector-AI vs Frameworks](#chatvector-vs-frameworks)
+- [Who is this for?](#-who-is-this-for)
+- [Current Status](#-current-status)
+- [Architecture Overview](#-architecture-overview)
+  - [Backend Layer (Core)](#backend-layer-core)
+  - [AI & Retrieval Layer](#ai--retrieval-layer)
+  - [Data Layer](#data-layer)
+  - [Reference Frontend (Non-Core)](#reference-frontend-non-core)
+- [Quick Start: Run in 5 Minutes](#-quick-start-run-in-5-minutes)
+  - [Backend Setup](#backend-setup)
+  - [Frontend-demo Setup](#frontend-layer-non-core)
+- [Contributing](#-contributing)
+- [License](#-license)
+
+---
 
 ## 🔗 Quick Links
-- **🚀 View Open [Issues](https://github.com/chatvector-ai/chatvector-ai/issues) & [Project Board](https://github.com/orgs/chatvector-ai/projects/2)**  
-- [🎥 Setup Video](https://www.loom.com/share/8635d7e0a5a64953a4bf028360b74e25) -- get up and running in 10 minutes
-- **[📘 Contributing Guide](CONTRIBUTING.md)** - **[Video](https://www.loom.com/share/c41bdbff541f47d49efcb48920cba382) - How to submit your first PR.
-- **[💬 Join Discussions](https://github.com/chatvector-ai/chatvector-ai/discussions)** - Say hello!
-- **[📘 Development notes](DEVELOPMENT.md)** - Quick notes/reminders while working on a feature
-`
-<h3>🚀 Current Status: Basic Backend/MVP!</h3>
 
-**The core RAG engine is complete and working!** We have a functional FastAPI backend that handles PDF uploads, vectorization, and AI-powered Q&A.
+- **🚀 View Open [Issues](https://github.com/chatvector-ai/chatvector-ai/issues) & [Project Board](https://github.com/orgs/chatvector-ai/projects/2)**
+- [🎥 Demo Video](https://www.loom.com/share/b7be8b165031450aad650144a71c1a10)
+- [🎥 Setup Video](https://www.loom.com/share/8635d7e0a5a64953a4bf028360b74e25) — get running in ~10 minutes
+- **[📘 Contributing Guide](CONTRIBUTING.md)** — **[Video](https://www.loom.com/share/c41bdbff541f47d49efcb48920cba382)**
+- **[🚀 Development Roadmap](ROADMAP.md)**
+- **[💬 Discussions](https://github.com/chatvector-ai/chatvector-ai/discussions)** — say hello
+- **[📘 Development Notes](DEVELOPMENT.md)** — maintainer notes & reminders
 
-<table>
-  <tr>
-    <td><strong>What's Working (MVP)</strong></td>
-    <td><strong>Backend Improvements Needed</strong></td>
-    <td><strong>Frontend & Features</strong></td>
-  </tr>
-  <tr>
-    <td>
-      ✅ PDF Text Extraction<br>
-      ✅ Basic Text Chunking<br>
-      ✅ Vector Embeddings<br>
-      ✅ Semantic Search<br>
-      ✅ AI-Powered Answers<br>
-      ✅ Supabase Integration
-    </td>
-    <td>
-      🚧 Advanced Chunking Strategies<br>
-      🚧 Error Handling & Logging<br>
-      🚧 API Rate Limiting<br>
-      🚧 Backend Refactoring<br>
-      🚧 Performance Optimization<br>
-      🚧 Proper Authentication
-    </td>
-    <td>
-      🚧 Beautiful Frontend<br>
-      🚧 User Authentication UI<br>
-      🚧 Multiple File Types<br>
-      🚧 Chat Interface<br>
-      🚧 Deployment Ready
-    </td>
-  </tr>
-</table>
+---
 
-**Now, we need your help to build the rest!** This is a community-driven project from the ground up.
+## 🔎 What is ChatVector-AI?
 
-## 🛠 Technology Stack Architecture
+ChatVector-AI provides a **clean, extensible backend foundation for RAG-based document intelligence**. It handles the full lifecycle of document Q&A:
 
-<h3>Frontend Layer</h3>
-<ul>
-  <li><strong>Next.js</strong> - React framework with App Router, SSR, and optimal performance</li>
-  <li><strong>Deployment:</strong> Vercel for seamless CI/CD and global edge network</li>
-  <li><strong>Features:</strong> Responsive UI, real-time chat interface, drag-and-drop uploads</li>
-</ul>
+- Document ingestion (PDF, text)
+- Text extraction and chunking
+- Vector embedding and storage
+- Semantic retrieval
+- LLM-powered answer generation
 
-<h3>Backend Layer</h3>
-<ul>
-  <li><strong>FastAPI</strong> - Modern Python web framework with automatic OpenAPI docs</li>
-  <li><strong>Uvicorn</strong> - ASGI web server for high-performance async handling</li>
-  <li><strong>Deployment:</strong> Docker containers on Railway for easy scaling</li>
-  <li><strong>Features:</strong> Async request handling, WebSocket support, comprehensive API</li>
-</ul>
+The goal is to offer a **developer-focused RAG engine** that can be embedded into other applications, tools, or products — not a polished end-user SaaS.
 
-<h3>AI & Processing Layer</h3>
-<ul>
-  <li><strong>LangChain</strong> - Orchestrates the entire RAG pipeline</li>
-  <li><strong>Google AI Studio</strong> - Primary AI provider (Gemini models)</li>
-  <li><strong>Embeddings:</strong> Google's embedding models for vector generation</li>
-  <li><strong>Features:</strong> Text chunking, semantic search, prompt optimization</li>
-</ul>
+---
 
-<h3>Data Layer</h3>
-<ul>
-  <li><strong>Supabase</strong> - All-in-one backend platform</li>
-  <li><strong>PostgreSQL with pgvector</strong> - Native vector similarity search</li>
-  <li><strong>Authentication:</strong> Built-in auth with session management</li>
-  <li><strong>Storage:</strong> Document file storage and metadata</li>
-</ul>
+## ChatVector vs Frameworks
+
+ChatVector-AI is designed as a **production-ready backend engine**, not a general-purpose framework. If you need a running, reliable API for document Q&A, this project provides a complete, opinionated solution. Here's how it compares to the approach of using a modular framework:
+
+| Aspect                        | **ChatVector-AI (This Project)**                                                                                 | **General AI Framework (e.g., LangChain)**                                                                          |
+| :---------------------------- | :--------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------ |
+| **Primary Goal**              | Deliver a **deployable backend service** for document intelligence.                                              | Provide **modular components** to build a wide variety of AI applications.                                          |
+| **Out-of-the-Box Experience** | A fully functional FastAPI service with logging, testing, and a clean API.                                       | A collection of tools and abstractions you must wire together and productionize.                                    |
+| **Architecture**              | **Batteries-included, opinionated engine.** Get a working system for one use case.                               | **Modular building blocks.** Assemble and customize components for many use cases.                                  |
+| **Best For**                  | Developers, startups, or teams who need a **document Q&A API now** and want to focus on their application layer. | Developers and researchers building novel, complex AI agents or exploring multiple LLM patterns from the ground up. |
+| **Path to Production**        | **Short.** Configure, deploy, and integrate via API. Built-in observability and scaling patterns.                | **Long.** Requires significant additional work on API layers, monitoring, deployment, and performance tuning.       |
+
+---
+
+## 👥 Who is this for?
+
+ChatVector-AI is designed for:
+
+- **Developers** building document intelligence tools or internal knowledge systems
+- **Backend engineers** who want a solid RAG foundation without heavy abstractions
+- **AI/ML practitioners** experimenting with chunking, retrieval, and prompt strategies
+- **Open-source contributors** interested in retrieval systems, embeddings, and LLM orchestration
+
+---
+
+## 🚀 Current Status
+
+### Backend MVP (Core Engine)
+
+The core RAG backend is **complete and functional**.
+
+**What works today:**
+
+- ✅ PDF text extraction
+- ✅ Basic chunking pipeline
+- ✅ Vector embeddings
+- ✅ Semantic search (pgvector)
+- ✅ LLM-powered answers
+- ✅ Supabase integration
+
+**Backend improvements in progress:**
+
+- 🚧 Advanced chunking strategies
+- 🚧 Error handling & logging
+- 🚧 API rate limiting
+- 🚧 Performance optimization
+- 🚧 Authentication & access control
+
+Frontend Demo: A lightweight UI for testing the backend API. Not production-ready.
+
+---
+
+## 🧠 Architecture Overview
+
+### Backend Layer (Core)
+
+- **FastAPI** — modern Python API framework with automatic OpenAPI docs
+- **Uvicorn** — high-performance ASGI server
+- **Design goals:** clarity, extensibility, and debuggability
+
+### AI & Retrieval Layer
+
+- **LangChain** — RAG orchestration
+- **Google AI Studio (Gemini)** — LLM + embeddings
+- **Features:** chunking, semantic retrieval, prompt construction
+
+### Data Layer
+
+- **Supabase** — PostgreSQL backend
+- **pgvector** — native vector similarity search
+- **Storage:** document metadata and embeddings
+
+### Reference Frontend (Non-Core)
+
+- **Next.js + TypeScript**
+- Exists solely to demonstrate backend usage
+- Not production-ready
+- Subject to breaking changes
+
+---
 
 ## 🎯 Quick Start: Run in 5 Minutes
 
-## 🖥️ Backend Setup
+## Backend Setup
 
 <h4>Prerequisites</h4>
 <ul>
@@ -122,19 +175,26 @@ git clone https://github.com/YOUR_USERNAME/chatvector-ai.git
 # - Get API key - project settings > API Keys > Click "Create new api keys" > Publishable Key
 
 # 3. Set up environment
-
 # Navigate to the backend folder
 cd backend
-# Create a .env file and add the following lines:
+
+# Create a .env file in backend/ and add the following lines:
 SUPABASE_URL=your_supabase_project_url_here
 SUPABASE_KEY=your_supabase_anon_public_key_here
 GEN_AI_KEY=your_google_ai_studio_api_key_here
+LOG_LEVEL=INFO
+LOG_USE_UTC=false
+
 # Replace each placeholder with the actual values from Step #2
 
 # 4. Create and activate virtual environment
-python -m venv venv
-# On Mac: source venv/bin/activate
+# On Mac/Linux:
+python3 -m venv venv   #create env
+source venv/bin/activate  #activate env
+
 # On Windows: venv\Scripts\activate
+python -m venv venv   #create env
+venv\Scripts\activate  #activate env
 
 # 5. Install dependencies
 pip install -r requirements.txt
@@ -225,7 +285,11 @@ uvicorn backend.main:app --reload --port 8000
   </li>
 </ul>
 
-## 🖥️ Frontend Setup
+---
+
+## Frontend Layer (Non-Core)
+
+Note: The frontend serves as the web presence for the OSS, and as a testing demo -- but is not central to the actual OSS.
 
 <h4>Prerequisites</h4>
 <ul>
@@ -237,7 +301,7 @@ uvicorn backend.main:app --reload --port 8000
 
 ```bash
 # 1. Navigate to frontend directory
-cd frontend
+cd frontend-demo
 
 # 2. Install dependencies
 npm install
@@ -249,31 +313,27 @@ npm run dev
 The frontend will run on http://localhost:3000
 ```
 
-<p>The frontend includes:</p> <ul> <li>✅ Next.js 16 with React 19</li> <li>✅ TypeScript for type safety</li> <li>✅ Tailwind CSS for styling</li> <li>✅ ESLint for code quality</li> </ul><p><strong>Note:</strong> The frontend is a minimal scaffold waiting for contributors to build features!</p>
+---
 
-</div>
+## 🤝 Contributing
 
-<br> <h2><Strong>🤝 Contribute to ChatVector-AI</Strong></h2>
+High-impact contribution areas:
 
-We are actively seeking contributors of all types and skill levels! This is your chance to get involved with a cutting-edge AI project and help build something amazing from the ground up.
+- Ingestion & indexing pipelines
+- Retrieval quality & evaluation
+- Chunking strategies
+- API design & refactoring
+- Performance & scaling
+- Documentation & examples
 
-<p align="center"> <strong>🚀 Looking For:</strong> </p><table align="center"> <tr> <td align="center"> <strong>Frontend Developers</strong><br> Build the Next.js interface, chat UI, and user experience </td> <td align="center"> <strong>Backend Engineers</strong><br> Scale the FastAPI system, optimize RAG, and add features </td> </tr> <tr> <td align="center"> <strong>UI/UX Designers</strong><br> Design beautiful interfaces and improve user workflows </td> <td align="center"> <strong>DevOps Engineers</strong><br> Set up Docker, deployment, and CI/CD pipelines </td> </tr> <tr> <td align="center"> <strong>AI/ML Enthusiasts</strong><br> Optimize prompts, chunking strategies, and model performance </td> <td align="center"> <strong>Technical Writers</strong><br> Improve documentation and create tutorials </td> </tr> </table>
+Frontend contributions are welcome but considered **non-core**.
 
-<h5>All skill levels welcome!</h5>
-<h5>Example tasks:</h5>
-🎯  Beginners
-<ul> <li>🚀 <strong>Build the initial Next.js frontend</strong> - Create the first React components</li> <li>📄 <strong>Add support for <code>.txt</code> files</strong> - Simple file type expansion</li> <li>📝 <strong>Create better documentation</strong> - Help others get started</li> <li>🐛 <strong>Improve error messages</strong> - Make the app more user-friendly</li> <li>🎨 <strong>Design UI mockups</strong> - Create the visual foundation</li> </ul>
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
-💪 Intermediate/Advanced
+---
 
-<ul> <li>🏗️ <strong>Refactor backend architecture</strong> - Split the monolith into clean modules</li> <li>🔐 <strong>Implement Supabase authentication</strong> - Add user accounts and security</li> <li>🐳 <strong>Add Docker & deployment scripts</strong> - Make deployment seamless</li> <li>🧠 <strong>Advanced RAG optimizations</strong> - Improve AI response quality</li> <li>⚡ <strong>Performance optimization</strong> - Speed up vector search and processing</li> </ul>
+## 📄 License
 
+MIT License
 
-<div >
-
-⭐ Star the repo to show your interest and stay updated!
-
-📄 License
-In Progress...
-
-</div>
+⭐ Star the repo to follow progress and support the project.
