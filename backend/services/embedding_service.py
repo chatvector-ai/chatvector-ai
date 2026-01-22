@@ -1,13 +1,11 @@
 import asyncio
 import google.generativeai as genai
 from backend.core.config import config
-from backend.core.logging_config import setup_logging
 import logging
 
 logger = logging.getLogger(__name__)
 
 genai.configure(api_key=config.GEN_AI_KEY)
-
 
 async def get_embedding(text: str):
     for attempt in range(3):
