@@ -1,6 +1,6 @@
 import logging
 from logging.handlers import RotatingFileHandler
-from backend.logging.logging_filters import (
+from backend.logging_config.logging_filters import (
     RequestIDFilter,
     AppOnlyFilter,
     UvicornOnlyFilter,
