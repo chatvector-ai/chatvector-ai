@@ -1,5 +1,4 @@
 # backend/services/db_service.py
-from backend.core.clients import supabase_client
 import logging
 from backend.services.embedding_service import get_embedding
 from backend.services.db_service import insert_chunk

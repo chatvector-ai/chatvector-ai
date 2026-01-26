@@ -18,7 +18,7 @@ services:
       context: ./backend
     container_name: chatvector-api
     env_file:
-      - .env
+      - ./backend/.env   
     depends_on:
       - db
     ports:
