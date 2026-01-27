@@ -19,7 +19,7 @@ def mock_settings():
 
 
     "   # Now import the modules that rely on these env vars"
-    from backend.core.config import config
+    from core.config import config
 
     assert config.SUPABASE_URL == "https://test.supabase.co"
     assert config.SUPABASE_KEY == "test-key-123"

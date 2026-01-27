@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, File
-from backend.services.extraction_service import extract_text_from_file
-from backend.services.db_service import create_document
-from backend.services.ingestion_service import ingest_chunks
+from services.extraction_service import extract_text_from_file
+from services.db_service import create_document
+from services.ingestion_service import ingest_chunks
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import logging
 

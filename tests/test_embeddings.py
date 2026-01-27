@@ -1,5 +1,5 @@
 import pytest
-from backend.services.embedding_service import get_embedding
+from services.embedding_service import get_embedding
 
 @pytest.mark.asyncio
 async def test_get_embedding_success(mocker):

@@ -2,8 +2,8 @@ import os
 import json
 import pytest
 from unittest import mock
-from backend.core.config import config
-from backend.services.embedding_service import get_embedding
+from core.config import config
+from services.embedding_service import get_embedding
 
 @pytest.mark.asyncio
 async def test_get_embedding_success(mocker):

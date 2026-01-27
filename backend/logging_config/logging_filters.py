@@ -1,5 +1,5 @@
 import logging
-from backend.middleware.request_id import get_request_id
+from middleware.request_id import get_request_id
 
 class RequestIDFilter(logging.Filter):
     """Inject request_id into application log records."""

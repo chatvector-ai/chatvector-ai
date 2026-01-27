@@ -3,7 +3,7 @@ import logging
 import json
 import uuid
 from typing import List
-from backend.core.config import config
+from core.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -11,11 +11,11 @@ logger = logging.getLogger(__name__)
 if config.APP_ENV.lower() == "development":
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.future import select
-    from backend.core.models import async_session, Document, DocumentChunk
+    from core.models import async_session, Document, DocumentChunk
 
 # Keep supabase client for production / cloud mode
 else:
-    from backend.core.clients import supabase_client
+    from core.clients import supabase_client
 
 
 # db funcs

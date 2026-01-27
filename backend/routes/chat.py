@@ -1,8 +1,8 @@
 from fastapi import APIRouter
-from backend.services.embedding_service import get_embedding
-from backend.services.answer_service import generate_answer
-from backend.services.db_service import locate_matching_chunks
-from backend.services.context_service import build_context_from_chunks
+from services.embedding_service import get_embedding
+from services.answer_service import generate_answer
+from services.db_service import locate_matching_chunks
+from services.context_service import build_context_from_chunks
 import logging
 
 logger = logging.getLogger(__name__)

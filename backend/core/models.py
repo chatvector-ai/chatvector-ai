@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy import Column, String, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from datetime import datetime
-from backend.core.config import config
+from core.config import config
 
 Base = declarative_base()
 

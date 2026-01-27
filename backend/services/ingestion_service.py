@@ -1,7 +1,7 @@
 # backend/services/db_service.py
 import logging
-from backend.services.embedding_service import get_embedding
-from backend.services.db_service import insert_chunk
+from services.embedding_service import get_embedding
+from services.db_service import insert_chunk
 
 logger = logging.getLogger(__name__)
 

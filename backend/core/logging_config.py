@@ -1,6 +1,6 @@
 import logging
 import logging.handlers
-from backend.core.config import config
+from core.config import config
 import sys
 import time
 from pathlib import Path

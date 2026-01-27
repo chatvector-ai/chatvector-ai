@@ -1,9 +1,9 @@
 from fastapi import FastAPI
-from backend.routes.test import router as test_router
-from backend.routes.upload import router as upload_router
-from backend.routes.chat import router as chat_router
-from backend.logging_config.logging_config import setup_logging
-from backend.middleware.request_id import register_request_id_middleware
+from routes.test import router as test_router
+from routes.upload import router as upload_router
+from routes.chat import router as chat_router
+from logging_config.logging_config import setup_logging
+from middleware.request_id import register_request_id_middleware
 import logging
 
 app = FastAPI()

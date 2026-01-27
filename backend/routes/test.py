@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from backend.core.clients import supabase_client
+from core.clients import supabase_client
 import logging
 logger = logging.getLogger(__name__)
 router = APIRouter()

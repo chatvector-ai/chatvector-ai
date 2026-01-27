@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:16
@@ -22,9 +20,10 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: "postgresql://postgres:postgres@db:5432/chatvector"
+      DATABASE_URL: "postgresql+psycopg://postgres:postgres@db:5432/chatvector"
+    working_dir: /app
     volumes:
-      - ./backend:/app  # hot reload: reflects local changes inside container
+      - ./backend:/app  # hot reload
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 volumes:
