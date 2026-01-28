@@ -76,14 +76,19 @@ async def insert_chunk(doc_id: str, chunk_text: str, embedding: List[float]):
             raise
 
 
-async def locate_matching_chunks(doc_id: str, query_embedding: List[float], match_count: int = 5):
+async def locate_matching_chunks(
+    doc_id: str, 
+    query_embedding: List[float], 
+    match_count: int = 5
+) -> List[DocumentChunk]:
     """
     Return matching chunks for a given document ID using embeddings.
+    Always returns a list of DocumentChunk objects, regardless of dev or Supabase.
     """
+    chunks: List[DocumentChunk] = []
+
     if config.APP_ENV.lower() == "development":
         async with async_session() as session:
-            # naive vector search using pgvector functions
-            # assumes you have embeddings stored as vector column (Postgres pgvector)
             result = await session.execute(
                 select(DocumentChunk)
                 .where(DocumentChunk.document_id == doc_id)
@@ -91,7 +96,6 @@ async def locate_matching_chunks(doc_id: str, query_embedding: List[float], matc
             )
             chunks = result.scalars().all()
             logger.debug(f"[DEV] Vector search returned {len(chunks)} chunks for document {doc_id}")
-            return chunks
     else:
         try:
             result = supabase_client.rpc("match_chunks", {
@@ -99,8 +103,21 @@ async def locate_matching_chunks(doc_id: str, query_embedding: List[float], matc
                 "match_count": match_count,
                 "filter_document_id": doc_id
             }).execute()
-            logger.debug(f"[SUPABASE] Vector search returned {len(result.data)} chunks for document {doc_id}")
-            return result.data
+
+            for c in result.data:
+                chunk_obj = DocumentChunk(
+                    id=c["id"],
+                    document_id=c["document_id"],
+                    chunk_text=c["chunk_text"],
+                    embedding=c["embedding"],
+                    created_at=c["created_at"]
+                )
+                chunks.append(chunk_obj)
+
+            logger.debug(f"[SUPABASE] Vector search returned {len(chunks)} chunks for document {doc_id}")
+
         except Exception as e:
             logger.error(f"[SUPABASE] Failed to retrieve chunks for document {doc_id}: {e}")
             raise
+
+    return chunks

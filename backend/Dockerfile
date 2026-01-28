@@ -2,8 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# System deps for psycopg / pgvector
-RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/lists/*
+# System deps for psycopg / pgvector + Postgres client for wait-for-db.sh
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libpq-dev \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps
 COPY requirements.txt .

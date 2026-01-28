@@ -2,9 +2,11 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy import Column, String, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
+from pgvector.sqlalchemy import Vector
 from core.config import config
+import uuid
 
 Base = declarative_base()
 
@@ -25,7 +27,7 @@ async_session = sessionmaker(
 class Document(Base):
     __tablename__ = "documents"
 
-    id = Column(UUID(as_uuid=True), primary_key=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     file_name = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -33,11 +35,8 @@ class Document(Base):
 class DocumentChunk(Base):
     __tablename__ = "document_chunks"
 
-    id = Column(UUID(as_uuid=True), primary_key=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=False)
     chunk_text = Column(String, nullable=False)
-    embedding = Column(JSONB, nullable=False)  # store embeddings as JSON array
+    embedding = Column(Vector(768), nullable=False)  # ✅ pgvector type
     created_at = Column(DateTime, default=datetime.utcnow)
-
-
-

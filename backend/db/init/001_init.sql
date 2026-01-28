@@ -2,14 +2,14 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Create documents table
-CREATE TABLE documents (
+CREATE TABLE IF NOT EXISTS documents (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   file_name TEXT,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Create document_chunks table
-CREATE TABLE document_chunks (
+CREATE TABLE IF NOT EXISTS document_chunks (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   document_id UUID REFERENCES documents(id),
   chunk_text TEXT,

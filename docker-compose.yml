@@ -1,14 +1,16 @@
+version: "3.9"
+
 services:
   db:
-    image: postgres:16
+    image: pgvector/pgvector:pg16  # ✅ Postgres 16 with vector extension
     container_name: chatvector-db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: chatvector
+      POSTGRES_DB: postgres
     volumes:
       - chatvector-db-data:/var/lib/postgresql/data
-      - ./backend/db/init:/docker-entrypoint-initdb.d  # ✅ Auto-run SQL
+      - ./backend/db/init:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
 
@@ -21,11 +23,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: "postgresql+psycopg://postgres:postgres@db:5432/chatvector"
+      DATABASE_URL: "postgresql+psycopg://postgres:postgres@db:5432/postgres"
     working_dir: /app
     volumes:
-      - ./backend:/app  # hot reload
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+      - ./backend:/app
+    command: ["./wait-for-db.sh", "db", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 volumes:
   chatvector-db-data:
