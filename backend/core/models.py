@@ -38,5 +38,5 @@ class DocumentChunk(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=False)
     chunk_text = Column(String, nullable=False)
-    embedding = Column(Vector(768), nullable=False)  # ✅ pgvector type
+    embedding = Column(Vector(3072), nullable=False)  # ✅ pgvector type
     created_at = Column(DateTime, default=datetime.utcnow)

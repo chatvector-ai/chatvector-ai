@@ -1,41 +1,60 @@
 import asyncio
+import logging
 from google import genai
 from core.config import config
-import logging
 
 logger = logging.getLogger(__name__)
 
-# Initialize the GenAI client
 client = genai.Client(api_key=config.GEN_AI_KEY)
 
-async def get_embedding(text: str):
+EMBEDDING_DIM = 3072
+MODEL_NAME = "models/gemini-embedding-001"
+
+
+async def get_embeddings(texts: list[str]) -> list[list[float]]:
     """
-    Get an embedding for the provided text using Gemini Embeddings.
-    Returns 768-dimensional vectors to match database schema.
+    Generate embeddings for multiple texts.
+    Always returns List[List[float]] with fixed dimension.
     """
     for attempt in range(3):
         try:
-            logger.info(f"Requesting embedding from GenAI (Attempt {attempt + 1}/3)...")
-            
-            # Use text-embedding-004 which returns 768 dimensions
+            logger.info(
+                f"Requesting embeddings for {len(texts)} inputs "
+                f"(Attempt {attempt + 1}/3)"
+            )
+
             result = await asyncio.to_thread(
                 client.models.embed_content,
-                model="models/text-embedding-004",  # 768 dimensions
-                contents=text
+                model=MODEL_NAME,
+                contents=texts,
             )
-            
-            # Extract the embedding values
-            content_embedding = result.embeddings[0]
-            embedding_vector = content_embedding.values
 
-            logger.info(f"Generated embedding of length: {len(embedding_vector)}")
-            return embedding_vector
+            embeddings = [e.values for e in result.embeddings]
+
+            # Safety check
+            for i, emb in enumerate(embeddings):
+                if len(emb) != EMBEDDING_DIM:
+                    raise ValueError(
+                        f"Embedding {i} has {len(emb)} dims, expected {EMBEDDING_DIM}"
+                    )
+
+            return embeddings
 
         except Exception as e:
             wait_time = (attempt + 1) * 2
-            logger.error(f"Embedding generation failed (Attempt {attempt + 1}/3). Error: {str(e)}")
+            logger.warning(
+                f"Embedding batch attempt {attempt + 1} failed, retrying: {e}"
+            )
             await asyncio.sleep(wait_time)
 
-    logger.error("Failed to get embedding after 3 attempts. Returning zero vector.")
-    # Match database schema: 768 dimensions
-    return [0.0] * 768
+    logger.error(
+        f"Embedding batch failed after retries; returning zero vectors ({EMBEDDING_DIM} dims)"
+    )
+    return [[0.0] * EMBEDDING_DIM for _ in texts]
+
+
+async def get_embedding(text: str) -> list[float]:
+    """
+    Convenience wrapper for single-text embedding.
+    """
+    return (await get_embeddings([text]))[0]

@@ -13,13 +13,13 @@ CREATE TABLE IF NOT EXISTS document_chunks (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   document_id UUID REFERENCES documents(id),
   chunk_text TEXT,
-  embedding vector(768),
+  embedding vector(3072),
   created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Vector search function
 CREATE OR REPLACE FUNCTION match_chunks(
-  query_embedding vector(768),
+  query_embedding vector(3072),
   match_count int DEFAULT 5,
   filter_document_id uuid DEFAULT NULL
 )

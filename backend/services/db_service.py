@@ -42,47 +42,58 @@ async def create_document(file_name: str):
             raise
 
 
-async def insert_chunk(doc_id: str, chunk_text: str, embedding) -> str:
+async def insert_chunks_batch(
+    doc_id: str,
+    chunks_with_embeddings: list[tuple[str, list[float]]],
+) -> list[str]:
     """
-    Insert a single document chunk.
-    embedding: list of floats or ContentEmbedding object
+    Insert multiple document chunks in a single DB operation.
+    Returns list of chunk IDs.
     """
-    # Ensure embedding is a plain list
-    if not isinstance(embedding, list):
-        try:
-            embedding = embedding.to_list()  # for ContentEmbedding
-        except AttributeError:
-            logger.warning(f"Embedding is not a list, defaulting to zero vector")
-            embedding = [0.0] * 3072
-
     if config.APP_ENV.lower() == "development":
         async with async_session() as session:
-            session: AsyncSession  # type hint for IDE
+            chunk_rows = []
+            chunk_ids = []
 
-            chunk_id = str(uuid.uuid4())
-            new_chunk = DocumentChunk(
-                id=chunk_id,
-                document_id=doc_id,
-                chunk_text=chunk_text,
-                embedding=embedding
-            )
-            session.add(new_chunk)
+            for chunk_text, embedding in chunks_with_embeddings:
+                chunk_id = str(uuid.uuid4())
+                chunk_ids.append(chunk_id)
+                chunk_rows.append(
+                    DocumentChunk(
+                        id=chunk_id,
+                        document_id=doc_id,
+                        chunk_text=chunk_text,
+                        embedding=embedding,
+                    )
+                )
+
+            session.add_all(chunk_rows)
             await session.commit()
-            logger.info(f"[DEV] Created chunk ID {chunk_id} for document {doc_id}")
-            return chunk_id
+
+            logger.info(f"[DEV] Inserted {len(chunk_ids)} chunks for document {doc_id}")
+            return chunk_ids
+
     else:
         try:
-            result = supabase_client.table("document_chunks").insert({
-                "document_id": doc_id,
-                "chunk_text": chunk_text,
-                "embedding": embedding
-            }).execute()
-            chunk_id = result.data[0]["id"]
-            logger.info(f"[SUPABASE] Created chunk ID {chunk_id} for document {doc_id}")
-            return chunk_id
+            payload = [
+                {
+                    "document_id": doc_id,
+                    "chunk_text": chunk_text,
+                    "embedding": embedding,
+                }
+                for chunk_text, embedding in chunks_with_embeddings
+            ]
+
+            result = supabase_client.table("document_chunks").insert(payload).execute()
+            chunk_ids = [row["id"] for row in result.data]
+
+            logger.info(f"[SUPABASE] Inserted {len(chunk_ids)} chunks for document {doc_id}")
+            return chunk_ids
+
         except Exception as e:
-            logger.error(f"[SUPABASE] Failed to create chunk for document {doc_id}: {e}")
+            logger.error(f"[SUPABASE] Batch insert failed for document {doc_id}: {e}")
             raise
+
 
 
 

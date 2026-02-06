@@ -10,8 +10,8 @@ async def test_get_embedding_success(mocker):
     """
     Test that get_embedding returns a vector without hitting the external API.
     """
-    # Define the mock return value (768 dimensions is standard for Gemini embedding-001)
-    mock_embedding = {"embedding": [0.1] * 768}
+    # Define the mock return value (3072 dimensions is standard for Gemini embedding-001)
+    mock_embedding = {"embedding": [0.1] * 3072}
     
     # Mock the genai.embed_content method
     mocker.patch(
@@ -25,7 +25,7 @@ async def test_get_embedding_success(mocker):
     
     # Assertions
     assert embedding == mock_embedding["embedding"]
-    assert len(embedding) == 768
+    assert len(embedding) == 3072
 
 
 

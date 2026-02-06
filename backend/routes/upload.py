@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File
 from services.extraction_service import extract_text_from_file
 from services.db_service import create_document
 from services.ingestion_service import ingest_chunks
+from services.embedding_service import get_embeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import logging
 
@@ -16,10 +17,12 @@ async def upload(file: UploadFile = File(...)):
     # Step 2: Split text into chunks
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = splitter.split_text(file_text)
-    # Step 3: Create document
+    # Step 3: Generate Embeddings
+    embeddings = await get_embeddings(chunks)
+    # Step 4: Create document
     doc_id = await create_document(file.filename)
-    # Step 4: Insert chunks
-    inserted_chunk_ids = await ingest_chunks(chunks, doc_id)
+    # Step 5: Insert chunks
+    inserted_chunk_ids = await ingest_chunks(chunks, embeddings, doc_id)
     logger.info(f"Successfully uploaded {len(inserted_chunk_ids)} chunks for document {doc_id}")
     return {
         "message": "Uploaded",

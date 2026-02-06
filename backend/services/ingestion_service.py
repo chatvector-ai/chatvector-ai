@@ -1,39 +1,19 @@
-# backend/services/db_service.py
 import logging
-from services.embedding_service import get_embedding
-from services.db_service import insert_chunk
+from services.db_service import insert_chunks_batch
 
 logger = logging.getLogger(__name__)
 
-async def ingest_chunks(chunks: list[str], doc_id: str):
+async def ingest_chunks(chunks: list[str], embeddings: list[list[float]], doc_id: str):
     """
-    Orchestrates chunk ingestion for a single document.
-
-    - Responsible for embedding generation and per-chunk insertion.
-    - Ensures embeddings are stored as plain float lists for pgvector.
-    - Partial ingestion may occur if an error is raised; errors are logged.
+    Insert document chunks with their embeddings in batch.
     """
-    inserted_chunk_ids = []
     try:
-        for idx, chunk in enumerate(chunks, start=1):
-            logger.info(f"Ingesting chunk {idx}/{len(chunks)} for document {doc_id}")
-
-            # Get embedding as plain list
-            embedding = await get_embedding(chunk)
-            if not isinstance(embedding, list):
-                # Safety check: convert any ContentEmbedding object
-                try:
-                    embedding = embedding.to_list()
-                except AttributeError:
-                    logger.warning(
-                        f"Embedding for chunk {idx} is not a list; "
-                        f"defaulting to zero vector"
-                    )
-                    embedding = [0.0] * 3072
-
-            # Insert chunk with embedding
-            chunk_id = await insert_chunk(doc_id, chunk, embedding)
-            inserted_chunk_ids.append(chunk_id)
+        if len(chunks) != len(embeddings):
+            raise ValueError(
+                f"Number of chunks ({len(chunks)}) does not match number of embeddings ({len(embeddings)})"
+            )
+        chunks_with_embeddings = list(zip(chunks, embeddings))
+        inserted_chunk_ids = await insert_chunks_batch(doc_id, chunks_with_embeddings)
 
         logger.info(f"Successfully ingested {len(inserted_chunk_ids)} chunks for document {doc_id}")
         return inserted_chunk_ids
@@ -41,3 +21,5 @@ async def ingest_chunks(chunks: list[str], doc_id: str):
     except Exception as e:
         logger.error(f"Chunk ingestion failed for document {doc_id}: {e}")
         raise
+
+
