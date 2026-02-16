@@ -1,10 +1,9 @@
-from __future__ import annotations
-
+# backend/services/db_service.py
 import logging
+import json
+from app.utils.retry import retry_async
 import uuid
-from dataclasses import dataclass
 from typing import List
-
 from core.config import config
 
 logger = logging.getLogger(__name__)
@@ -18,18 +17,6 @@ if config.APP_ENV.lower() == "development":
 # Keep supabase client for production / cloud mode
 else:
     from core.clients import supabase_client
-
-
-@dataclass
-class ChunkMatch:
-    """Normalized chunk object returned in Supabase mode."""
-
-    id: str
-    chunk_text: str
-    document_id: str | None = None
-    embedding: list[float] | None = None
-    created_at: str | None = None
-    similarity: float | None = None
 
 
 # db funcs
@@ -109,91 +96,18 @@ async def insert_chunks_batch(
             raise
 
 
-def _cleanup_orphaned_document(doc_id: str) -> None:
-    """
-    Best-effort cleanup for non-atomic Supabase writes.
-    Deletes chunks first, then document.
-    """
-    try:
-        supabase_client.table("document_chunks").delete().eq("document_id", doc_id).execute()
-        supabase_client.table("documents").delete().eq("id", doc_id).execute()
-        logger.info(f"[SUPABASE] Cleanup succeeded for failed upload document {doc_id}")
-    except Exception as cleanup_error:
-        logger.error(f"[SUPABASE] Cleanup failed for orphaned document {doc_id}: {cleanup_error}")
-
-
-async def create_document_with_chunks_atomic(
-    file_name: str,
-    chunks_with_embeddings: list[tuple[str, list[float]]],
-) -> tuple[str, list[str]]:
-    """
-    Persist document + chunks as one logical unit.
-
-    Development mode:
-    - Uses a single SQLAlchemy transaction (true DB atomicity).
-
-    Supabase mode:
-    - Uses compensating cleanup on failure, since multi-step client writes
-      are not atomic by default.
-    """
-    if config.APP_ENV.lower() == "development":
-        async with async_session() as session:
-            session: AsyncSession
-            chunk_ids: list[str] = []
-            doc_id = str(uuid.uuid4())
-
-            try:
-                async with session.begin():
-                    session.add(Document(id=doc_id, file_name=file_name))
-
-                    chunk_rows = []
-                    for chunk_text, embedding in chunks_with_embeddings:
-                        chunk_id = str(uuid.uuid4())
-                        chunk_ids.append(chunk_id)
-                        chunk_rows.append(
-                            DocumentChunk(
-                                id=chunk_id,
-                                document_id=doc_id,
-                                chunk_text=chunk_text,
-                                embedding=embedding,
-                            )
-                        )
-
-                    session.add_all(chunk_rows)
-
-                logger.info(
-                    f"[DEV] Atomic upload persisted document {doc_id} with {len(chunk_ids)} chunks"
-                )
-                return doc_id, chunk_ids
-            except Exception as e:
-                logger.error(f"[DEV] Atomic upload failed for file {file_name}: {e}")
-                raise
-
-    doc_id: str | None = None
-    try:
-        doc_id = await create_document(file_name)
-        chunk_ids = await insert_chunks_batch(doc_id, chunks_with_embeddings)
-        logger.info(
-            f"[SUPABASE] Upload persisted document {doc_id} with {len(chunk_ids)} chunks"
-        )
-        return doc_id, chunk_ids
-    except Exception as e:
-        logger.error(f"[SUPABASE] Atomic upload failed for file {file_name}: {e}")
-        if doc_id is not None:
-            _cleanup_orphaned_document(doc_id)
-        raise
 
 
 async def locate_matching_chunks(
-    doc_id: str,
-    query_embedding: List[float],
-    match_count: int = 5,
-) -> list:
+    doc_id: str, 
+    query_embedding: List[float], 
+    match_count: int = 5
+) -> List[DocumentChunk]:
     """
     Return matching chunks for a given document ID using embeddings.
-    Always returns chunk-like objects with a chunk_text attribute.
+    Always returns a list of DocumentChunk objects, regardless of dev or Supabase.
     """
-    chunks: list = []
+    chunks: List[DocumentChunk] = []
 
     if config.APP_ENV.lower() == "development":
         async with async_session() as session:
@@ -206,26 +120,21 @@ async def locate_matching_chunks(
             logger.debug(f"[DEV] Vector search returned {len(chunks)} chunks for document {doc_id}")
     else:
         try:
-            result = supabase_client.rpc(
-                "match_chunks",
-                {
-                    "query_embedding": query_embedding,
-                    "match_count": match_count,
-                    "filter_document_id": doc_id,
-                },
-            ).execute()
+            result = supabase_client.rpc("match_chunks", {
+                "query_embedding": query_embedding,
+                "match_count": match_count,
+                "filter_document_id": doc_id
+            }).execute()
 
             for c in result.data:
-                chunks.append(
-                    ChunkMatch(
-                        id=c["id"],
-                        document_id=c.get("document_id", doc_id),
-                        chunk_text=c["chunk_text"],
-                        embedding=c.get("embedding"),
-                        created_at=c.get("created_at"),
-                        similarity=c.get("similarity"),
-                    )
+                chunk_obj = DocumentChunk(
+                    id=c["id"],
+                    document_id=c["document_id"],
+                    chunk_text=c["chunk_text"],
+                    embedding=c["embedding"],
+                    created_at=c["created_at"]
                 )
+                chunks.append(chunk_obj)
 
             logger.debug(f"[SUPABASE] Vector search returned {len(chunks)} chunks for document {doc_id}")
 
