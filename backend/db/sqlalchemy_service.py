@@ -1,6 +1,7 @@
 import uuid
 import logging
 from sqlalchemy.ext.asyncio import async_session
+from sqlalchemy import select
 from app.models import DocumentChunk, Document
 from app.db.base import DatabaseService
 
@@ -60,3 +61,20 @@ class SQLAlchemyService(DatabaseService):
                     "created_at": document.created_at
                 }
             return None
+        
+    async def find_similar_chunks(
+        self,
+        doc_id: str,
+        query_embedding: list[float],
+        match_count: int = 5
+    ) -> list[DocumentChunk]:
+        async with async_session() as session:
+            result = await session.execute(
+                select(DocumentChunk)
+                .where(DocumentChunk.document_id == doc_id)
+                .limit(match_count)
+            )
+            chunks = result.scalars().all()
+            
+            logger.debug(f"[SQLAlchemy] Found {len(chunks)} chunks for document {doc_id}")
+            return chunks

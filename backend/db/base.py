@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from core.models import async_session, Document, DocumentChunk
 
 # abstract base class that defines WHAT database operations we need
 # all dbservices (sqlalchemy, supabas, mongodb etc.) must implement these methods.
@@ -23,5 +24,16 @@ class DatabaseService(ABC):
     #grab a document by id
     @abstractmethod
     async def get_document(self, doc_id: str) -> dict:
+        pass
+
+    # Find chunks similar to the query embedding using vector similarity.
+    # return List of DocumentChunk objects sorted by similarity
+    @abstractmethod
+    async def find_similar_chunks(
+        self,
+        doc_id: str,
+        query_embedding: list[float],
+        match_count: int = 5
+    ) -> list[DocumentChunk]:
         pass
     

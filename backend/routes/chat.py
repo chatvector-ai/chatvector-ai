@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from services.embedding_service import get_embedding
 from services.answer_service import generate_answer
-from services.db_service import locate_matching_chunks
+from services.db_service import find_similar_chunks
 from services.context_service import build_context_from_chunks
 import logging
 
@@ -14,7 +14,7 @@ async def chat(question: str, doc_id: str):
     # step 1: Embed query
     query_embedding = await get_embedding(question)
     # step 2: vector search
-    matching_chunks = await locate_matching_chunks(doc_id, query_embedding, match_count=5)
+    matching_chunks = await find_similar_chunks(doc_id, query_embedding, match_count=5)
     # step 3: prepare context for llm
     context = build_context_from_chunks(matching_chunks)
     # step 4: generate answer

@@ -5,7 +5,7 @@ Uses an in-memory SQLite database for testing.
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from app.db.sqlalchemy_service import SQLAlchemyService
+from db.sqlalchemy_service import SQLAlchemyService
 
 @pytest.fixture
 def sqlalchemy_service():

@@ -5,7 +5,7 @@ Tests the complete pipeline with mocked failures.
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from app.routes.upload import upload
+from routes.upload import upload
 from fastapi import UploadFile
 
 @pytest.mark.asyncio
@@ -50,4 +50,4 @@ async def test_upload_fails_on_permanent_error():
                 with pytest.raises(Exception, match="constraint violation"):
                     await upload(mock_file)
     
-    assert mock_create.call_count == 1  # No retry
+    assert mock_create.call_count == 1  

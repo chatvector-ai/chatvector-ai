@@ -6,7 +6,7 @@ import pytest
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-from app.utils.retry import retry_async, is_transient_error
+from utils.retry import retry_async, is_transient_error
 
 @pytest.mark.asyncio
 async def test_retry_success_on_third_try():

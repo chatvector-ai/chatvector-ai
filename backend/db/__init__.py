@@ -25,6 +25,7 @@ Permanent errors (constraints, validation) fail immediately.
 import logging
 from app.config import config
 from app.utils.retry import retry_async  
+from core.models import DocumentChunk
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +98,32 @@ async def get_document(doc_id: str) -> dict:
         func_name=f"{service.__class__.__name__}.get_document"
     )
 
-# You can also export the service directly if you prefer
+# Find chunks similar to query embedding using vector search.db
+async def find_similar_chunks(
+    doc_id: str,
+    query_embedding: list[float],
+    match_count: int = 5
+) -> list[DocumentChunk]:
+    
+    service = get_db_service()
+    
+    async def _find():
+        return await service.find_similar_chunks(doc_id, query_embedding, match_count)
+    
+    return await retry_async(
+        _find,
+        max_retries=3,
+        base_delay=1.0,
+        backoff=2.0,
+        func_name=f"{service.__class__.__name__}.find_similar_chunks"
+    )
+
 __all__ = [
     "get_db_service",
     "create_document", 
     "store_chunks_with_embeddings",
     "get_document",
+    "find_similar_chunks",  # 👈 Add this
     "db_service",  
 ]
+

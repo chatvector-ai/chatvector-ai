@@ -5,7 +5,7 @@ Ensures the right service is returned based on environment.
 import pytest
 from unittest.mock import patch
 
-from app.db import get_db_service
+from db import get_db_service
 
 @pytest.mark.asyncio
 async def test_factory_returns_sqlalchemy_in_dev():
