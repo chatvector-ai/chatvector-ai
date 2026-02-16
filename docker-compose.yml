@@ -30,8 +30,10 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: "postgresql+psycopg://postgres:postgres@db:5432/postgres"
-      PYTHONPATH: /app        # ensures imports work
+      # 👇 Fixed: Using asyncpg for async support
+      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@db:5432/postgres"
+      APP_ENV: "development"
+      PYTHONPATH: /app
     working_dir: /app
     volumes:
       - ./backend:/app
@@ -45,12 +47,14 @@ services:
     volumes:
       - ./backend:/app
     environment:
-      DATABASE_URL: "postgresql+psycopg://postgres:postgres@db:5432/postgres"
+      # 👇 Same fix here
+      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@db:5432/postgres"
+      APP_ENV: "test"
       PYTHONPATH: /app
     depends_on:
       db:
         condition: service_healthy
-    command: ["pytest", "-v"]  # run all tests
+    command: ["pytest", "-v", "--asyncio-mode=auto"]  # 👈 Added asyncio mode
 
 volumes:
   chatvector-db-data:

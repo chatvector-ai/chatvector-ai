@@ -19,6 +19,13 @@ COPY . .
 # Make logs folder
 RUN mkdir -p logs
 
+# Make scripts executable
+RUN chmod +x /app/wait-for-db.sh /app/entrypoint.sh
+
 EXPOSE 8000
 
+# Use entrypoint script to handle cleanup and setup
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# Default command (can be overridden)
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
