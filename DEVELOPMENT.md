@@ -227,3 +227,9 @@ docker compose logs chatvector-db | grep "ready to accept"
 - Check `.env` file exists
 - Verify `GEMINI_API_KEY` is set
 - Restart backend container: `docker compose restart`
+
+## Upload Atomicity (Issue #63)
+
+- `/upload` now persists the document record and chunk rows as one logical operation.
+- In `development`, this uses a single SQLAlchemy transaction.
+- In `production` (Supabase mode), if chunk insertion fails after document creation, the backend performs compensating cleanup to delete the orphaned document/chunks.
