@@ -42,6 +42,25 @@ docker compose ps
 docker compose restart
 ```
 
+
+### Makefile Commands
+
+To simplify Docker workflows, the project includes a `Makefile` with short, memorable commands.
+
+These are wrappers around standard `docker compose` commands.  
+You can still use Docker directly if preferred.
+
+
+```bash
+make up      # Start containers (detached)
+make build   # Rebuild and start containers
+make down    # Stop containers
+make reset   # Stop containers and remove volumes
+make logs    # Follow API logs
+make db      # Open Postgres shell
+make help    # Show all available commands
+```
+
 ### Frontend (Local Node )
 
 ```bash
