@@ -8,23 +8,22 @@ import logging
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-
 @router.post("/upload")
 async def upload(file: UploadFile = File(...)):
     logger.info(f"Starting upload for file: {file.filename} ({file.content_type})")
 
     try:
-        # Step 1: Extract text from the file
+        # Step 1: Extract text
         file_text = await extract_text_from_file(file)
 
-        # Step 2: Split text into chunks
+        # Step 2: Split into chunks
         splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         chunks = splitter.split_text(file_text)
 
         # Step 3: Generate embeddings
         embeddings = await get_embeddings(chunks)
 
-        # Step 4: Persist document + chunks atomically
+        # Step 4: Delegate to ingestion service (handles validation + atomic persistence)
         doc_id, inserted_chunk_ids = await ingest_document_atomic(
             file_name=file.filename,
             chunks=chunks,
@@ -32,14 +31,19 @@ async def upload(file: UploadFile = File(...)):
         )
 
         logger.info(f"Successfully uploaded {len(inserted_chunk_ids)} chunks for document {doc_id}")
+
         return {
             "message": "Uploaded",
             "document_id": doc_id,
             "chunks": len(inserted_chunk_ids),
         }
+    
     except ValueError as e:
         logger.warning(f"Upload validation failed for file {file.filename}: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Upload failed for file {file.filename}: {e}")
         raise HTTPException(status_code=500, detail="Upload failed. Please try again.")
+
+
+    

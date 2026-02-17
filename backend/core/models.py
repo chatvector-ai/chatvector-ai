@@ -30,6 +30,8 @@ class Document(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     file_name = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, default="processing")  # Add this line
+
 
 
 class DocumentChunk(Base):
@@ -40,3 +42,4 @@ class DocumentChunk(Base):
     chunk_text = Column(String, nullable=False)
     embedding = Column(Vector(3072), nullable=False)  # ✅ pgvector type
     created_at = Column(DateTime, default=datetime.utcnow)
+    

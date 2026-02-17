@@ -8,6 +8,20 @@ CREATE TABLE IF NOT EXISTS documents (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Add status column if it doesn't exist (for new setups and migrations)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_name = 'documents' 
+        AND column_name = 'status'
+    ) THEN
+        ALTER TABLE documents 
+        ADD COLUMN status VARCHAR(50) DEFAULT 'processing';
+    END IF;
+END $$;
+
 -- Create document_chunks table
 CREATE TABLE IF NOT EXISTS document_chunks (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

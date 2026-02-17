@@ -1,45 +1,72 @@
 # Development Guide
 
-Quick reference for day-to-day development workflows. For initial setup, see the main README.
+## Table of Contents
+
+- [API Access](#api-access)
+- [Quick Start](#quick-start)
+- [Docker Reference](#docker-reference)
+- [Database Initialization](#database-initialization)
+- [Working with the Database Layer](#working-with-the-database-layer)
+- [Tests](#tests)
+- [Advanced Local Development](#advanced-local-development)
+- [Git Workflow](#git-workflow)
+- [Common Tasks](#common-tasks)
+- [Environment Variables](#environment-variables)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
-## 📚 Table of Contents
+## API Access
 
-- [Quick Start](#-quick-start)
-- [API Access](#-api-access)
-- [Tests](#-running-tests)
-- [Backend Development](#-backend-development-local-python---advanced)
-- [Git Workflow](#-git-workflow)
-- [Common Tasks](#-common-tasks)
-- [Troubleshooting](#-troubleshooting)
+Backend: http://localhost:8000  
+API Docs (Swagger UI): http://localhost:8000/docs  
+Database: PostgreSQL with pgvector (port 5432)
+
+---
 
 ## Quick Start
 
-### Backend (Docker - Recommended)
+Start the full backend stack (API + database):
 
 ```bash
-# Start backend + PostgreSQL
-docker compose up chatvector-api chatvector-db
+docker compose up --build
+```
 
-# Stop backend and database
+Backend: http://localhost:8000  
+Docs: http://localhost:8000/docs
+
+---
+
+## Docker Reference
+
+```bash
+# Rebuild backend after dependency changes
+docker compose build api
+
+# Start API + database
+docker compose up api db
+
+# Start database only
+docker compose up db
+
+# Stop containers
 docker compose down
 
-# Stop and remove data (clean slate)
+# Stop and remove data (WARNING: deletes DB data)
 docker compose down -v
 
-# View backend logs
-docker compose logs -f chatvector-api
-
-# Rebuild backend after dependency changes
-docker compose build chatvector-api
+# View logs
+docker compose logs -f api
+docker compose logs -f db
 
 # Check running services
 docker compose ps
-# Should show: chatvector-api, chatvector-db
 
 # Restart containers
 docker compose restart
+
+# Access PostgreSQL directly
+docker exec -it chatvector-db psql -U postgres -d postgres
 ```
 
 
@@ -62,54 +89,134 @@ make help    # Show all available commands
 ```
 
 ### Frontend (Local Node )
+---
+
+## Database Initialization
+
+The database initializes automatically with:
+
+- `pgvector` extension
+- `documents` table
+- `document_chunks` table
+- `match_chunks` similarity function
+
+Verify setup:
 
 ```bash
-cd frontend
+docker exec -it chatvector-db psql -U postgres -d postgres
 
-# Install dependencies
-npm install
+\dx
+\dt
 
-# Run dev server
-npm run dev
+SELECT * FROM match_chunks(
+    array_fill(0::real, ARRAY[3072])::vector,
+    1
+) LIMIT 0;
+
+\q
 ```
 
 ---
 
-## API Access
+## Working with the Database Layer
 
-- **Backend:** [http://localhost:8000](http://localhost:8000)
-- **Frontend:** [http://localhost:3000](http://localhost:3000) (optional, for testing)
-- **API Docs (Swagger UI):** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Database:** PostgreSQL on port 5432
+All database access must go through the service abstraction layer.
+
+### 1. Add method to base class (`db/base.py`)
+
+```python
+from abc import abstractmethod
+
+@abstractmethod
+async def new_operation(self, param: str) -> str:
+    pass
+```
+
+### 2. Implement in both services
+
+- `db/sqlalchemy_service.py` (development)
+- `db/supabase_service.py` (production)
+
+### 3. Use via factory
+
+```python
+from app.db import new_operation
+
+result = await new_operation("test")
+```
+
+The factory automatically:
+
+- Selects the correct environment
+- Applies retry logic
+- Handles logging
 
 ---
 
-## Running Tests
+## Tests
 
-This project uses `pytest` and `pytest-asyncio` for async tests.
+This project uses `pytest` and `pytest-asyncio`.
 
-### Using Docker
-
-Run all tests in a one-off container:
+### Using Docker (Recommended)
 
 ```bash
-docker-compose run --rm tests
+docker compose run --rm tests
 ```
 
-## 🔧 Backend Development (Local Python - Advanced)
+Common options:
+
+```bash
+pytest -v        # verbose
+pytest -x        # stop on first failure
+pytest -s        # show print statements
+pytest --cov=app # coverage
+```
+
+### Running Locally
 
 ```bash
 cd backend
+pip install -r requirements.txt
+pytest tests/ -v
+```
 
-# Create/activate virtual environment
+(PostgreSQL must be running.)
+
+---
+
+## Advanced Local Development
+
+For contributors running Python directly.
+
+### Option 1: Docker Database Only
+
+```bash
+docker compose up -d db
+
+cd backend
 python -m venv venv
-source venv/bin/activate  # Mac/Linux
-# venv\Scripts\activate   # Windows
-
-# Install dependencies
+source venv/bin/activate
 pip install -r requirements.txt
 
-# Run with auto-reload
+export DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
+export APP_ENV="development"
+export GEN_AI_KEY="your-key"
+
+uvicorn main:app --reload --port 8000
+```
+
+---
+
+### Option 2: Fully Local PostgreSQL
+
+```bash
+createdb chatvector_dev
+psql -d chatvector_dev -f backend/db/init/001_init.sql
+
+export DATABASE_URL="postgresql+asyncpg://localhost:5432/chatvector_dev"
+export APP_ENV="development"
+export GEN_AI_KEY="your-key"
+
 uvicorn main:app --reload --port 8000
 ```
 
@@ -117,138 +224,86 @@ uvicorn main:app --reload --port 8000
 
 ## Git Workflow
 
-### 0. One-Time Setup (Required)
-
 ```bash
-# Clone your fork
-git clone https://github.com/<your-username>/chatvector-ai.git
-cd chatvector-ai
-
-# Add upstream (main project repo)
-git remote add upstream https://github.com/chatvector-ai/chatvector-ai.git
-
-# Verify remotes
-git remote -v
-```
-
-### Expected output
-
-```bash
-origin    https://github.com/<your-username>/chatvector-ai.git (fetch)
-origin    https://github.com/<your-username>/chatvector-ai.git (push)
-upstream  https://github.com/chatvector-ai/chatvector-ai.git (fetch)
-upstream  https://github.com/chatvector-ai/chatvector-ai.git (push)
-```
-
-### 1. Create Feature Branch
-
-```bash
-# Update local main
 git checkout main
 git pull upstream main
-
-# Create descriptive branch
-git checkout -b feat/your-feature-name
-# or: fix/bug-description, docs/topic-update
+git checkout -b feat/your-feature
 ```
 
-### 2. Make Changes & Commit
+Commit:
 
 ```bash
-# Stage changes
 git add .
-
-# Commit with clear message
-git commit -m "feat: add document search endpoint"
-
-# Push to your fork
-git push -u origin feat/your-feature-name
+git commit -m "feat: add feature"
+git push -u origin feat/your-feature
 ```
 
-### 3. Update Branch (Before PR)
+Before PR:
 
 ```bash
-# Get latest from main
 git fetch upstream
-
-# Rebase to avoid merge commits
 git rebase upstream/main
-
-# Resolve any conflicts, then continue
-git add .
-git rebase --continue
-
-# Force push (safe for your branch only)
 git push --force-with-lease
 ```
 
-### 4. Submit Pull Request
-
-- Go to: `your-fork:feature-branch → upstream:main`
-- Use PR template
-- Link related issues
-- Wait for CI checks
-- Request review
+Open PR → `your-fork → main`
 
 ---
 
 ## Common Tasks
 
-### Database Access
+### Access Database
 
 ```bash
-# Connect to PostgreSQL
-docker compose exec chatvector-db psql -U postgres -d chatvector
-
-# Run SQL
-\dt  # List tables
-SELECT * FROM documents LIMIT 5;
-\q   # Quit
+docker compose exec db psql -U postgres -d postgres
 ```
 
-### Test API Endpoints
+### Reset Database
 
 ```bash
-# Health check
+docker compose down -v
+docker compose up -d db
+```
+
+### Health Check
+
+```bash
 curl http://localhost:8000/
+```
 
-# Upload a document
-curl -X POST -F "file=@sample.pdf" http://localhost:8000/upload
+---
 
-# Chat with document
-curl -X POST "http://localhost:8000/chat?doc_id=UUID&question=your+question"
+## Environment Variables
+
+Create `backend/.env`:
+
+```env
+GEN_AI_KEY=your_google_ai_studio_key
+APP_ENV=development
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/postgres
+LOG_LEVEL=INFO
 ```
 
 ---
 
 ## Troubleshooting
 
-### "Port already in use"
+### Port Already in Use
 
 ```bash
-# Find and kill process
-lsof -ti:8000 | xargs kill -9  # Backend
+lsof -ti:8000 | xargs kill -9
 ```
 
-### Database connection errors
+### Database Issues
 
 ```bash
-# Reset database
+docker compose logs db
+docker compose ps
+```
+
+### Reset Everything
+
+```bash
 docker compose down -v
-docker compose up chatvector-db
-
-# Wait for PostgreSQL to be ready
-docker compose logs chatvector-db | grep "ready to accept"
+docker compose up --build
 ```
-
-### "No API_KEY found"
-
-- Check `.env` file exists
-- Verify `GEMINI_API_KEY` is set
-- Restart backend container: `docker compose restart`
-
-## Upload Atomicity (Issue #63)
-
-- `/upload` now persists the document record and chunk rows as one logical operation.
-- In `development`, this uses a single SQLAlchemy transaction.
-- In `production` (Supabase mode), if chunk insertion fails after document creation, the backend performs compensating cleanup to delete the orphaned document/chunks.

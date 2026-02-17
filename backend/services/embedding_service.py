@@ -12,7 +12,7 @@ MODEL_NAME = "models/gemini-embedding-001"
 async def get_embeddings(texts: list[str]) -> list[list[float]]:
     """
     Generate embeddings for multiple texts.
-    Always returns List[List[float]] with fixed dimension.
+    Always returns list[list[float]] with fixed dimension.
     """
     for attempt in range(3):
         try:

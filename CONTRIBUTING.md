@@ -6,8 +6,8 @@ There is a range of tasks for beginners to more advanced developers
 
 This guide will walk you through the process step-by-step.
 
-- Watch our [Contributor Video Guide](https://www.loom.com/share/c41bdbff541f47d49efcb48920cba382) 
-- For initial project setup see -- **[📘 Readme](README.md) 
+- Watch our [Contributor Video Guide](https://www.loom.com/share/c41bdbff541f47d49efcb48920cba382)
+- For initial project setup see -- \*\*[📘 Readme](README.md)
 
 ### Start Here:
 
@@ -22,21 +22,21 @@ This guide will walk you through the process step-by-step.
 2. Ask for help in - [Discussions](https://github.com/chatvector-ai/chatvector-ai/discussions/landing)
 3. We'll help you find the perfect first contribution
 
-  ---
+   ***
 
 ## 📝 Branch and Commit Naming Convention
 
 **Format:** `type/description`
 
 **Types:**
+
 - `feat/` - New features (e.g., `feat/add-dark-mode`)
 - `fix/` - Bug fixes (e.g., `fix/upload-error-handling`)
 - `docs/` - Documentation (e.g., `docs/update-readme`)
 - `refactor/` - Code restructuring (e.g., `refactor/backend-modules`)
 
-
-
 Quick checklist:
+
 - Branch name follows convention
 - Commits are focused and descriptive
 
@@ -44,12 +44,13 @@ Maintainers should review and merge according to project policy.
 
 ---
 
-## Variable Naming 
+## Variable Naming
 
 **Python:**
+
 ```python
 # 👍 Good - Type hints and docstrings
-def process_document_chunks(document_text: str) -> List[str]:
+def process_document_chunks(document_text: str) -> list[str]:
     """Split document into chunks for processing."""
     pass
 
@@ -60,9 +61,11 @@ def chunk(
 ---
 
 ## PR Process
+
 **Check the [Readme](https://github.com/chatvector-ai/chatvector-ai/blob/main/README.md)** - For instructions on project setup
 
 ### 1. Create Your Feature Branch
+
 ```
 Follow the branching workflow described here:
 
@@ -72,12 +75,14 @@ This document focuses on contribution rules and expectations.
 ```
 
 ### 2. Open Pull Request
+
 1. Go to YOUR fork: github.com/YOUR_USERNAME/chatvector-ai
 2. Look for: "Your recently pushed branches: feat/your-feature-name"
 3. Click "Compare & pull request"
 4. This creates PR from your fork → original repo
 
 ### 3. Fill PR Description
+
 ```
 ## What does this PR do?
 
@@ -89,6 +94,7 @@ This document focuses on contribution rules and expectations.
 ```
 
 🎯 Before Submitting
+
 1. Test your changes manually using FastAPI /docs
 2. Verify existing functionality still works
 3. Check your code runs without errors
