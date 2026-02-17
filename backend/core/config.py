@@ -1,7 +1,8 @@
 from pathlib import Path
 from dotenv import load_dotenv
 import logging
-import sys, os
+import os
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -17,15 +18,19 @@ if not dotenv_path.exists():
 load_dotenv(dotenv_path)
 logger.debug(f"Loaded environment variables from {dotenv_path}")
 
+
 class Settings:
     APP_ENV: str = os.getenv("APP_ENV", "production")
     IS_PROD = APP_ENV.lower() == "production"
     SUPABASE_URL: str = os.getenv("SUPABASE_URL")
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY")
     GEN_AI_KEY: str = os.getenv("GEN_AI_KEY")
-    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()  # Log level with default
-    LOG_USE_UTC: bool = os.getenv("LOG_USE_UTC", "false").lower() in ("1", "true", "yes")# if env var is set to true-like value you can see it in utc
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
+    LOG_USE_UTC: bool = os.getenv("LOG_USE_UTC", "false").lower() in ("1", "true", "yes")
     DATABASE_URL: str = os.getenv("DATABASE_URL")
+
+    MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
+    MAX_UPLOAD_SIZE_BYTES: int = MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
     # Backwards-compatible lowercase properties for accessing config values
     @property
@@ -35,5 +40,6 @@ class Settings:
     @property
     def supabase_key(self) -> str:
         return self.SUPABASE_KEY
+
 
 config = Settings()

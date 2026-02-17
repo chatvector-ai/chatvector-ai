@@ -1,24 +1,27 @@
 """
 Tests for SQLAlchemy database service.
-Uses an in-memory SQLite database for testing.
+Uses mocked methods for interface-level behavior.
 """
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
+
+pytest.importorskip("pgvector")
+
 from db.sqlalchemy_service import SQLAlchemyService
+
 
 @pytest.fixture
 def sqlalchemy_service():
     """Create a test instance with mocked methods."""
     service = SQLAlchemyService()
-    
-    # Mock the database methods directly
+
     service.create_document = AsyncMock(return_value="test-doc-id")
     service.store_chunks_with_embeddings = AsyncMock(return_value=["chunk1", "chunk2"])
-    service.get_document = AsyncMock(return_value={"id": "test-doc-id", "filename": "test.pdf"})
+    service.get_document = AsyncMock(return_value={"id": "test-doc-id", "file_name": "test.pdf"})
     service.find_similar_chunks = AsyncMock(return_value=[])
-    service.health_check = AsyncMock(return_value=True)
-    
+
     return service
+
 
 @pytest.mark.asyncio
 async def test_create_document(sqlalchemy_service):
@@ -26,6 +29,7 @@ async def test_create_document(sqlalchemy_service):
     doc_id = await sqlalchemy_service.create_document("test.pdf")
     assert doc_id == "test-doc-id"
     sqlalchemy_service.create_document.assert_called_once_with("test.pdf")
+
 
 @pytest.mark.asyncio
 async def test_store_chunks_with_embeddings(sqlalchemy_service):

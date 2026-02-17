@@ -1,12 +1,14 @@
 # backend/core/models.py
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy import Column, String, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
-from pgvector.sqlalchemy import Vector
-from core.config import config
 import uuid
+
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
+
+from core.config import config
 
 Base = declarative_base()
 
@@ -20,18 +22,22 @@ async_engine = create_async_engine(
 async_session = sessionmaker(
     async_engine,
     expire_on_commit=False,
-    class_=AsyncSession
+    class_=AsyncSession,
 )
 
-# models
+
 class Document(Base):
     __tablename__ = "documents"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     file_name = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="uploaded")
+    failed_stage = Column(String, nullable=True)
+    error_message = Column(Text, nullable=True)
+    chunks_total = Column(Integer, nullable=False, default=0)
+    chunks_processed = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
-    status = Column(String, default="processing")  # Add this line
-
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class DocumentChunk(Base):
@@ -40,6 +46,5 @@ class DocumentChunk(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=False)
     chunk_text = Column(String, nullable=False)
-    embedding = Column(Vector(3072), nullable=False)  # ✅ pgvector type
+    embedding = Column(Vector(3072), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
