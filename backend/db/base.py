@@ -2,13 +2,14 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
 
-# Abstract base class that defines WHAT database operations we need
-# All DB services (sqlalchemy, supabase, mongodb etc.) must implement these methods.
-# This ensures they're interchangeable.
+# Abstract base class that defines WHAT database operations we need.
+# All DB services (sqlalchemy, supabase, etc.) must implement these methods.
+
 
 @dataclass
 class ChunkMatch:
     """Normalized chunk object returned by similarity search."""
+
     id: str
     chunk_text: str
     document_id: Optional[str] = None
@@ -16,45 +17,67 @@ class ChunkMatch:
     created_at: Optional[str] = None
     similarity: Optional[float] = None
 
+
 class DatabaseService(ABC):
     """Abstract base class for database services."""
-    
-    # Create a document record and return the document ID.
+
     @abstractmethod
     async def create_document(self, filename: str) -> str:
-        pass
-    
-    # Insert multiple chunks and their embeddings, return list of IDs.
-    @abstractmethod
-    async def store_chunks_with_embeddings(
-        self, 
-        doc_id: str, 
-        chunks_with_embeddings: list[tuple[str, list[float]]]
-    ) -> list[str]:
-        pass
-    
-    # Grab a document by ID.
-    @abstractmethod
-    async def get_document(self, doc_id: str) -> dict:
+        """Create a document record and return document ID."""
         pass
 
-    # Find chunks similar to the query embedding using vector similarity.
-    # Return list of ChunkMatch objects sorted by similarity.
+    @abstractmethod
+    async def store_chunks_with_embeddings(
+        self,
+        doc_id: str,
+        chunks_with_embeddings: list[tuple[str, list[float]]],
+    ) -> list[str]:
+        """Insert chunks/embeddings and return chunk IDs."""
+        pass
+
+    @abstractmethod
+    async def get_document(self, doc_id: str) -> Optional[dict]:
+        """Fetch a document by ID."""
+        pass
+
     @abstractmethod
     async def find_similar_chunks(
         self,
         doc_id: str,
         query_embedding: list[float],
-        match_count: int = 5
+        match_count: int = 5,
     ) -> list[ChunkMatch]:
+        """Run vector similarity search for chunks."""
         pass
-    
-    # Atomically create document and chunks in one operation.
-    # Returns tuple of (document_id, list of chunk_ids).
+
     @abstractmethod
     async def create_document_with_chunks_atomic(
         self,
         file_name: str,
-        chunks_with_embeddings: list[tuple[str, list[float]]]
+        chunks_with_embeddings: list[tuple[str, list[float]]],
     ) -> tuple[str, list[str]]:
+        """Atomically create document with chunk records."""
+        pass
+
+    @abstractmethod
+    async def update_document_status(
+        self,
+        doc_id: str,
+        status: str,
+        failed_stage: Optional[str] = None,
+        error_message: Optional[str] = None,
+        chunks_total: Optional[int] = None,
+        chunks_processed: Optional[int] = None,
+    ) -> None:
+        """Update upload status/progress metadata."""
+        pass
+
+    @abstractmethod
+    async def get_document_status(self, doc_id: str) -> Optional[dict]:
+        """Get document upload status payload for polling."""
+        pass
+
+    @abstractmethod
+    async def delete_document_chunks(self, doc_id: str) -> None:
+        """Delete all chunks for a document (cleanup on failures)."""
         pass

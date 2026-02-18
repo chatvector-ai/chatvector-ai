@@ -16,26 +16,33 @@ def reset_db_service_cache():
     yield
     db.db_service = None
 
+
 @pytest.mark.asyncio
 async def test_factory_returns_sqlalchemy_in_dev():
     """Should return SQLAlchemyService when APP_ENV=development."""
-    with patch('core.config.config.APP_ENV', 'development'):  # Changed from app.config
+    pytest.importorskip("pgvector")
+    with patch("core.config.config.APP_ENV", "development"):
         service = get_db_service()
-        from db.sqlalchemy_service import SQLAlchemyService  # Changed from app.db
+        from db.sqlalchemy_service import SQLAlchemyService
+
         assert isinstance(service, SQLAlchemyService)
+
 
 @pytest.mark.asyncio
 async def test_factory_returns_supabase_in_prod():
     """Should return SupabaseService when APP_ENV=production."""
-    with patch('core.config.config.APP_ENV', 'production'):  # Changed from app.config
+    with patch("core.config.config.APP_ENV", "production"):
         service = get_db_service()
-        from db.supabase_service import SupabaseService  # Changed from app.db
+        from db.supabase_service import SupabaseService
+
         assert isinstance(service, SupabaseService)
+
 
 @pytest.mark.asyncio
 async def test_factory_caches_service():
     """Should return same instance on subsequent calls."""
-    with patch('core.config.config.APP_ENV', 'development'):  # Changed from app.config
+    pytest.importorskip("pgvector")
+    with patch("core.config.config.APP_ENV", "development"):
         service1 = get_db_service()
         service2 = get_db_service()
-        assert service1 is service2  # Same instance
+        assert service1 is service2

@@ -194,8 +194,9 @@ docker-compose up --build
 
 **Try endpoints:**
 
-1. `/upload` — Upload a PDF and get a `document_id`
-2. `/chat` — Ask questions using the `document_id`
+1. `/upload` - Upload a PDF and get a `document_id` and `status_endpoint`
+2. `/documents/{document_id}/status` - Poll upload stage/progress metadata
+3. `/chat` - Ask questions using the `document_id`
 
 ---
 
@@ -296,4 +297,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 ## 📄 License
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://choosealicense.com/licenses/mit/)
+
 
