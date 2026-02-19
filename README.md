@@ -1,3 +1,30 @@
+# ChatVector-AI
+
+### Open-Source Backend-First RAG Engine for Document Intelligence
+
+ChatVector-AI is an open-source Retrieval-Augmented Generation (RAG) engine for ingesting, indexing, and querying unstructured documents such as PDFs and text files.
+
+Think of it as an engine developers can use to build document-aware applications — such as research assistants, contract analysis tools, or internal knowledge systems — without having to reinvent the RAG pipeline.
+
+<p>
+  <img src="https://img.shields.io/badge/Status-Backend%20MVP-brightgreen" alt="Status">
+  <img src="https://img.shields.io/badge/PRs-Welcome-brightgreen" alt="PRs Welcome">
+  <img src="https://img.shields.io/badge/Python-FastAPI-blue" alt="Python FastAPI">
+  <img src="https://img.shields.io/badge/AI-RAG%20Engine-orange" alt="AI RAG">
+</p>
+
+---
+
+⭐ **Star the repo to follow progress and support the project!** 
+
+---
+
+## 📌 Overview
+
+Build up star count and grow the community!
+
+Add a progress bar to the `README.md` that shows our current GitHub star count and updates as we grow. Even though we're starting small, this builds transparency and shows progress as it grows.
+
 ## ⭐ Star Progress
 
 [![GitHub stars](https://img.shields.io/github/stars/chatvector-ai/chatvector-ai?style=social)](https://github.com/chatvector-ai/chatvector-ai/stargazers)
