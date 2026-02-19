@@ -23,7 +23,7 @@ Think of it as an engine developers can use to build document-aware applications
 
 Build up star count and grow the community!
 
-Feel free to get creative with it
+Add a progress bar to the `README.md` that shows our current GitHub star count and updates as we grow. Even though we're starting small, this builds transparency and shows progress as it grows.
 
 ## ⭐ Star Progress
 
