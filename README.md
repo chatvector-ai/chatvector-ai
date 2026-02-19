@@ -19,13 +19,11 @@ Think of it as an engine developers can use to build document-aware applications
 
 ---
 
-## 🔗 Quick Links
+## 📌 Overview
 
-- [![Good First Issues](https://img.shields.io/badge/Good%20First%20Issues-Start%20Here-brightgreen?style=for-the-badge&logo=github)](https://github.com/chatvector-ai/chatvector-ai/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22) - Start here if new to the project
-- [![Roadmap](https://img.shields.io/badge/Roadmap-Project%20Plan-1f6feb?style=for-the-badge&logo=bookstack&logoColor=white)](ROADMAP.md) - Long-term vision + Issue details
-- [![Quick Setup](https://img.shields.io/badge/Quick%20Setup-5%20Min-2496ED?style=for-the-badge&logo=docker&logoColor=white)](#backend-setup) - Get running locally in 5 min (Docker + PostgreSQL)
-- [![Project Board](https://img.shields.io/badge/Project%20Board-Track%20Progress-6f42c1?style=for-the-badge&logo=github&logoColor=white)](https://github.com/orgs/chatvector-ai/projects/2) - Track development progress & priorities
-- [![Demo Video](https://img.shields.io/badge/Demo%20Video-3%20Min-625DF5?style=for-the-badge&logo=loom&logoColor=white)](https://www.loom.com/share/b7be8b165031450aad650144a71c1a10) - 3-min overview of ChatVector-A
+Build up star count and grow the community!
+
+Feel free to get creative with it
 
 ## ⭐ Star Progress
 
