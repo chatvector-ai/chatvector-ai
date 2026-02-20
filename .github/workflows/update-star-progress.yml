@@ -1,0 +1,75 @@
+name: Update Star Progress Bar
+
+on:
+  schedule:
+    # Run daily at 00:00 UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allow manual trigger
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/update-star-progress.yml'
+
+jobs:
+  update-progress:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch star count and update README
+        run: |
+          # Fetch current star count from GitHub API
+          STARS=$(curl -s https://api.github.com/repos/chatvector-ai/chatvector-ai | jq -r '.stargazers_count')
+          echo "Current stars: $STARS"
+
+          # Calculate progress
+          MILESTONE=25
+          TOTAL_CHARS=30
+          FILLED=$(( STARS * TOTAL_CHARS / MILESTONE ))
+
+          # Cap at TOTAL_CHARS if stars exceed milestone
+          if [ $FILLED -gt $TOTAL_CHARS ]; then
+            FILLED=$TOTAL_CHARS
+          fi
+
+          EMPTY=$(( TOTAL_CHARS - FILLED ))
+
+          # Generate progress bar
+          BAR=""
+          for ((i=0; i<FILLED; i++)); do
+            BAR="${BAR}█"
+          done
+          for ((i=0; i<EMPTY; i++)); do
+            BAR="${BAR}░"
+          done
+
+          echo "Progress bar: $BAR $STARS/$MILESTONE stars"
+
+          # Update README.md
+          # Find and replace the progress bar line
+          sed -i "s/^[█░]\{30\} [0-9]\+\/25 stars$/$BAR $STARS\/$MILESTONE stars/" README.md
+
+          # Check if there were changes
+          if git diff --quiet README.md; then
+            echo "No changes to commit"
+            echo "CHANGES=false" >> $GITHUB_ENV
+          else
+            echo "Changes detected"
+            echo "CHANGES=true" >> $GITHUB_ENV
+          fi
+
+      - name: Commit and push if changed
+        if: env.CHANGES == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "chore: update star progress bar [skip ci]"
+          git push
