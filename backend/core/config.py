@@ -27,6 +27,7 @@ class Settings:
     GEN_AI_KEY: str = os.getenv("GEN_AI_KEY")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
     LOG_USE_UTC: bool = os.getenv("LOG_USE_UTC", "false").lower() in ("1", "true", "yes")
+    LOG_FORMAT: str = os.getenv("LOG_FORMAT", "TEXT").upper()  # Add this line - TEXT or JSON
     DATABASE_URL: str = os.getenv("DATABASE_URL")
 
     MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
