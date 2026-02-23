@@ -9,20 +9,17 @@ Think of it as an engine developers can use to build document-aware applications
 <p>
   <img src="https://img.shields.io/badge/Status-Backend%20MVP-brightgreen" alt="Status">
   <img src="https://img.shields.io/badge/PRs-Welcome-brightgreen" alt="PRs Welcome">
-  <img src="https://img.shields.io/badge/Python-FastAPI-blue" alt="Python FastAPI">
   <img src="https://img.shields.io/badge/AI-RAG%20Engine-orange" alt="AI RAG">
 </p>
 
+![Python Version](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=github)
+![FastAPI Version](https://img.shields.io/badge/FastAPI-0.101-green?style=for-the-badge&logo=github)
 ---
 
 ⭐ **Star the repo to follow progress and support the project!**
 
 [![GitHub stars](https://img.shields.io/github/stars/chatvector-ai/chatvector-ai?style=social)](https://github.com/chatvector-ai/chatvector-ai)
 **Next Milestone:** 25
-
-```
-████░░░░░░░░░░░░░░░░░░░░░░░░░░ 4/25 stars
-```
 
 ---
 
@@ -32,10 +29,12 @@ Think of it as an engine developers can use to build document-aware applications
 - [![Roadmap](https://img.shields.io/badge/Roadmap-Project%20Plan-1f6feb?style=for-the-badge&logo=bookstack&logoColor=white)](ROADMAP.md) - Long-term vision + Issue details
 - [![Quick Setup](https://img.shields.io/badge/Quick%20Setup-5%20Min-2496ED?style=for-the-badge&logo=docker&logoColor=white)](#backend-setup) - Get running locally in 5 min (Docker + PostgreSQL)
 - [![Project Board](https://img.shields.io/badge/Project%20Board-Track%20Progress-6f42c1?style=for-the-badge&logo=github&logoColor=white)](https://github.com/orgs/chatvector-ai/projects/2) - Track development progress & priorities
-- [![Demo Video](https://img.shields.io/badge/Demo%20Video-3%20Min-625DF5?style=for-the-badge&logo=loom&logoColor=white)](https://www.loom.com/share/b7be8b165031450aad650144a71c1a10) - 3-min overview of ChatVector-AI in action
+- [![Dev Notes](https://img.shields.io/badge/Dev%20Notes-Maintainer%20Guide-6e7781?style=for-the-badge&logo=markdown&logoColor=white)](DEVELOPMENT.md) - Internal maintainer notes & conventions
+- [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge&logo=markdown&logoColor=white)](https://opensource.org/license/mit) - MIT License
 - [![Contributing Docs](https://img.shields.io/badge/Contributing%20Docs-Read%20Guide-0E8A16?style=for-the-badge&logo=bookstack&logoColor=white)](CONTRIBUTING.md) [![Contributing Video](https://img.shields.io/badge/Contributing%20Video-Watch-F24E1E?style=for-the-badge&logo=loom&logoColor=white)](https://www.loom.com/share/c41bdbff541f47d49efcb48920cba382) - PR workflow & code standards
 - [![Discussions](https://img.shields.io/badge/Discussions-Ask%20%26%20Share-2da44e?style=for-the-badge&logo=github&logoColor=white)](https://github.com/chatvector-ai/chatvector-ai/discussions/51) - Community hub for questions & ideas
-- [![Dev Notes](https://img.shields.io/badge/Dev%20Notes-Maintainer%20Guide-6e7781?style=for-the-badge&logo=markdown&logoColor=white)](DEVELOPMENT.md) - Internal maintainer notes & conventions
+- [![Demo Video](https://img.shields.io/badge/Demo%20Video-3%20Min-625DF5?style=for-the-badge&logo=loom&logoColor=white)](https://www.loom.com/share/b7be8b165031450aad650144a71c1a10) - 3-min overview of ChatVector-AI in action
+- [![Demo Video Preview](https://i.imgur.com/a7PbKea.gif)](https://www.loom.com/share/b7be8b165031450aad650144a71c1a10)
 
 ---
 
@@ -160,10 +159,10 @@ Follow these steps to get the backend running in under 5 minutes.
 
 ### Prerequisites
 
-* Docker & Docker Compose installed
+- Docker & Docker Compose installed
+  - [Install Docker](https://docs.docker.com/get-docker/) (Mac/Windows/Linux)
 
-  * [Install Docker](https://docs.docker.com/get-docker/) (Mac/Windows/Linux)
-* Google AI Studio API Key ([Get Key](https://aistudio.google.com/))
+- Google AI Studio API Key ([Get Key](https://aistudio.google.com/))
 
 ### Setup `.env`
 
@@ -181,23 +180,25 @@ GEN_AI_KEY=your_google_ai_studio_api_key_here
 ```
 
 ### Launch Backend
+
 Note: Make sure Docker Desktop is running (Mac/Windows) before executing this command.
 
 Run from the project root (where `docker-compose.yml` is located):
+
 ```bash
 docker-compose up --build
 ```
 
 **What happens:**
 
-* Postgres with pgvector starts automatically and initializes tables + vector functions
-* API waits for Postgres healthcheck
-* Live reload enabled for backend code
+- Postgres with pgvector starts automatically and initializes tables + vector functions
+- API waits for Postgres healthcheck
+- Live reload enabled for backend code
 
 ### Test the API
 
-* Root: [http://localhost:8000](http://localhost:8000)
-* Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Root: [http://localhost:8000](http://localhost:8000)
+- Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 **Try endpoints:**
 
@@ -210,11 +211,11 @@ docker-compose up --build
 ## 2️⃣ Extra Docker Commands
 
 | Command                                   | Purpose                                                                       |
-| ----------------------------------------- | ----------------------------------------------------------------------------- |
-| `docker-compose up`                       | Start containers (without rebuilding - normal start)   
-| `docker-compose down`                     | Stop containers (preserve data -- normal stop)
+| ----------------------------------------- | ----------------------------------------------------------------------------- | --- |
+| `docker-compose up`                       | Start containers (without rebuilding - normal start)                          |
+| `docker-compose down`                     | Stop containers (preserve data -- normal stop)                                |
 | `docker-compose down -v`                  | Stop containers **and delete all database data**. Use to reset DB completely. |
-| `docker-compose up --build`               | Rebuild containers after code changes or DB reset.                            |                                       |
+| `docker-compose up --build`               | Rebuild containers after code changes or DB reset.                            |     |
 | `docker-compose logs -f api`              | Follow API logs in real time.                                                 |
 | `docker-compose exec db psql -U postgres` | Connect to Postgres inside Docker for manual queries.                         |
 
@@ -243,16 +244,15 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 **Notes:**
 
-* Requires a running Postgres instance with pgvector enabled
-* Only needed for local development outside Docker
+- Requires a running Postgres instance with pgvector enabled
+- Only needed for local development outside Docker
 
 ---
 
 ✅ **Result**
 
-* Docker-first setup is simple, cross-platform, and fully initialized
-* Optional sections give control for resets, logs, or running scripts manually
-
+- Docker-first setup is simple, cross-platform, and fully initialized
+- Optional sections give control for resets, logs, or running scripts manually
 
 ---
 
