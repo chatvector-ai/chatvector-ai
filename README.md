@@ -9,7 +9,8 @@ Think of it as an engine developers can use to build document-aware applications
 <p>
   <img src="https://img.shields.io/badge/Status-Backend%20MVP-brightgreen" alt="Status">
   <img src="https://img.shields.io/badge/PRs-Welcome-brightgreen" alt="PRs Welcome">
-  <img src="https://img.shields.io/badge/Python-FastAPI-blue" alt="Python FastAPI">
+  <img src="https://img.shields.io/badge/Python-3.11-blue?logo=python&logoColor=white" alt="Python 3.11">
+  <img src="https://img.shields.io/badge/FastAPI-0.121-009688?logo=fastapi&logoColor=white" alt="FastAPI 0.121">
   <img src="https://img.shields.io/badge/AI-RAG%20Engine-orange" alt="AI RAG">
 </p>
 
