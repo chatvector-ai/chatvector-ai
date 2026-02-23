@@ -21,7 +21,7 @@ Think of it as an engine developers can use to build document-aware applications
 **Next Milestone:** 25
 
 ```
-████░░░░░░░░░░░░░░░░░░░░░░░░░░ 4/25 stars
+██████████████░░░░░░░░░░░░░░░░ 12/25 stars
 ```
 
 ---
@@ -160,10 +160,10 @@ Follow these steps to get the backend running in under 5 minutes.
 
 ### Prerequisites
 
-* Docker & Docker Compose installed
+- Docker & Docker Compose installed
+  - [Install Docker](https://docs.docker.com/get-docker/) (Mac/Windows/Linux)
 
-  * [Install Docker](https://docs.docker.com/get-docker/) (Mac/Windows/Linux)
-* Google AI Studio API Key ([Get Key](https://aistudio.google.com/))
+- Google AI Studio API Key ([Get Key](https://aistudio.google.com/))
 
 ### Setup `.env`
 
@@ -181,23 +181,25 @@ GEN_AI_KEY=your_google_ai_studio_api_key_here
 ```
 
 ### Launch Backend
+
 Note: Make sure Docker Desktop is running (Mac/Windows) before executing this command.
 
 Run from the project root (where `docker-compose.yml` is located):
+
 ```bash
 docker-compose up --build
 ```
 
 **What happens:**
 
-* Postgres with pgvector starts automatically and initializes tables + vector functions
-* API waits for Postgres healthcheck
-* Live reload enabled for backend code
+- Postgres with pgvector starts automatically and initializes tables + vector functions
+- API waits for Postgres healthcheck
+- Live reload enabled for backend code
 
 ### Test the API
 
-* Root: [http://localhost:8000](http://localhost:8000)
-* Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Root: [http://localhost:8000](http://localhost:8000)
+- Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 **Try endpoints:**
 
@@ -210,11 +212,11 @@ docker-compose up --build
 ## 2️⃣ Extra Docker Commands
 
 | Command                                   | Purpose                                                                       |
-| ----------------------------------------- | ----------------------------------------------------------------------------- |
-| `docker-compose up`                       | Start containers (without rebuilding - normal start)   
-| `docker-compose down`                     | Stop containers (preserve data -- normal stop)
+| ----------------------------------------- | ----------------------------------------------------------------------------- | --- |
+| `docker-compose up`                       | Start containers (without rebuilding - normal start)                          |
+| `docker-compose down`                     | Stop containers (preserve data -- normal stop)                                |
 | `docker-compose down -v`                  | Stop containers **and delete all database data**. Use to reset DB completely. |
-| `docker-compose up --build`               | Rebuild containers after code changes or DB reset.                            |                                       |
+| `docker-compose up --build`               | Rebuild containers after code changes or DB reset.                            |     |
 | `docker-compose logs -f api`              | Follow API logs in real time.                                                 |
 | `docker-compose exec db psql -U postgres` | Connect to Postgres inside Docker for manual queries.                         |
 
@@ -243,16 +245,15 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 **Notes:**
 
-* Requires a running Postgres instance with pgvector enabled
-* Only needed for local development outside Docker
+- Requires a running Postgres instance with pgvector enabled
+- Only needed for local development outside Docker
 
 ---
 
 ✅ **Result**
 
-* Docker-first setup is simple, cross-platform, and fully initialized
-* Optional sections give control for resets, logs, or running scripts manually
-
+- Docker-first setup is simple, cross-platform, and fully initialized
+- Optional sections give control for resets, logs, or running scripts manually
 
 ---
 
@@ -304,5 +305,3 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 ## 📄 License
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://choosealicense.com/licenses/mit/)
-
-
