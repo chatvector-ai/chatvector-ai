@@ -12,9 +12,6 @@ These issues are perfect for first-time contributors. They're well-scoped, have 
 
 | Issue | What You'll Build | Impact | Skill Level |
 |-------|-----------------|--------|-------------|
-| [#87 Add GIF Preview for Demo or Contributing Video Links](https://github.com/chatvector-ai/chatvector-ai/issues/87) | Add small GIF previews inline with the Demo Video or Contributing Video badges in the README | Improve visual engagement and preview for contributors | Beginner |
-| [#86 Add License Badge to Quick Links in README](https://github.com/chatvector-ai/chatvector-ai/issues/86) | Add a license badge to the Quick Links section of the README for better visibility | Make licensing clear to new users/contributors | Beginner |
-| [#85 Add Python & FastAPI Version Badges to README](https://github.com/chatvector-ai/chatvector-ai/issues/85) | Display the Python and FastAPI versions as badges in the README | Improve transparency and ease onboarding | Beginner |
 | [#83 Enhance Root Endpoint with Clickable Links to Docs and Status](https://github.com/chatvector-ai/chatvector-ai/issues/83) | Update the root ASCII page to include clickable links to documentation and status endpoints | Improve developer UX for testing the backend | Beginner |
 | [#58 Add Setup Demo Video to Quick Links](https://github.com/chatvector-ai/chatvector-ai/issues/58) | Record a short setup demo and add it to the README | Be the face of the project and help future contributors get started | Beginner |
 | [#24 Normalize PDF Text in Ingestion Pipeline](https://github.com/chatvector-ai/chatvector-ai/issues/24) | Clean up extracted PDF text (fix line breaks, normalize whitespace, handle special characters) | Improve downstream retrieval and RAG answer accuracy | Beginner |

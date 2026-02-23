@@ -4,7 +4,6 @@ from routes.test import router as test_router
 from routes.upload import router as upload_router
 from routes.chat import router as chat_router
 from routes.documents import router as documents_router
-from app.routers import status
 from logging_config.logging_config import setup_logging
 from middleware.request_id import register_request_id_middleware
 import logging
@@ -23,6 +22,5 @@ app.include_router(test_router)
 app.include_router(upload_router)
 app.include_router(chat_router)
 app.include_router(documents_router)
-app.include_router(status.router)
 
 logger.info("Application startup complete.")
