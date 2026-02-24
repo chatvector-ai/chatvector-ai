@@ -21,7 +21,7 @@ Think of it as an engine developers can use to build document-aware applications
 **Next Milestone:** 25
 
 ```
-██████████████░░░░░░░░░░░░░░░░ 12/25 stars
+███████████████░░░░░░░░░░░░░░░ 13/25 stars
 ```
 
 ---
