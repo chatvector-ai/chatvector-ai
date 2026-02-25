@@ -209,24 +209,15 @@ docker-compose up --build
 ---
 
 ## 2️⃣ Extra Docker Commands
-<!--
-| Command                                   | Purpose                                                                       |
-| ----------------------------------------- | ----------------------------------------------------------------------------- | --- |
-| `docker-compose up`                       | Start containers (without rebuilding - normal start)                          |
-| `docker-compose down`                     | Stop containers (preserve data -- normal stop)                                |
-| `docker-compose down -v`                  | Stop containers **and delete all database data**. Use to reset DB completely. |
-| `docker-compose up --build`               | Rebuild containers after code changes or DB reset.                            |     |
-| `docker-compose logs -f api`              | Follow API logs in real time.                                                 |
-| `docker-compose exec db psql -U postgres` | Connect to Postgres inside Docker for manual queries.                         |
--->
-| **Command**                                  | **Purpose**                                                             |
-|----------------------------------------------|-------------------------------------------------------------------------|
-| `docker-compose up`                          | Start containers (without rebuilding – normal start)                   |
-| `docker-compose down`                        | Stop containers (preserve data – normal stop)                          |
-| `docker-compose down -v`                     | Stop containers and delete all database data. Use to reset DB completely. |
-| `docker-compose up --build`                  | Rebuild containers after code changes or DB reset.                     |
-| `docker-compose logs -f api`                 | Follow API logs in real time.                                           |
-| `docker-compose exec db psql -U postgres`    | Connect to Postgres inside Docker for manual queries.                  |
+
+| Command                                      | Purpose                                                                   |
+|----------------------------------------------|---------------------------------------------------------------------------|
+| `docker-compose up`                          | Start containers without rebuilding (normal start).                       |
+| `docker-compose down`                        | Stop containers and preserve data (normal stop).                          |
+| `docker-compose down -v`                     | Stop containers and delete all database data. Use to completely reset DB. |
+| `docker-compose up --build`                  | Rebuild containers after code changes or DB reset.                        |
+| `docker-compose logs -f api`                 | Follow API logs in real time.                                             |
+| `docker-compose exec db psql -U postgres`    | Connect to Postgres inside Docker for manual queries.                     |
 
 ---
 
