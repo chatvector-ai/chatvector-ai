@@ -177,6 +177,9 @@ LOG_LEVEL=INFO
 LOG_USE_UTC=false
 GEN_AI_KEY=your_google_ai_studio_api_key_here
 # Replace GEN_AI_KEY with your actual API key
+
+# Upload validation
+MAX_UPLOAD_SIZE_MB=10
 ```
 
 ### Launch Backend
