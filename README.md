@@ -31,20 +31,20 @@ Think of it as an engine developers can use to build document-aware applications
 
 ## 📌 Table of Contents
 
-- [What is ChatVector-AI?](#-what-is-chatvector-ai)
-- [ChatVector-AI vs Frameworks](#chatvector-vs-frameworks)
-- [Who is this for?](#-who-is-this-for)
-- [Current Status](#-current-status)
-- [Architecture Overview](#-architecture-overview)
-  - [Backend Layer (Core)](#backend-layer-core)
-  - [AI & Retrieval Layer](#ai--retrieval-layer)
-  - [Data Layer](#data-layer)
-  - [Reference Frontend (Non-Core)](#reference-frontend-non-core)
-- [Quick Start: Run in 5 Minutes](#-quick-start-run-in-5-minutes)
-  - [Backend Setup](#backend-setup)
-  - [Frontend-demo Setup](#frontend-layer-non-core)
-- [Contributing](#-contributing)
-- [License](#-license)
+- [![What is ChatVector-AI?](https://img.shields.io/badge/What%20is-ChatVector%20AI-brightgreen?style=for-the-badge&logo=github)](#-what-is-chatvector-ai)
+- [![ChatVector-AI vs Frameworks](https://img.shields.io/badge/ChatVector%20AI-vs%20Frameworks%20-1f6feb?style=for-the-badge&logo=loom&logoColor=white)](#chatvector-vs-frameworks)
+- [![Who is this for?](https://img.shields.io/badge/Who_is_this_for-Users-blue?style=for-the-badge&logo=target&logoColor=white)](#-who-is-this-for)
+- [![Current Status](https://img.shields.io/badge/Current_Status-Active-success?style=for-the-badge&logo=githubactions&logoColor=white)](#-current-status)
+- [![Architecture Overview](https://img.shields.io/badge/Architecture-Overview-purple?style=for-the-badge&logo=docker&logoColor=white)](#-architecture-overview)
+  - [![Backend Core](https://img.shields.io/badge/Backend_Layer-Core-blue?style=for-the-badge&logo=target&logoColor=white)](#backend-layer-core)
+  - [![AI Retrieval](https://img.shields.io/badge/AI_&_Retrieval-Layer-purple?style=for-the-badge&logo=open-source-initiative&logoColor=white)](#ai--retrieval-layer)
+  - [![Data Layer](https://img.shields.io/badge/Data-Layer-success?style=for-the-badge&logo=fastapi&logoColor=white)](#data-layer)
+  - [![Reference Frontend](https://img.shields.io/badge/Reference_Frontend-Non--Core-orange?style=for-the-badge&logo=react&logoColor=white)](#reference-frontend-non-core)
+- [![Quick Start](https://img.shields.io/badge/Quick_Start-5_Minutes-red?style=for-the-badge&logo=rocket&logoColor=white)](#-quick-start-run-in-5-minutes)
+  - [![Backend Setup](https://img.shields.io/badge/Backend-Setup-blue?style=for-the-badge&logo=fastapi&logoColor=white)](#backend-setup)
+  - [![Frontend Demo](https://img.shields.io/badge/Frontend-Demo-purple?style=for-the-badge&logo=react&logoColor=white)](#frontend-layer-non-core)
+- [![Contributing](https://img.shields.io/badge/Contributing-Welcome-brightgreen?style=for-the-badge&logo=github&logoColor=white)](#-contributing)
+- [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge&logo=open-source-initiative&logoColor=white)](#-license)
 
 ---
 
