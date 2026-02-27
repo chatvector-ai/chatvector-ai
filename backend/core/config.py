@@ -32,6 +32,10 @@ class Settings:
 
     MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
     MAX_UPLOAD_SIZE_BYTES: int = MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    RETRIEVAL_MAX_CONCURRENCY: int = max(1, int(os.getenv("RETRIEVAL_MAX_CONCURRENCY", "8")))
+    SUPABASE_IO_CONCURRENCY: int = max(1, int(os.getenv("SUPABASE_IO_CONCURRENCY", "16")))
+    CHAT_BATCH_MAX_ITEMS: int = max(1, int(os.getenv("CHAT_BATCH_MAX_ITEMS", "20")))
+    CHAT_MAX_DOC_IDS_PER_QUERY: int = max(1, int(os.getenv("CHAT_MAX_DOC_IDS_PER_QUERY", "10")))
 
     # Backwards-compatible lowercase properties for accessing config values
     @property
