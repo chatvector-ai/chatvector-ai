@@ -1,6 +1,9 @@
+import asyncio
 import logging
 from datetime import datetime, timezone
+from typing import Any, Callable
 
+from core.config import config
 from core.clients import supabase_client
 from db.base import ChunkMatch, DatabaseService
 
@@ -10,15 +13,29 @@ logger = logging.getLogger(__name__)
 class SupabaseService(DatabaseService):
     """Supabase implementation for production."""
 
+    def __init__(self):
+        self._io_semaphore = asyncio.Semaphore(config.SUPABASE_IO_CONCURRENCY)
+
+    async def _run_io(self, operation: Callable[[], Any]) -> Any:
+        """
+        Execute blocking Supabase SDK calls in a thread with bounded concurrency.
+        """
+        async with self._io_semaphore:
+            return await asyncio.to_thread(operation)
+
     async def create_document(self, filename: str) -> str:
-        result = supabase_client.table("documents").insert(
-            {
-                "file_name": filename,
-                "status": "uploaded",
-                "chunks_total": 0,
-                "chunks_processed": 0,
-            }
-        ).execute()
+        result = await self._run_io(
+            lambda: supabase_client.table("documents")
+            .insert(
+                {
+                    "file_name": filename,
+                    "status": "uploaded",
+                    "chunks_total": 0,
+                    "chunks_processed": 0,
+                }
+            )
+            .execute()
+        )
 
         doc_id = result.data[0]["id"]
         logger.info(f"[Supabase] Created document {doc_id}")
@@ -38,14 +55,18 @@ class SupabaseService(DatabaseService):
             for chunk_text, embedding in chunks_with_embeddings
         ]
 
-        result = supabase_client.table("document_chunks").insert(payload).execute()
+        result = await self._run_io(
+            lambda: supabase_client.table("document_chunks").insert(payload).execute()
+        )
         chunk_ids = [row["id"] for row in result.data]
 
         logger.info(f"[Supabase] Inserted {len(chunk_ids)} chunks for document {doc_id}")
         return chunk_ids
 
     async def get_document(self, doc_id: str) -> dict | None:
-        result = supabase_client.table("documents").select("*").eq("id", doc_id).execute()
+        result = await self._run_io(
+            lambda: supabase_client.table("documents").select("*").eq("id", doc_id).execute()
+        )
         if result.data:
             return result.data[0]
         return None
@@ -106,12 +127,14 @@ class SupabaseService(DatabaseService):
         if chunks_processed is not None:
             payload["chunks_processed"] = chunks_processed
 
-        supabase_client.table("documents").update(payload).eq("id", doc_id).execute()
+        await self._run_io(
+            lambda: supabase_client.table("documents").update(payload).eq("id", doc_id).execute()
+        )
         logger.debug(f"[Supabase] Updated status for {doc_id} -> {status}")
 
     async def get_document_status(self, doc_id: str) -> dict | None:
-        result = (
-            supabase_client.table("documents")
+        result = await self._run_io(
+            lambda: supabase_client.table("documents")
             .select("id,status,failed_stage,error_message,chunks_total,chunks_processed,created_at,updated_at")
             .eq("id", doc_id)
             .limit(1)
@@ -134,7 +157,9 @@ class SupabaseService(DatabaseService):
         }
 
     async def delete_document_chunks(self, doc_id: str) -> None:
-        supabase_client.table("document_chunks").delete().eq("document_id", doc_id).execute()
+        await self._run_io(
+            lambda: supabase_client.table("document_chunks").delete().eq("document_id", doc_id).execute()
+        )
         logger.info(f"[Supabase] Deleted chunks for failed upload document {doc_id}")
 
     async def find_similar_chunks(
@@ -145,14 +170,16 @@ class SupabaseService(DatabaseService):
     ) -> list[ChunkMatch]:
         """Find similar chunks using Supabase RPC."""
         try:
-            result = supabase_client.rpc(
-                "match_chunks",
-                {
-                    "query_embedding": query_embedding,
-                    "match_count": match_count,
-                    "filter_document_id": doc_id,
-                },
-            ).execute()
+            result = await self._run_io(
+                lambda: supabase_client.rpc(
+                    "match_chunks",
+                    {
+                        "query_embedding": query_embedding,
+                        "match_count": match_count,
+                        "filter_document_id": doc_id,
+                    },
+                ).execute()
+            )
 
             matches = [
                 ChunkMatch(
