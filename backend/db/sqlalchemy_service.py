@@ -1,5 +1,7 @@
 import logging
 import os
+import asyncio
+import time
 import uuid
 from datetime import datetime
 
@@ -8,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from core.models import Document, DocumentChunk
+from core.config import config
 from db.base import ChunkMatch, DatabaseService
 
 logger = logging.getLogger(__name__)
@@ -25,14 +28,16 @@ class SQLAlchemyService(DatabaseService):
         self.engine = create_async_engine(
             async_url,
             echo=False,
-            pool_size=5,
-            max_overflow=10,
+            pool_size=config.SQLALCHEMY_POOL_SIZE,
+            max_overflow=config.SQLALCHEMY_MAX_OVERFLOW,
+            pool_timeout=config.SQLALCHEMY_POOL_TIMEOUT_SEC,
         )
         self.async_session = sessionmaker(
             self.engine,
             class_=AsyncSession,
             expire_on_commit=False,
         )
+        self._retrieval_semaphore = asyncio.Semaphore(config.SQLALCHEMY_RETRIEVAL_CONCURRENCY)
 
     async def create_document(self, filename: str) -> str:
         async with self.async_session() as session:
@@ -190,25 +195,42 @@ class SQLAlchemyService(DatabaseService):
         match_count: int = 5,
     ) -> list[ChunkMatch]:
         """Find similar chunks using pgvector."""
-        async with self.async_session() as session:
-            result = await session.execute(
-                select(DocumentChunk)
-                .where(DocumentChunk.document_id == doc_id)
-                .order_by(DocumentChunk.embedding.op("<=>")(query_embedding))
-                .limit(match_count)
+        start = time.perf_counter()
+        try:
+            async with self._retrieval_semaphore:
+                async with self.async_session() as session:
+                    result = await session.execute(
+                        select(DocumentChunk)
+                        .where(DocumentChunk.document_id == doc_id)
+                        .order_by(DocumentChunk.embedding.op("<=>")(query_embedding))
+                        .limit(match_count)
+                    )
+                    chunks = result.scalars().all()
+
+                    matches = [
+                        ChunkMatch(
+                            id=str(chunk.id),
+                            chunk_text=chunk.chunk_text,
+                            document_id=str(chunk.document_id),
+                            embedding=chunk.embedding,
+                            created_at=str(chunk.created_at) if chunk.created_at else None,
+                        )
+                        for chunk in chunks
+                    ]
+
+                    duration_ms = int((time.perf_counter() - start) * 1000)
+                    logger.debug(
+                        "[PostgreSQL] Vector search returned %s chunks for doc_id=%s in %sms",
+                        len(matches),
+                        doc_id,
+                        duration_ms,
+                    )
+                    return matches
+        except Exception:
+            duration_ms = int((time.perf_counter() - start) * 1000)
+            logger.exception(
+                "[PostgreSQL] Vector search failed for doc_id=%s in %sms",
+                doc_id,
+                duration_ms,
             )
-            chunks = result.scalars().all()
-
-            matches = [
-                ChunkMatch(
-                    id=str(chunk.id),
-                    chunk_text=chunk.chunk_text,
-                    document_id=str(chunk.document_id),
-                    embedding=chunk.embedding,
-                    created_at=str(chunk.created_at) if chunk.created_at else None,
-                )
-                for chunk in chunks
-            ]
-
-            logger.debug(f"[PostgreSQL] Vector search returned {len(matches)} chunks")
-            return matches
+            raise

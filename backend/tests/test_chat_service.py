@@ -62,6 +62,7 @@ def test_answer_questions_for_documents_batch_processes_queries():
     ) as mock_answer:
         result = asyncio.run(answer_questions_for_documents_batch(queries))
 
+    assert [item["status"] for item in result] == ["ok", "ok"]
     assert [item["question"] for item in result] == ["Q1", "Q2"]
     assert result[0]["doc_ids"] == ["doc-a", "doc-b"]
     assert result[0]["chunks"] == 2
@@ -112,3 +113,47 @@ def test_answer_questions_for_documents_batch_respects_retrieval_concurrency_lim
 
     assert len(result) == 3
     assert max_active_calls <= 2
+
+
+def test_answer_questions_for_documents_batch_returns_partial_failures():
+    queries = [
+        {"question": "Q1", "doc_ids": ["doc-a"]},
+        {"question": "Q2", "doc_ids": ["doc-b"]},
+    ]
+
+    async def fake_generate_answer(question: str, context: str) -> str:
+        if question == "Q2":
+            raise RuntimeError("LLM timeout")
+        return f"{question}:{context}"
+
+    with patch(
+        "services.chat_service.get_embeddings",
+        new=AsyncMock(return_value=[[0.1], [0.2]]),
+    ), patch(
+        "services.chat_service.find_similar_chunks",
+        new=AsyncMock(return_value=[{"id": "c1", "chunk_text": "ctx"}]),
+    ), patch(
+        "services.chat_service.build_context_from_chunks",
+        return_value="ctx",
+    ), patch(
+        "services.chat_service.generate_answer",
+        new=AsyncMock(side_effect=fake_generate_answer),
+    ):
+        result = asyncio.run(answer_questions_for_documents_batch(queries))
+
+    assert len(result) == 2
+    assert result[0]["status"] == "ok"
+    assert result[1]["status"] == "error"
+    assert result[1]["error"]["code"] == "query_processing_failed"
+
+
+def test_answer_questions_for_documents_batch_rejects_duplicate_doc_ids():
+    queries = [
+        {"question": "Q1", "doc_ids": ["doc-a", "doc-a"]},
+    ]
+
+    try:
+        asyncio.run(answer_questions_for_documents_batch(queries))
+        raise AssertionError("Expected ValueError was not raised")
+    except ValueError as exc:
+        assert "duplicate doc IDs" in str(exc)

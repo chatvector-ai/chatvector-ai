@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
 from core.config import config
@@ -13,15 +14,36 @@ logger = logging.getLogger(__name__)
 class SupabaseService(DatabaseService):
     """Supabase implementation for production."""
 
+    _executor: ThreadPoolExecutor | None = None
+    _executor_workers: int | None = None
+
     def __init__(self):
         self._io_semaphore = asyncio.Semaphore(config.SUPABASE_IO_CONCURRENCY)
 
-    async def _run_io(self, operation: Callable[[], Any]) -> Any:
+    @classmethod
+    def _get_executor(cls) -> ThreadPoolExecutor:
+        workers = max(1, int(config.SUPABASE_IO_CONCURRENCY))
+        if cls._executor is None or cls._executor_workers != workers:
+            if cls._executor is not None:
+                cls._executor.shutdown(wait=False, cancel_futures=False)
+            cls._executor = ThreadPoolExecutor(
+                max_workers=workers,
+                thread_name_prefix="supabase-io",
+            )
+            cls._executor_workers = workers
+        return cls._executor
+
+    async def _run_io(self, operation: Callable[[], Any], operation_name: str) -> Any:
         """
         Execute blocking Supabase SDK calls in a thread with bounded concurrency.
         """
         async with self._io_semaphore:
-            return await asyncio.to_thread(operation)
+            try:
+                loop = asyncio.get_running_loop()
+                return await loop.run_in_executor(self._get_executor(), operation)
+            except Exception:
+                logger.exception("[Supabase] I/O operation failed: %s", operation_name)
+                raise
 
     async def create_document(self, filename: str) -> str:
         result = await self._run_io(
@@ -34,7 +56,8 @@ class SupabaseService(DatabaseService):
                     "chunks_processed": 0,
                 }
             )
-            .execute()
+            .execute(),
+            operation_name="create_document",
         )
 
         doc_id = result.data[0]["id"]
@@ -56,7 +79,8 @@ class SupabaseService(DatabaseService):
         ]
 
         result = await self._run_io(
-            lambda: supabase_client.table("document_chunks").insert(payload).execute()
+            lambda: supabase_client.table("document_chunks").insert(payload).execute(),
+            operation_name="store_chunks_with_embeddings",
         )
         chunk_ids = [row["id"] for row in result.data]
 
@@ -65,7 +89,8 @@ class SupabaseService(DatabaseService):
 
     async def get_document(self, doc_id: str) -> dict | None:
         result = await self._run_io(
-            lambda: supabase_client.table("documents").select("*").eq("id", doc_id).execute()
+            lambda: supabase_client.table("documents").select("*").eq("id", doc_id).execute(),
+            operation_name="get_document",
         )
         if result.data:
             return result.data[0]
@@ -128,7 +153,8 @@ class SupabaseService(DatabaseService):
             payload["chunks_processed"] = chunks_processed
 
         await self._run_io(
-            lambda: supabase_client.table("documents").update(payload).eq("id", doc_id).execute()
+            lambda: supabase_client.table("documents").update(payload).eq("id", doc_id).execute(),
+            operation_name="update_document_status",
         )
         logger.debug(f"[Supabase] Updated status for {doc_id} -> {status}")
 
@@ -138,7 +164,8 @@ class SupabaseService(DatabaseService):
             .select("id,status,failed_stage,error_message,chunks_total,chunks_processed,created_at,updated_at")
             .eq("id", doc_id)
             .limit(1)
-            .execute()
+            .execute(),
+            operation_name="get_document_status",
         )
 
         if not result.data:
@@ -158,7 +185,8 @@ class SupabaseService(DatabaseService):
 
     async def delete_document_chunks(self, doc_id: str) -> None:
         await self._run_io(
-            lambda: supabase_client.table("document_chunks").delete().eq("document_id", doc_id).execute()
+            lambda: supabase_client.table("document_chunks").delete().eq("document_id", doc_id).execute(),
+            operation_name="delete_document_chunks",
         )
         logger.info(f"[Supabase] Deleted chunks for failed upload document {doc_id}")
 
@@ -178,7 +206,8 @@ class SupabaseService(DatabaseService):
                         "match_count": match_count,
                         "filter_document_id": doc_id,
                     },
-                ).execute()
+                ).execute(),
+                operation_name="find_similar_chunks",
             )
 
             matches = [

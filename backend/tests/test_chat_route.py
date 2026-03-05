@@ -16,7 +16,12 @@ def test_chat_route_delegates_to_chat_service():
 
 
 def test_chat_batch_route_delegates_to_chat_service():
-    payload = {"count": 1, "results": [{"question": "q", "doc_ids": ["doc-1"], "chunks": 1, "answer": "a"}]}
+    payload = {
+        "count": 1,
+        "success_count": 1,
+        "failure_count": 0,
+        "results": [{"status": "ok", "question": "q", "doc_ids": ["doc-1"], "chunks": 1, "answer": "a"}],
+    }
     batch_request = ChatBatchRequest(queries=[ChatBatchItem(question="q", doc_ids=["doc-1"])])
 
     with patch(
@@ -29,6 +34,31 @@ def test_chat_batch_route_delegates_to_chat_service():
     mock_batch.assert_awaited_once_with(
         [{"question": "q", "doc_ids": ["doc-1"], "match_count": 5}]
     )
+
+
+def test_chat_batch_route_counts_failures_and_successes():
+    batch_request = ChatBatchRequest(queries=[ChatBatchItem(question="q", doc_ids=["doc-1"])])
+
+    with patch(
+        "routes.chat.answer_questions_for_documents_batch",
+        new=AsyncMock(
+            return_value=[
+                {"status": "ok", "question": "q1", "doc_ids": ["doc-1"], "chunks": 1, "answer": "a1"},
+                {
+                    "status": "error",
+                    "question": "q2",
+                    "doc_ids": ["doc-2"],
+                    "chunks": 0,
+                    "error": {"code": "query_processing_failed", "message": "boom"},
+                },
+            ]
+        ),
+    ):
+        result = asyncio.run(chat_batch(batch_request))
+
+    assert result["count"] == 2
+    assert result["success_count"] == 1
+    assert result["failure_count"] == 1
 
 
 def test_chat_batch_route_returns_422_for_value_error():

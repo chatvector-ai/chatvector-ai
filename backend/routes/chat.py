@@ -49,8 +49,13 @@ async def chat_batch(payload: ChatBatchRequest):
             },
         )
 
+    success_count = sum(1 for item in results if item.get("status") == "ok")
+    failure_count = len(results) - success_count
+
     return {
         "count": len(results),
+        "success_count": success_count,
+        "failure_count": failure_count,
         "results": results,
     }
 
