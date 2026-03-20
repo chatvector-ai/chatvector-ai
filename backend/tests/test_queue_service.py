@@ -263,8 +263,8 @@ async def test_document_status_includes_queue_position_when_queued():
     db_payload = {
         "document_id": "doc-q",
         "status": "queued",
-        "chunks_total": None,
-        "chunks_processed": None,
+        "chunks": {"total": 0, "processed": 0},
+        "error": None,
     }
 
     with (
@@ -278,8 +278,8 @@ async def test_document_status_includes_queue_position_when_queued():
 
 
 @pytest.mark.asyncio
-async def test_document_status_queue_position_none_when_not_queued():
-    """GET /documents/{id}/status sets queue_position=None for non-queued docs."""
+async def test_document_status_queue_position_omitted_when_not_queued():
+    """GET /documents/{id}/status omits queue_position for non-queued docs."""
     from routes.documents import get_document_status
 
     db_payload = {"document_id": "doc-emb", "status": "embedding"}
@@ -287,7 +287,7 @@ async def test_document_status_queue_position_none_when_not_queued():
     with patch("routes.documents.db.get_document_status", new=AsyncMock(return_value=db_payload)):
         result = await get_document_status("doc-emb")
 
-    assert result["queue_position"] is None
+    assert "queue_position" not in result
 
 
 # ---------------------------------------------------------------------------

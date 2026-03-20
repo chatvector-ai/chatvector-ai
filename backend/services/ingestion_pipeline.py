@@ -76,18 +76,14 @@ class IngestionPipeline:
         self,
         doc_id: str,
         status: str,
-        failed_stage: str | None = None,
-        error_message: str | None = None,
-        chunks_total: int | None = None,
-        chunks_processed: int | None = None,
+        error: dict | None = None,
+        chunks: dict | None = None,
     ) -> None:
         await db.update_document_status(
             doc_id=doc_id,
             status=status,
-            failed_stage=failed_stage,
-            error_message=error_message,
-            chunks_total=chunks_total,
-            chunks_processed=chunks_processed,
+            error=error,
+            chunks=chunks,
         )
 
     async def _handle_error(self, doc_id: str, stage: str, message: str) -> None:
@@ -96,8 +92,7 @@ class IngestionPipeline:
             await self._update_status(
                 doc_id=doc_id,
                 status="failed",
-                failed_stage=stage,
-                error_message=safe_message,
+                error={"stage": stage, "message": safe_message},
             )
         except Exception as status_error:
             logger.error(f"Failed to mark document {doc_id} as failed: {status_error}")
@@ -151,8 +146,7 @@ class IngestionPipeline:
             await self._update_status(
                 doc_id=doc_id,
                 status="embedding",
-                chunks_total=len(chunks),
-                chunks_processed=0,
+                chunks={"total": len(chunks), "processed": 0},
             )
             embeddings = await get_embeddings(chunks)
 
@@ -174,10 +168,7 @@ class IngestionPipeline:
             await self._update_status(
                 doc_id=doc_id,
                 status="completed",
-                failed_stage="",
-                error_message="",
-                chunks_total=len(chunks),
-                chunks_processed=len(chunk_ids),
+                chunks={"total": len(chunks), "processed": len(chunk_ids)},
             )
 
             logger.info(
@@ -267,8 +258,7 @@ class IngestionPipeline:
             await self._update_status(
                 doc_id=doc_id,
                 status="embedding",
-                chunks_total=len(chunks),
-                chunks_processed=0,
+                chunks={"total": len(chunks), "processed": 0},
             )
             if rate_limiter is not None:
                 await rate_limiter.acquire()
@@ -293,10 +283,7 @@ class IngestionPipeline:
             await self._update_status(
                 doc_id=doc_id,
                 status="completed",
-                failed_stage="",
-                error_message="",
-                chunks_total=len(chunks),
-                chunks_processed=len(chunk_ids),
+                chunks={"total": len(chunks), "processed": len(chunk_ids)},
             )
 
             logger.info(

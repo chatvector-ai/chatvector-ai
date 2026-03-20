@@ -64,10 +64,8 @@ class DatabaseService(ABC):
         self,
         doc_id: str,
         status: str,
-        failed_stage: Optional[str] = None,
-        error_message: Optional[str] = None,
-        chunks_total: Optional[int] = None,
-        chunks_processed: Optional[int] = None,
+        error: Optional[dict] = None,
+        chunks: Optional[dict] = None,
     ) -> None:
         """Update upload status/progress metadata."""
         pass

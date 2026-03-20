@@ -22,10 +22,20 @@ async def get_document_status(document_id: str):
             },
         )
 
-    # Augment with live queue position when the document is still waiting
-    if status_payload.get("status") == "queued":
-        status_payload["queue_position"] = ingestion_queue.queue_position(document_id)
-    else:
-        status_payload["queue_position"] = None
+    response: dict = {
+        "document_id": status_payload["document_id"],
+        "status": status_payload.get("status"),
+        "chunks": status_payload.get("chunks"),
+        "created_at": status_payload.get("created_at"),
+        "updated_at": status_payload.get("updated_at"),
+    }
 
-    return status_payload
+    if status_payload.get("error") is not None:
+        response["error"] = status_payload["error"]
+
+    if status_payload.get("status") == "queued":
+        queue_pos = ingestion_queue.queue_position(document_id)
+        if queue_pos is not None:
+            response["queue_position"] = queue_pos
+
+    return response

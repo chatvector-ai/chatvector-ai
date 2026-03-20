@@ -46,8 +46,7 @@ class SQLAlchemyService(DatabaseService):
                 id=doc_id,
                 file_name=filename,
                 status="uploaded",
-                chunks_total=0,
-                chunks_processed=0,
+                chunks={"total": 0, "processed": 0},
             )
             session.add(document)
             await session.commit()
@@ -90,10 +89,8 @@ class SQLAlchemyService(DatabaseService):
                 "id": str(document.id),
                 "file_name": document.file_name,
                 "status": document.status,
-                "failed_stage": document.failed_stage,
-                "error_message": document.error_message,
-                "chunks_total": document.chunks_total,
-                "chunks_processed": document.chunks_processed,
+                "chunks": document.chunks,
+                "error": document.error,
                 "created_at": str(document.created_at) if document.created_at else None,
                 "updated_at": str(document.updated_at) if document.updated_at else None,
             }
@@ -114,8 +111,7 @@ class SQLAlchemyService(DatabaseService):
                         id=doc_id,
                         file_name=file_name,
                         status="completed",
-                        chunks_total=len(chunks_with_embeddings),
-                        chunks_processed=len(chunks_with_embeddings),
+                        chunks={"total": len(chunks_with_embeddings), "processed": len(chunks_with_embeddings)},
                     )
                     session.add(document)
 
@@ -141,10 +137,8 @@ class SQLAlchemyService(DatabaseService):
         self,
         doc_id: str,
         status: str,
-        failed_stage: str | None = None,
-        error_message: str | None = None,
-        chunks_total: int | None = None,
-        chunks_processed: int | None = None,
+        error: dict | None = None,
+        chunks: dict | None = None,
     ) -> None:
         async with self.async_session() as session:
             document = await session.get(Document, doc_id)
@@ -152,14 +146,10 @@ class SQLAlchemyService(DatabaseService):
                 raise ValueError(f"Document {doc_id} not found")
 
             document.status = status
-            if failed_stage is not None:
-                document.failed_stage = failed_stage
-            if error_message is not None:
-                document.error_message = error_message
-            if chunks_total is not None:
-                document.chunks_total = chunks_total
-            if chunks_processed is not None:
-                document.chunks_processed = chunks_processed
+            if error is not None:
+                document.error = error
+            if chunks is not None:
+                document.chunks = chunks
             document.updated_at = datetime.utcnow()
 
             await session.commit()
@@ -174,10 +164,8 @@ class SQLAlchemyService(DatabaseService):
             return {
                 "document_id": str(document.id),
                 "status": document.status,
-                "failed_stage": document.failed_stage,
-                "error_message": document.error_message,
-                "chunks_total": document.chunks_total,
-                "chunks_processed": document.chunks_processed,
+                "chunks": document.chunks,
+                "error": document.error,
                 "created_at": str(document.created_at) if document.created_at else None,
                 "updated_at": str(document.updated_at) if document.updated_at else None,
             }
@@ -195,8 +183,7 @@ class SQLAlchemyService(DatabaseService):
                 .where(Document.status.in_(statuses))
                 .values(
                     status="failed",
-                    failed_stage="server_restart",
-                    error_message="Server restarted while document was being processed.",
+                    error={"stage": "server_restart", "message": "Server restarted while document was being processed."},
                     updated_at=datetime.utcnow(),
                 )
             )

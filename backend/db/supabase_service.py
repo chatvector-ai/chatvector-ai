@@ -52,8 +52,7 @@ class SupabaseService(DatabaseService):
                 {
                     "file_name": filename,
                     "status": "uploaded",
-                    "chunks_total": 0,
-                    "chunks_processed": 0,
+                    "chunks": {"total": 0, "processed": 0},
                 }
             )
             .execute(),
@@ -109,10 +108,7 @@ class SupabaseService(DatabaseService):
             await self.update_document_status(
                 doc_id,
                 status="completed",
-                chunks_total=len(chunks_with_embeddings),
-                chunks_processed=len(chunk_ids),
-                failed_stage="",
-                error_message="",
+                chunks={"total": len(chunks_with_embeddings), "processed": len(chunk_ids)},
             )
 
             logger.info(f"[Supabase] Atomic upload: {doc_id} with {len(chunk_ids)} chunks")
@@ -125,8 +121,7 @@ class SupabaseService(DatabaseService):
                 await self.update_document_status(
                     doc_id,
                     status="failed",
-                    failed_stage="storing",
-                    error_message=str(e),
+                    error={"stage": "storing", "message": str(e)},
                 )
             raise
 
@@ -134,23 +129,17 @@ class SupabaseService(DatabaseService):
         self,
         doc_id: str,
         status: str,
-        failed_stage: str | None = None,
-        error_message: str | None = None,
-        chunks_total: int | None = None,
-        chunks_processed: int | None = None,
+        error: dict | None = None,
+        chunks: dict | None = None,
     ) -> None:
         payload: dict = {
             "status": status,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
-        if failed_stage is not None:
-            payload["failed_stage"] = failed_stage
-        if error_message is not None:
-            payload["error_message"] = error_message
-        if chunks_total is not None:
-            payload["chunks_total"] = chunks_total
-        if chunks_processed is not None:
-            payload["chunks_processed"] = chunks_processed
+        if error is not None:
+            payload["error"] = error
+        if chunks is not None:
+            payload["chunks"] = chunks
 
         await self._run_io(
             lambda: supabase_client.table("documents").update(payload).eq("id", doc_id).execute(),
@@ -161,7 +150,7 @@ class SupabaseService(DatabaseService):
     async def get_document_status(self, doc_id: str) -> dict | None:
         result = await self._run_io(
             lambda: supabase_client.table("documents")
-            .select("id,status,failed_stage,error_message,chunks_total,chunks_processed,created_at,updated_at")
+            .select("id,status,chunks,error,created_at,updated_at")
             .eq("id", doc_id)
             .limit(1)
             .execute(),
@@ -175,10 +164,8 @@ class SupabaseService(DatabaseService):
         return {
             "document_id": row["id"],
             "status": row.get("status"),
-            "failed_stage": row.get("failed_stage"),
-            "error_message": row.get("error_message"),
-            "chunks_total": row.get("chunks_total"),
-            "chunks_processed": row.get("chunks_processed"),
+            "chunks": row.get("chunks"),
+            "error": row.get("error"),
             "created_at": row.get("created_at"),
             "updated_at": row.get("updated_at"),
         }
@@ -196,10 +183,10 @@ class SupabaseService(DatabaseService):
             .update(
                 {
                     "status": "failed",
-                    "failed_stage": "server_restart",
-                    "error_message": (
-                        "Server restarted while document was being processed."
-                    ),
+                    "error": {
+                        "stage": "server_restart",
+                        "message": "Server restarted while document was being processed.",
+                    },
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                 }
             )

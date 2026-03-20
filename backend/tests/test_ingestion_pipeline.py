@@ -129,7 +129,7 @@ async def test_process_document_marks_failed_when_no_text_extracted(monkeypatch)
 
     mock_cleanup.assert_awaited_once_with("doc-no-text")
     assert mock_update.await_args_list[-1].kwargs["status"] == "failed"
-    assert mock_update.await_args_list[-1].kwargs["failed_stage"] == "extracting"
+    assert mock_update.await_args_list[-1].kwargs["error"]["stage"] == "extracting"
 
 
 @pytest.mark.asyncio
@@ -163,4 +163,4 @@ async def test_process_document_marks_failed_on_storage_error(monkeypatch):
 
     mock_cleanup.assert_awaited_once_with("doc-store-fail")
     assert mock_update.await_args_list[-1].kwargs["status"] == "failed"
-    assert mock_update.await_args_list[-1].kwargs["failed_stage"] == "storing"
+    assert mock_update.await_args_list[-1].kwargs["error"]["stage"] == "storing"

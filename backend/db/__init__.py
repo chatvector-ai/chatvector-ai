@@ -128,10 +128,8 @@ async def find_similar_chunks(
 async def update_document_status(
     doc_id: str,
     status: str,
-    failed_stage: str | None = None,
-    error_message: str | None = None,
-    chunks_total: int | None = None,
-    chunks_processed: int | None = None,
+    error: dict | None = None,
+    chunks: dict | None = None,
 ) -> None:
     """Persist status/progress updates with retry logic."""
     service = get_db_service()
@@ -140,10 +138,8 @@ async def update_document_status(
         await service.update_document_status(
             doc_id=doc_id,
             status=status,
-            failed_stage=failed_stage,
-            error_message=error_message,
-            chunks_total=chunks_total,
-            chunks_processed=chunks_processed,
+            error=error,
+            chunks=chunks,
         )
 
     await retry_async(
