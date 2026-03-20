@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 
 from fastapi import UploadFile
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -12,6 +13,13 @@ from services.text_cleaning_service import clean_text
 logger = logging.getLogger(__name__)
 
 ALLOWED_UPLOAD_TYPES = {"application/pdf", "text/plain"}
+
+
+@dataclass
+class _FileMetadata:
+    """Minimal duck-type shim used by extract_text_from_file for background jobs."""
+    content_type: str
+    filename: str
 
 
 class UploadPipelineError(Exception):
@@ -208,3 +216,103 @@ class IngestionPipeline:
                 message="Upload failed. Please try again.",
                 document_id=doc_id,
             )
+
+    async def process_document_background(
+        self,
+        doc_id: str,
+        file_name: str,
+        content_type: str,
+        file_bytes: bytes,
+    ) -> None:
+        """
+        Run the extraction→chunking→embedding→storing pipeline stages for a
+        document that was already created and queued by the upload endpoint.
+
+        Called exclusively by background workers; raises on unrecoverable error
+        so the worker can apply retry / DLQ logic.
+        """
+        file_meta = _FileMetadata(content_type=content_type, filename=file_name)
+        stage = "extracting"
+
+        try:
+            await self._update_status(doc_id=doc_id, status="extracting")
+            file_text = await extract_text_from_file(file_meta, file_bytes)  # type: ignore[arg-type]
+            file_text = clean_text(file_text)
+
+            if not file_text:
+                raise UploadPipelineError(
+                    status_code=422,
+                    code="no_text_extracted",
+                    stage=stage,
+                    message="No extractable text was found in the uploaded document.",
+                    document_id=doc_id,
+                )
+
+            stage = "chunking"
+            await self._update_status(doc_id=doc_id, status="chunking")
+            splitter = self._splitter_cls(chunk_size=1000, chunk_overlap=200)
+            chunks = splitter.split_text(file_text)
+
+            if not chunks:
+                raise UploadPipelineError(
+                    status_code=422,
+                    code="no_chunks_generated",
+                    stage=stage,
+                    message="No chunks were generated from extracted text.",
+                    document_id=doc_id,
+                )
+
+            stage = "embedding"
+            await self._update_status(
+                doc_id=doc_id,
+                status="embedding",
+                chunks_total=len(chunks),
+                chunks_processed=0,
+            )
+            embeddings = await get_embeddings(chunks)
+
+            if len(embeddings) != len(chunks):
+                raise UploadPipelineError(
+                    status_code=500,
+                    code="embedding_mismatch",
+                    stage=stage,
+                    message="Embedding generation returned an unexpected number of vectors.",
+                    document_id=doc_id,
+                )
+
+            stage = "storing"
+            await self._update_status(doc_id=doc_id, status="storing")
+            chunk_ids = await db.store_chunks_with_embeddings(
+                doc_id,
+                list(zip(chunks, embeddings)),
+            )
+
+            await self._update_status(
+                doc_id=doc_id,
+                status="completed",
+                failed_stage="",
+                error_message="",
+                chunks_total=len(chunks),
+                chunks_processed=len(chunk_ids),
+            )
+
+            logger.info(
+                f"Background processing complete: {len(chunk_ids)} chunks "
+                f"stored for document {doc_id}"
+            )
+
+        except UploadPipelineError as e:
+            await self._handle_error(doc_id=doc_id, stage=e.stage, message=e.message)
+            logger.warning(
+                f"Background pipeline failed at stage={e.stage} "
+                f"for document {doc_id}: {e.message}"
+            )
+            raise
+
+        except Exception as e:
+            await self._handle_error(doc_id=doc_id, stage=stage, message=str(e))
+            logger.error(
+                f"Background pipeline unexpected error at stage={stage} "
+                f"for document {doc_id}: {e}"
+            )
+            raise
