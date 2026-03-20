@@ -7,6 +7,7 @@ import db
 from core.config import config
 from services.embedding_service import get_embeddings
 from services.extraction_service import extract_text_from_file
+from services.text_cleaning_service import clean_text
 
 logger = logging.getLogger(__name__)
 
@@ -115,8 +116,9 @@ class IngestionPipeline:
             stage = "extracting"
             await self._update_status(doc_id=doc_id, status="extracting")
             file_text = await extract_text_from_file(file, file_bytes)
+            file_text = clean_text(file_text)
 
-            if not file_text.strip():
+            if not file_text:
                 raise UploadPipelineError(
                     status_code=422,
                     code="no_text_extracted",
