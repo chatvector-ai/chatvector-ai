@@ -8,6 +8,8 @@ System design details and architectural decisions
 - [Database Strategy Pattern](#database-strategy-pattern)
 - [Development vs Production](#development-vs-production)
 - [Retry Logic](#retry-logic)
+- [Ingestion Queue](#ingestion-queue)
+- [Logging & Observability](#logging--observability)
 - [Vector Search Design](#vector-search-design)
 - [Design Principles](#design-principles)
 - [Extension Path](#extension-path)
@@ -44,7 +46,7 @@ Two implementations:
 Selected via environment-aware factory in:
 
 ```
-app/db/__init__.py
+backend/db/__init__.py
 ```
 
 This ensures:
@@ -81,6 +83,25 @@ Purpose:
 - Improve production resilience
 
 Retries are applied at the service layer, not the API layer, to maintain separation of concerns.
+
+---
+
+## Ingestion Queue
+
+- An async in-memory queue decouples document upload from embedding generation
+- Workers process jobs in the background via `queue_service.py`
+- Failed jobs are retried with configurable backoff and moved to a DLQ on exhaustion
+- Queue will be replaced with Redis in Phase 2 for durability and multi-instance support
+
+---
+
+## Logging & Observability
+
+- Structured JSON logging via `logging_config/logging_config.py`
+- Request ID middleware injects a unique ID per request for log tracing
+- Log filters suppress noise (e.g. health check spam)
+- Logs written to `logs/app.log` and stdout
+- External log shipping (DataDog, Splunk, ELK) planned for Phase 2
 
 ---
 
@@ -141,10 +162,8 @@ Transient failures are handled automatically.
 Future improvements may include:
 
 - Multi-tenant support
-- Background task queue
 - Embedding provider abstraction
 - Observability and metrics
-- Caching layer
 - Read replicas
 
 The current abstraction layer supports these extensions without major refactors.

@@ -22,13 +22,19 @@ class ChatBatchRequest(BaseModel):
     queries: list[ChatBatchItem] = Field(..., min_length=1)
 
 
+class ChatRequest(BaseModel):
+    question: str = Field(..., min_length=1)
+    doc_id: str = Field(..., min_length=1)
+    match_count: int = Field(default=5, ge=1)
+
+
 @router.post("/chat")
-async def chat(question: str, doc_id: str, match_count: int = 5):
-    logger.info(f"Chat request received for document {doc_id}")
+async def chat(payload: ChatRequest):
+    logger.info(f"Chat request received for document {payload.doc_id}")
     return await answer_question_for_document(
-        question=question,
-        doc_id=doc_id,
-        match_count=match_count,
+        question=payload.question,
+        doc_id=payload.doc_id,
+        match_count=payload.match_count,
     )
 
 

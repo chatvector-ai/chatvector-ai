@@ -7,6 +7,17 @@ from services.queue_service import ingestion_queue
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# =============================================================================
+# SECURITY / OPS WARNING — READ BEFORE DEPLOYMENT
+# -----------------------------------------------------------------------------
+# GET /queue/stats is UNAUTHENTICATED and returns internal operational metrics
+# (queue depth, worker task count, dead-letter metadata). This is intended for
+# trusted local or private-network debugging only. Before any public, shared, or
+# multi-tenant deployment, this route MUST be gated (e.g. auth, admin-only
+# network policy, reverse-proxy allowlist, or feature flag). Do not expose it to
+# the open internet without explicit review.
+# =============================================================================
+
 
 @router.get("/queue/stats")
 def get_queue_stats():

@@ -2,14 +2,14 @@ import asyncio
 from fastapi import HTTPException
 from unittest.mock import AsyncMock, patch
 
-from routes.chat import ChatBatchItem, ChatBatchRequest, chat, chat_batch
+from routes.chat import ChatBatchItem, ChatBatchRequest, ChatRequest, chat, chat_batch
 
 
 def test_chat_route_delegates_to_chat_service():
     payload = {"question": "q", "chunks": 1, "answer": "a"}
 
     with patch("routes.chat.answer_question_for_document", new=AsyncMock(return_value=payload)) as mock_chat:
-        result = asyncio.run(chat(question="q", doc_id="doc-xyz"))
+        result = asyncio.run(chat(ChatRequest(question="q", doc_id="doc-xyz")))
 
     assert result == payload
     mock_chat.assert_awaited_once_with(question="q", doc_id="doc-xyz", match_count=5)
