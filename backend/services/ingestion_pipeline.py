@@ -1,16 +1,70 @@
+import bisect
 import logging
+from dataclasses import dataclass
 
 from fastapi import UploadFile
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 import db
 from core.config import config
+from db.base import ChunkRecord
 from services.embedding_service import get_embeddings
-from services.extraction_service import extract_text_from_file
+from services.extraction_service import PageBoundary, extract_text_with_metadata
+from services.text_cleaning_service import clean_text
 
 logger = logging.getLogger(__name__)
 
 ALLOWED_UPLOAD_TYPES = {"application/pdf", "text/plain"}
+
+
+def _resolve_page_number(
+    offset: int,
+    page_boundaries: list[PageBoundary],
+) -> int | None:
+    """
+    Return the 1-based page number that contains *offset*, or None for non-PDF.
+
+    Uses binary search on the sorted start_offset values for O(log n) lookup.
+    """
+    if not page_boundaries:
+        return None
+    starts = [pb.start_offset for pb in page_boundaries]
+    idx = bisect.bisect_right(starts, offset) - 1
+    idx = max(0, idx)
+    return page_boundaries[idx].page_number
+
+
+def _build_chunk_records(
+    langchain_docs: list,
+    embeddings: list[list[float]],
+    page_boundaries: list[PageBoundary],
+) -> list[ChunkRecord]:
+    """
+    Pair langchain Document objects (which carry start_index metadata) with
+    their embeddings and compute all chunk metadata fields.
+    """
+    records: list[ChunkRecord] = []
+    for chunk_index, (doc, embedding) in enumerate(zip(langchain_docs, embeddings)):
+        start = doc.metadata.get("start_index", 0)
+        end = start + len(doc.page_content)
+        records.append(
+            ChunkRecord(
+                chunk_text=doc.page_content,
+                embedding=embedding,
+                chunk_index=chunk_index,
+                character_offset_start=start,
+                character_offset_end=end,
+                page_number=_resolve_page_number(start, page_boundaries),
+            )
+        )
+    return records
+
+
+@dataclass
+class _FileMetadata:
+    """Minimal duck-type shim used by extract_text_from_file for background jobs."""
+    content_type: str
+    filename: str
 
 
 class UploadPipelineError(Exception):
@@ -67,18 +121,14 @@ class IngestionPipeline:
         self,
         doc_id: str,
         status: str,
-        failed_stage: str | None = None,
-        error_message: str | None = None,
-        chunks_total: int | None = None,
-        chunks_processed: int | None = None,
+        error: dict | None = None,
+        chunks: dict | None = None,
     ) -> None:
         await db.update_document_status(
             doc_id=doc_id,
             status=status,
-            failed_stage=failed_stage,
-            error_message=error_message,
-            chunks_total=chunks_total,
-            chunks_processed=chunks_processed,
+            error=error,
+            chunks=chunks,
         )
 
     async def _handle_error(self, doc_id: str, stage: str, message: str) -> None:
@@ -87,8 +137,7 @@ class IngestionPipeline:
             await self._update_status(
                 doc_id=doc_id,
                 status="failed",
-                failed_stage=stage,
-                error_message=safe_message,
+                error={"stage": stage, "message": safe_message},
             )
         except Exception as status_error:
             logger.error(f"Failed to mark document {doc_id} as failed: {status_error}")
@@ -114,9 +163,10 @@ class IngestionPipeline:
 
             stage = "extracting"
             await self._update_status(doc_id=doc_id, status="extracting")
-            file_text = await extract_text_from_file(file, file_bytes)
+            file_text, page_boundaries = await extract_text_with_metadata(file, file_bytes)
+            file_text = clean_text(file_text)
 
-            if not file_text.strip():
+            if not file_text:
                 raise UploadPipelineError(
                     status_code=422,
                     code="no_text_extracted",
@@ -126,10 +176,10 @@ class IngestionPipeline:
 
             stage = "chunking"
             await self._update_status(doc_id=doc_id, status="chunking")
-            splitter = self._splitter_cls(chunk_size=1000, chunk_overlap=200)
-            chunks = splitter.split_text(file_text)
+            splitter = self._splitter_cls(chunk_size=1000, chunk_overlap=200, add_start_index=True)
+            langchain_docs = splitter.create_documents([file_text])
 
-            if not chunks:
+            if not langchain_docs:
                 raise UploadPipelineError(
                     status_code=422,
                     code="no_chunks_generated",
@@ -141,12 +191,11 @@ class IngestionPipeline:
             await self._update_status(
                 doc_id=doc_id,
                 status="embedding",
-                chunks_total=len(chunks),
-                chunks_processed=0,
+                chunks={"total": len(langchain_docs), "processed": 0},
             )
-            embeddings = await get_embeddings(chunks)
+            embeddings = await get_embeddings([doc.page_content for doc in langchain_docs])
 
-            if len(embeddings) != len(chunks):
+            if len(embeddings) != len(langchain_docs):
                 raise UploadPipelineError(
                     status_code=500,
                     code="embedding_mismatch",
@@ -156,18 +205,13 @@ class IngestionPipeline:
 
             stage = "storing"
             await self._update_status(doc_id=doc_id, status="storing")
-            chunk_ids = await db.store_chunks_with_embeddings(
-                doc_id,
-                list(zip(chunks, embeddings)),
-            )
+            chunk_records = _build_chunk_records(langchain_docs, embeddings, page_boundaries)
+            chunk_ids = await db.store_chunks_with_embeddings(doc_id, chunk_records)
 
             await self._update_status(
                 doc_id=doc_id,
                 status="completed",
-                failed_stage="",
-                error_message="",
-                chunks_total=len(chunks),
-                chunks_processed=len(chunk_ids),
+                chunks={"total": len(langchain_docs), "processed": len(chunk_ids)},
             )
 
             logger.info(
@@ -206,3 +250,100 @@ class IngestionPipeline:
                 message="Upload failed. Please try again.",
                 document_id=doc_id,
             )
+
+    async def process_document_background(
+        self,
+        doc_id: str,
+        file_name: str,
+        content_type: str,
+        file_bytes: bytes,
+        rate_limiter=None,
+    ) -> None:
+        """
+        Run the extraction→chunking→embedding→storing pipeline stages for a
+        document that was already created and queued by the upload endpoint.
+
+        Called exclusively by background workers; raises on unrecoverable error
+        so the worker can apply retry / DLQ logic.
+        """
+        file_meta = _FileMetadata(content_type=content_type, filename=file_name)
+        stage = "extracting"
+
+        try:
+            await self._update_status(doc_id=doc_id, status="extracting")
+            file_text, page_boundaries = await extract_text_with_metadata(file_meta, file_bytes)  # type: ignore[arg-type]
+            file_text = clean_text(file_text)
+
+            if not file_text:
+                raise UploadPipelineError(
+                    status_code=422,
+                    code="no_text_extracted",
+                    stage=stage,
+                    message="No extractable text was found in the uploaded document.",
+                    document_id=doc_id,
+                )
+
+            stage = "chunking"
+            await self._update_status(doc_id=doc_id, status="chunking")
+            splitter = self._splitter_cls(chunk_size=1000, chunk_overlap=200, add_start_index=True)
+            langchain_docs = splitter.create_documents([file_text])
+
+            if not langchain_docs:
+                raise UploadPipelineError(
+                    status_code=422,
+                    code="no_chunks_generated",
+                    stage=stage,
+                    message="No chunks were generated from extracted text.",
+                    document_id=doc_id,
+                )
+
+            stage = "embedding"
+            await self._update_status(
+                doc_id=doc_id,
+                status="embedding",
+                chunks={"total": len(langchain_docs), "processed": 0},
+            )
+            if rate_limiter is not None:
+                await rate_limiter.acquire()
+            embeddings = await get_embeddings([doc.page_content for doc in langchain_docs])
+
+            if len(embeddings) != len(langchain_docs):
+                raise UploadPipelineError(
+                    status_code=500,
+                    code="embedding_mismatch",
+                    stage=stage,
+                    message="Embedding generation returned an unexpected number of vectors.",
+                    document_id=doc_id,
+                )
+
+            stage = "storing"
+            await self._update_status(doc_id=doc_id, status="storing")
+            chunk_records = _build_chunk_records(langchain_docs, embeddings, page_boundaries)
+            chunk_ids = await db.store_chunks_with_embeddings(doc_id, chunk_records)
+
+            await self._update_status(
+                doc_id=doc_id,
+                status="completed",
+                chunks={"total": len(langchain_docs), "processed": len(chunk_ids)},
+            )
+
+            logger.info(
+                f"Background processing complete: {len(chunk_ids)} chunks "
+                f"stored for document {doc_id}"
+            )
+
+        except UploadPipelineError as e:
+            await self._handle_error(doc_id=doc_id, stage=e.stage, message=e.message)
+            logger.warning(
+                f"Background pipeline failed at stage={e.stage} "
+                f"for document {doc_id}: {e.message}"
+            )
+            raise
+
+        except Exception as e:
+            await self._handle_error(doc_id=doc_id, stage=stage, message=str(e))
+            logger.error(
+                f"Background pipeline unexpected error at stage={stage} "
+                f"for document {doc_id}: {e}"
+            )
+            raise

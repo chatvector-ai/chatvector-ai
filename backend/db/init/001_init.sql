@@ -1,73 +1,30 @@
 -- Enable vector extension
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Create documents table
-CREATE TABLE IF NOT EXISTS documents (
+-- Drop and recreate documents table with consolidated schema
+DROP TABLE IF EXISTS document_chunks;
+DROP TABLE IF EXISTS documents;
+
+CREATE TABLE documents (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   file_name TEXT,
   status VARCHAR(50) DEFAULT 'uploaded',
-  failed_stage TEXT,
-  error_message TEXT,
-  chunks_total INTEGER DEFAULT 0,
-  chunks_processed INTEGER DEFAULT 0,
+  chunks JSONB DEFAULT '{"total": 0, "processed": 0}',
+  error JSONB,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- Add/migrate status and progress columns for existing databases
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'documents' AND column_name = 'status'
-    ) THEN
-        ALTER TABLE documents ADD COLUMN status VARCHAR(50) DEFAULT 'uploaded';
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'documents' AND column_name = 'failed_stage'
-    ) THEN
-        ALTER TABLE documents ADD COLUMN failed_stage TEXT;
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'documents' AND column_name = 'error_message'
-    ) THEN
-        ALTER TABLE documents ADD COLUMN error_message TEXT;
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'documents' AND column_name = 'chunks_total'
-    ) THEN
-        ALTER TABLE documents ADD COLUMN chunks_total INTEGER DEFAULT 0;
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'documents' AND column_name = 'chunks_processed'
-    ) THEN
-        ALTER TABLE documents ADD COLUMN chunks_processed INTEGER DEFAULT 0;
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'documents' AND column_name = 'updated_at'
-    ) THEN
-        ALTER TABLE documents ADD COLUMN updated_at TIMESTAMP DEFAULT NOW();
-    END IF;
-
-    ALTER TABLE documents ALTER COLUMN status SET DEFAULT 'uploaded';
-END $$;
-
 -- Create document_chunks table
-CREATE TABLE IF NOT EXISTS document_chunks (
+CREATE TABLE document_chunks (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   document_id UUID REFERENCES documents(id),
   chunk_text TEXT,
   embedding vector(3072),
+  chunk_index INTEGER NOT NULL DEFAULT 0,
+  page_number INTEGER,
+  character_offset_start INTEGER NOT NULL DEFAULT 0,
+  character_offset_end INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -80,6 +37,11 @@ CREATE OR REPLACE FUNCTION match_chunks(
 RETURNS TABLE (
   id uuid,
   chunk_text text,
+  chunk_index integer,
+  page_number integer,
+  character_offset_start integer,
+  character_offset_end integer,
+  file_name text,
   similarity float
 )
 LANGUAGE plpgsql
@@ -89,8 +51,14 @@ BEGIN
   SELECT
     document_chunks.id,
     document_chunks.chunk_text,
+    document_chunks.chunk_index,
+    document_chunks.page_number,
+    document_chunks.character_offset_start,
+    document_chunks.character_offset_end,
+    documents.file_name,
     1 - (document_chunks.embedding <=> query_embedding) AS similarity
   FROM document_chunks
+  JOIN documents ON document_chunks.document_id = documents.id
   WHERE (filter_document_id IS NULL OR document_chunks.document_id = filter_document_id)
   ORDER BY document_chunks.embedding <=> query_embedding
   LIMIT match_count;

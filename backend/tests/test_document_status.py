@@ -10,8 +10,8 @@ async def test_get_document_status_success():
     payload = {
         "document_id": "doc-1",
         "status": "embedding",
-        "chunks_total": 10,
-        "chunks_processed": 4,
+        "chunks": {"total": 10, "processed": 4},
+        "error": None,
     }
 
     with patch("routes.documents.db.get_document_status", new=AsyncMock(return_value=payload)):
@@ -19,6 +19,8 @@ async def test_get_document_status_success():
 
     assert result["document_id"] == "doc-1"
     assert result["status"] == "embedding"
+    assert result["chunks"] == {"total": 10, "processed": 4}
+    assert "error" not in result
 
 
 @pytest.mark.asyncio

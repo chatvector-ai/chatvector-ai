@@ -41,6 +41,12 @@ class Settings:
     SQLALCHEMY_POOL_TIMEOUT_SEC: int = max(1, int(os.getenv("SQLALCHEMY_POOL_TIMEOUT_SEC", "30")))
     SQLALCHEMY_RETRIEVAL_CONCURRENCY: int = max(1, int(os.getenv("SQLALCHEMY_RETRIEVAL_CONCURRENCY", "8")))
 
+    # Background ingestion queue
+    QUEUE_WORKER_COUNT: int = max(1, min(5, int(os.getenv("QUEUE_WORKER_COUNT", "3"))))
+    QUEUE_MAX_SIZE: int = max(1, int(os.getenv("QUEUE_MAX_SIZE", "100")))
+    QUEUE_EMBEDDING_RPS: float = max(0.1, float(os.getenv("QUEUE_EMBEDDING_RPS", "2.0")))
+    QUEUE_JOB_MAX_RETRIES: int = max(0, int(os.getenv("QUEUE_JOB_MAX_RETRIES", "3")))
+
     # Backwards-compatible lowercase properties for accessing config values
     @property
     def supabase_url(self) -> str:

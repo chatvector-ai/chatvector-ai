@@ -1,4 +1,4 @@
-.PHONY: help up build down reset logs db
+.PHONY: help up build down reset logs db sync
 
 # ==========================================
 # Auto-detect Docker Compose (v1 or v2)
@@ -42,6 +42,7 @@ help:
 	@echo "$(GREEN)make reset$(RESET)   💣 Stop and remove volumes"
 	@echo "$(GREEN)make logs$(RESET)    📊 Follow API logs"
 	@echo "$(GREEN)make db$(RESET)      🐘 Open Postgres shell"
+	@echo "$(GREEN)make sync$(RESET)    🔄 Sync with upstream main"
 	@echo ""
 	@echo "Using: $(CYAN)$(DOCKER_COMPOSE)$(RESET)"
 	@echo ""
@@ -73,3 +74,12 @@ logs:
 
 db:
 	$(DOCKER_COMPOSE) exec db psql -U postgres
+
+# ==========================================
+# Git Commands
+# ==========================================
+sync:
+	git fetch upstream
+	git rebase upstream/main
+	git push --force-with-lease
+	@echo "$(GREEN)🔄 Synced with upstream/main$(RESET)"

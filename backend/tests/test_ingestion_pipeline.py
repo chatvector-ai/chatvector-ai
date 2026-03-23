@@ -1,26 +1,49 @@
 """Ingestion pipeline tests for validation, status tracking, and failure handling."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, call, patch
 
 import pytest
 from fastapi import UploadFile
 
-from services.ingestion_pipeline import IngestionPipeline, UploadPipelineError
+from db.base import ChunkRecord
+from services.ingestion_pipeline import (
+    IngestionPipeline,
+    UploadPipelineError,
+    _build_chunk_records,
+    _resolve_page_number,
+)
+from services.extraction_service import PageBoundary
+
+
+class _FakeDoc:
+    """Minimal stand-in for a LangChain Document object."""
+
+    def __init__(self, text: str, start_index: int):
+        self.page_content = text
+        self.metadata = {"start_index": start_index}
 
 
 class _FixedSplitter:
-    def __init__(self, chunk_size: int, chunk_overlap: int):
+    def __init__(self, chunk_size: int, chunk_overlap: int, add_start_index: bool = False):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.add_start_index = add_start_index
+
+    def create_documents(self, texts: list[str]) -> list[_FakeDoc]:
+        return [_FakeDoc("chunk-a", 0), _FakeDoc("chunk-b", 7)]
 
     def split_text(self, text: str) -> list[str]:
         return ["chunk-a", "chunk-b"]
 
 
 class _SingleChunkSplitter:
-    def __init__(self, chunk_size: int, chunk_overlap: int):
+    def __init__(self, chunk_size: int, chunk_overlap: int, add_start_index: bool = False):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.add_start_index = add_start_index
+
+    def create_documents(self, texts: list[str]) -> list[_FakeDoc]:
+        return [_FakeDoc("chunk-a", 0)]
 
     def split_text(self, text: str) -> list[str]:
         return ["chunk-a"]
@@ -45,7 +68,8 @@ async def test_process_document_success_tracks_status_and_returns_status_endpoin
     ) as mock_store, patch(
         "services.ingestion_pipeline.db.delete_document_chunks", new=AsyncMock()
     ) as mock_cleanup, patch(
-        "services.ingestion_pipeline.extract_text_from_file", new=AsyncMock(return_value="hello world")
+        "services.ingestion_pipeline.extract_text_with_metadata",
+        new=AsyncMock(return_value=("hello world", [])),
     ) as mock_extract, patch(
         "services.ingestion_pipeline.get_embeddings", new=AsyncMock(return_value=[[0.1, 0.2], [0.3, 0.4]])
     ):
@@ -118,7 +142,8 @@ async def test_process_document_marks_failed_when_no_text_extracted(monkeypatch)
     ) as mock_update, patch(
         "services.ingestion_pipeline.db.delete_document_chunks", new=AsyncMock()
     ) as mock_cleanup, patch(
-        "services.ingestion_pipeline.extract_text_from_file", new=AsyncMock(return_value="   ")
+        "services.ingestion_pipeline.extract_text_with_metadata",
+        new=AsyncMock(return_value=("   ", [])),
     ):
         with pytest.raises(UploadPipelineError) as excinfo:
             await pipeline.process_document(mock_file)
@@ -129,7 +154,7 @@ async def test_process_document_marks_failed_when_no_text_extracted(monkeypatch)
 
     mock_cleanup.assert_awaited_once_with("doc-no-text")
     assert mock_update.await_args_list[-1].kwargs["status"] == "failed"
-    assert mock_update.await_args_list[-1].kwargs["failed_stage"] == "extracting"
+    assert mock_update.await_args_list[-1].kwargs["error"]["stage"] == "extracting"
 
 
 @pytest.mark.asyncio
@@ -148,7 +173,9 @@ async def test_process_document_marks_failed_on_storage_error(monkeypatch):
     ) as mock_update, patch(
         "services.ingestion_pipeline.db.delete_document_chunks", new=AsyncMock()
     ) as mock_cleanup, patch(
-        "services.ingestion_pipeline.extract_text_from_file", new=AsyncMock(return_value="hello world")), patch(
+        "services.ingestion_pipeline.extract_text_with_metadata",
+        new=AsyncMock(return_value=("hello world", [])),
+    ), patch(
         "services.ingestion_pipeline.get_embeddings", new=AsyncMock(return_value=[[0.1, 0.2]])
     ), patch(
         "services.ingestion_pipeline.db.store_chunks_with_embeddings", new=AsyncMock(side_effect=RuntimeError("db down"))
@@ -163,4 +190,112 @@ async def test_process_document_marks_failed_on_storage_error(monkeypatch):
 
     mock_cleanup.assert_awaited_once_with("doc-store-fail")
     assert mock_update.await_args_list[-1].kwargs["status"] == "failed"
-    assert mock_update.await_args_list[-1].kwargs["failed_stage"] == "storing"
+    assert mock_update.await_args_list[-1].kwargs["error"]["stage"] == "storing"
+
+
+# ---------------------------------------------------------------------------
+# Metadata generation unit tests (Issue #23)
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_page_number_returns_none_for_empty_boundaries():
+    assert _resolve_page_number(0, []) is None
+    assert _resolve_page_number(999, []) is None
+
+
+def test_resolve_page_number_single_page():
+    boundaries = [PageBoundary(page_number=1, start_offset=0, end_offset=500)]
+    assert _resolve_page_number(0, boundaries) == 1
+    assert _resolve_page_number(499, boundaries) == 1
+
+
+def test_resolve_page_number_multi_page():
+    boundaries = [
+        PageBoundary(page_number=1, start_offset=0, end_offset=100),
+        PageBoundary(page_number=2, start_offset=100, end_offset=250),
+        PageBoundary(page_number=3, start_offset=250, end_offset=400),
+    ]
+    assert _resolve_page_number(0, boundaries) == 1
+    assert _resolve_page_number(99, boundaries) == 1
+    assert _resolve_page_number(100, boundaries) == 2
+    assert _resolve_page_number(249, boundaries) == 2
+    assert _resolve_page_number(250, boundaries) == 3
+    assert _resolve_page_number(399, boundaries) == 3
+
+
+def test_build_chunk_records_populates_all_fields():
+    docs = [_FakeDoc("hello world", 0), _FakeDoc("second chunk", 12)]
+    embeddings = [[0.1, 0.2], [0.3, 0.4]]
+    boundaries = [PageBoundary(page_number=1, start_offset=0, end_offset=100)]
+
+    records = _build_chunk_records(docs, embeddings, boundaries)
+
+    assert len(records) == 2
+
+    assert records[0].chunk_text == "hello world"
+    assert records[0].embedding == [0.1, 0.2]
+    assert records[0].chunk_index == 0
+    assert records[0].character_offset_start == 0
+    assert records[0].character_offset_end == len("hello world")
+    assert records[0].page_number == 1
+
+    assert records[1].chunk_text == "second chunk"
+    assert records[1].embedding == [0.3, 0.4]
+    assert records[1].chunk_index == 1
+    assert records[1].character_offset_start == 12
+    assert records[1].character_offset_end == 12 + len("second chunk")
+    assert records[1].page_number == 1
+
+
+def test_build_chunk_records_page_number_none_for_txt():
+    docs = [_FakeDoc("plain text", 0)]
+    embeddings = [[0.5, 0.6]]
+
+    records = _build_chunk_records(docs, embeddings, page_boundaries=[])
+
+    assert records[0].page_number is None
+
+
+@pytest.mark.asyncio
+async def test_process_document_passes_chunk_records_to_store(monkeypatch):
+    """store_chunks_with_embeddings must receive ChunkRecord objects with metadata."""
+    mock_file = AsyncMock(spec=UploadFile)
+    mock_file.filename = "report.pdf"
+    mock_file.content_type = "application/pdf"
+    mock_file.read = AsyncMock(return_value=b"fake-pdf-bytes")
+
+    monkeypatch.setattr("services.ingestion_pipeline.config.MAX_UPLOAD_SIZE_BYTES", 10 * 1024 * 1024)
+    monkeypatch.setattr("services.ingestion_pipeline.config.MAX_UPLOAD_SIZE_MB", 10)
+
+    page_boundaries = [PageBoundary(page_number=1, start_offset=0, end_offset=20)]
+    pipeline = IngestionPipeline(splitter_cls=_FixedSplitter)
+
+    with patch("services.ingestion_pipeline.db.create_document", new=AsyncMock(return_value="doc-meta")), patch(
+        "services.ingestion_pipeline.db.update_document_status", new=AsyncMock()
+    ), patch(
+        "services.ingestion_pipeline.db.store_chunks_with_embeddings", new=AsyncMock(return_value=["c1", "c2"])
+    ) as mock_store, patch(
+        "services.ingestion_pipeline.db.delete_document_chunks", new=AsyncMock()
+    ), patch(
+        "services.ingestion_pipeline.extract_text_with_metadata",
+        new=AsyncMock(return_value=("hello world", page_boundaries)),
+    ), patch(
+        "services.ingestion_pipeline.get_embeddings",
+        new=AsyncMock(return_value=[[0.1, 0.2], [0.3, 0.4]]),
+    ):
+        await pipeline.process_document(mock_file)
+
+    mock_store.assert_awaited_once()
+    _doc_id, records = mock_store.call_args.args
+    assert _doc_id == "doc-meta"
+    assert len(records) == 2
+    assert all(isinstance(r, ChunkRecord) for r in records)
+
+    assert records[0].chunk_index == 0
+    assert records[0].character_offset_start == 0
+    assert records[0].character_offset_end == len("chunk-a")
+    assert records[0].page_number == 1
+
+    assert records[1].chunk_index == 1
+    assert records[1].character_offset_start == 7
+    assert records[1].character_offset_end == 7 + len("chunk-b")

@@ -7,6 +7,7 @@
 - [Docker Reference](#docker-reference)
 - [Database Initialization](#database-initialization)
 - [Working with the Database Layer](#working-with-the-database-layer)
+- [Embedding Queue Architecture](#embedding-queue-architecture)
 - [Tests](#tests)
 - [Advanced Local Development](#advanced-local-development)
 - [Git Workflow](#git-workflow)
@@ -150,6 +151,141 @@ The factory automatically:
 - Selects the correct environment
 - Applies retry logic
 - Handles logging
+
+---
+
+## Embedding Queue Architecture
+
+`POST /upload` returns in under 500 ms regardless of file size. The heavy
+work — text extraction, chunking, embedding, and storage — happens in the
+background via an in-memory asyncio queue drained by a pool of worker tasks.
+
+### Upload flow
+
+```
+Client                   API                       Worker pool
+  │                       │                             │
+  │── POST /upload ───────▶│                             │
+  │                       │ validate file               │
+  │                       │ create document (DB)        │
+  │                       │ update status → "queued"    │
+  │                       │ enqueue(job)                │
+  │◀─ 202 {doc_id,        │                             │
+  │    queue_position} ───│                             │
+  │                       │            pick up job ─────▶
+  │                       │            update → extracting
+  │                       │            update → chunking
+  │                       │            rate-limit token
+  │                       │            update → embedding
+  │                       │            update → storing
+  │                       │            update → completed
+  │                       │                             │
+  │── GET /documents/{id}/status ─────────────────────▶ │
+  │◀─ {status: "completed", chunks_processed: 42} ──── │
+```
+
+Poll `GET /documents/{id}/status` for progress. While the job is still
+pending, the response also includes a live `queue_position` field.
+
+### Worker pool
+
+Workers are plain asyncio tasks started when the application boots and
+cancelled cleanly on shutdown. The pool size is set with `QUEUE_WORKER_COUNT`
+(default `3`, maximum `5`).
+
+```env
+QUEUE_WORKER_COUNT=3   # number of concurrent background workers (1–5)
+QUEUE_MAX_SIZE=100     # maximum pending jobs; uploads beyond this return 503
+```
+
+**When to increase workers:** if documents stay in `"queued"` status for a
+long time while the server is otherwise idle, more workers will drain the
+backlog faster. Keep in mind that each worker makes independent embedding
+API calls, so raising `QUEUE_WORKER_COUNT` without also raising
+`QUEUE_EMBEDDING_RPS` will cause workers to serialize on the rate limiter
+rather than truly run in parallel.
+
+### Token bucket rate limiter
+
+The embedding step calls the Google Gemini API. To protect against rate-limit
+errors under load, each worker must acquire a token from a shared token bucket
+before calling `get_embeddings()`. Jobs that fail during extraction or
+chunking (before reaching the embedding step) never consume a token.
+
+```env
+QUEUE_EMBEDDING_RPS=2.0   # max Gemini API calls per second across all workers
+```
+
+The bucket refills continuously at `QUEUE_EMBEDDING_RPS` tokens per second
+with a burst capacity equal to one second of throughput. If all workers race
+to embed at the same time, they queue behind the limiter and are released
+at the configured rate.
+
+**Tuning:** consult your Google AI Studio project's quota page. A typical
+free-tier project allows around 2 requests/second; a paid project may allow
+significantly more. Set `QUEUE_EMBEDDING_RPS` to ~80% of your actual quota
+to leave headroom for the chat endpoint's embedding calls.
+
+### Retry logic and dead-letter queue
+
+If a worker fails at any stage, it retries the full job (extraction through
+storage) up to `QUEUE_JOB_MAX_RETRIES` times. Between attempts the document
+status is set to `"retrying"` so polling clients see a meaningful state
+rather than a transient `"failed"`.
+
+```env
+QUEUE_JOB_MAX_RETRIES=3   # retries before a job is moved to the DLQ
+```
+
+After all retries are exhausted the job is appended to the **dead-letter
+queue (DLQ)** — an in-memory list of lightweight records (no file bytes).
+Inspect it at any time:
+
+```bash
+curl http://localhost:8000/queue/stats
+```
+
+```json
+{
+  "queue_size": 2,
+  "worker_count": 3,
+  "dlq_size": 1,
+  "dlq": [
+    {
+      "doc_id": "a1b2c3d4-...",
+      "file_name": "report.pdf",
+      "attempt": 3,
+      "error": "embedding API unavailable",
+      "failed_at": "2026-03-20T21:14:05.123456+00:00"
+    }
+  ]
+}
+```
+
+The DLQ is in-memory only — it is cleared on server restart. The document's
+`status` in the database is set to `"failed"` with a `failed_stage` and
+`error_message` for durable inspection via `GET /documents/{id}/status`.
+
+### Server restart and in-flight jobs
+
+Because the queue is in-memory, any jobs still pending or being processed at
+the moment the server stops are lost. On the next startup, before workers
+begin accepting new jobs, the application scans the database for documents
+left in any in-progress state and bulk-updates them to `"failed"`:
+
+| Status reset to `"failed"` on startup |
+|---|
+| `queued` |
+| `retrying` |
+| `extracting` |
+| `chunking` |
+| `embedding` |
+| `storing` |
+
+This ensures clients polling for a stale document receive a definitive
+`"failed"` response rather than waiting indefinitely. The original file is
+not retained after the upload request completes, so these documents cannot
+be automatically retried — the client must re-upload.
 
 ---
 

@@ -107,6 +107,18 @@ async def _retrieve_chunks_for_documents(
     return merged_chunks
 
 
+def _build_sources(chunks: list) -> list[dict]:
+    """Extract citation metadata from retrieved chunks."""
+    return [
+        {
+            "file_name": chunk.file_name,
+            "page_number": chunk.page_number,
+            "chunk_index": chunk.chunk_index,
+        }
+        for chunk in chunks
+    ]
+
+
 async def answer_question_for_document(
     question: str,
     doc_id: str,
@@ -131,6 +143,7 @@ async def answer_question_for_document(
         "question": question,
         "chunks": len(matching_chunks),
         "answer": answer,
+        "sources": _build_sources(matching_chunks),
     }
 
 
@@ -211,6 +224,7 @@ async def answer_questions_for_documents_batch(
                 "doc_ids": query["doc_ids"],
                 "chunks": len(matching_chunks),
                 "answer": answer,
+                "sources": _build_sources(matching_chunks),
             }
         except Exception as e:
             logger.exception(
