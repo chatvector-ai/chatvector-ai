@@ -9,7 +9,7 @@ import logging
 
 from core.config import config
 from utils.retry import retry_async
-from .base import ChunkMatch
+from .base import ChunkMatch, ChunkRecord
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +55,12 @@ async def create_document(filename: str) -> str:
 
 async def store_chunks_with_embeddings(
     doc_id: str,
-    chunks_with_embeddings: list[tuple[str, list[float]]],
+    chunk_records: list[ChunkRecord],
 ) -> list[str]:
     service = get_db_service()
 
     async def _store():
-        return await service.store_chunks_with_embeddings(doc_id, chunks_with_embeddings)
+        return await service.store_chunks_with_embeddings(doc_id, chunk_records)
 
     return await retry_async(
         _store,
@@ -88,13 +88,13 @@ async def get_document(doc_id: str) -> dict:
 
 async def create_document_with_chunks_atomic(
     file_name: str,
-    chunks_with_embeddings: list[tuple[str, list[float]]],
+    chunk_records: list[ChunkRecord],
 ) -> tuple[str, list[str]]:
     """Atomic document+chunk creation with retry logic."""
     service = get_db_service()
 
     async def _atomic():
-        return await service.create_document_with_chunks_atomic(file_name, chunks_with_embeddings)
+        return await service.create_document_with_chunks_atomic(file_name, chunk_records)
 
     return await retry_async(
         _atomic,
@@ -215,5 +215,6 @@ __all__ = [
     "delete_document_chunks",
     "fail_stale_documents",
     "ChunkMatch",
+    "ChunkRecord",
     "db_service",
 ]

@@ -1,5 +1,6 @@
 import logging
 import db
+from db.base import ChunkRecord
 
 
 logger = logging.getLogger(__name__)
@@ -20,10 +21,26 @@ async def ingest_document_atomic(
     if not chunks:
         raise ValueError("No content chunks were generated from the uploaded file.")
 
-    chunks_with_embeddings = list(zip(chunks, embeddings))
+    cursor = 0
+    chunk_records: list[ChunkRecord] = []
+    for idx, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
+        start = cursor
+        end = start + len(chunk_text)
+        chunk_records.append(
+            ChunkRecord(
+                chunk_text=chunk_text,
+                embedding=embedding,
+                chunk_index=idx,
+                character_offset_start=start,
+                character_offset_end=end,
+                page_number=None,
+            )
+        )
+        cursor = end
+
     doc_id, inserted_chunk_ids = await db.create_document_with_chunks_atomic(
         file_name=file_name,
-        chunks_with_embeddings=chunks_with_embeddings,
+        chunk_records=chunk_records,
     )
 
     logger.info(

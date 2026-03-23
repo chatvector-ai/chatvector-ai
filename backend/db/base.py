@@ -1,9 +1,21 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 # Abstract base class that defines WHAT database operations we need.
 # All DB services (sqlalchemy, supabase, etc.) must implement these methods.
+
+
+@dataclass
+class ChunkRecord:
+    """Chunk payload passed to store_chunks_with_embeddings."""
+
+    chunk_text: str
+    embedding: list[float]
+    chunk_index: int
+    character_offset_start: int
+    character_offset_end: int
+    page_number: Optional[int] = None
 
 
 @dataclass
@@ -16,6 +28,11 @@ class ChunkMatch:
     embedding: Optional[list[float]] = None
     created_at: Optional[str] = None
     similarity: Optional[float] = None
+    chunk_index: Optional[int] = None
+    page_number: Optional[int] = None
+    character_offset_start: Optional[int] = None
+    character_offset_end: Optional[int] = None
+    file_name: Optional[str] = None
 
 
 class DatabaseService(ABC):
@@ -30,7 +47,7 @@ class DatabaseService(ABC):
     async def store_chunks_with_embeddings(
         self,
         doc_id: str,
-        chunks_with_embeddings: list[tuple[str, list[float]]],
+        chunk_records: list[ChunkRecord],
     ) -> list[str]:
         """Insert chunks/embeddings and return chunk IDs."""
         pass
@@ -54,7 +71,7 @@ class DatabaseService(ABC):
     async def create_document_with_chunks_atomic(
         self,
         file_name: str,
-        chunks_with_embeddings: list[tuple[str, list[float]]],
+        chunk_records: list[ChunkRecord],
     ) -> tuple[str, list[str]]:
         """Atomically create document with chunk records."""
         pass

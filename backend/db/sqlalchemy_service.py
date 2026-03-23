@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from core.models import Document, DocumentChunk
 from core.config import config
-from db.base import ChunkMatch, DatabaseService
+from db.base import ChunkMatch, ChunkRecord, DatabaseService
 
 logger = logging.getLogger(__name__)
 
@@ -56,21 +56,25 @@ class SQLAlchemyService(DatabaseService):
     async def store_chunks_with_embeddings(
         self,
         doc_id: str,
-        chunks_with_embeddings: list[tuple[str, list[float]]],
+        chunk_records: list[ChunkRecord],
     ) -> list[str]:
         async with self.async_session() as session:
             chunk_rows = []
             chunk_ids = []
 
-            for chunk_text, embedding in chunks_with_embeddings:
+            for record in chunk_records:
                 chunk_id = str(uuid.uuid4())
                 chunk_ids.append(chunk_id)
                 chunk_rows.append(
                     DocumentChunk(
                         id=chunk_id,
                         document_id=doc_id,
-                        chunk_text=chunk_text,
-                        embedding=embedding,
+                        chunk_text=record.chunk_text,
+                        embedding=record.embedding,
+                        chunk_index=record.chunk_index,
+                        page_number=record.page_number,
+                        character_offset_start=record.character_offset_start,
+                        character_offset_end=record.character_offset_end,
                     )
                 )
 
@@ -98,7 +102,7 @@ class SQLAlchemyService(DatabaseService):
     async def create_document_with_chunks_atomic(
         self,
         file_name: str,
-        chunks_with_embeddings: list[tuple[str, list[float]]],
+        chunk_records: list[ChunkRecord],
     ) -> tuple[str, list[str]]:
         """Atomic document+chunk creation with transaction."""
         async with self.async_session() as session:
@@ -111,19 +115,23 @@ class SQLAlchemyService(DatabaseService):
                         id=doc_id,
                         file_name=file_name,
                         status="completed",
-                        chunks={"total": len(chunks_with_embeddings), "processed": len(chunks_with_embeddings)},
+                        chunks={"total": len(chunk_records), "processed": len(chunk_records)},
                     )
                     session.add(document)
 
-                    for chunk_text, embedding in chunks_with_embeddings:
+                    for record in chunk_records:
                         chunk_id = str(uuid.uuid4())
                         chunk_ids.append(chunk_id)
                         session.add(
                             DocumentChunk(
                                 id=chunk_id,
                                 document_id=doc_id,
-                                chunk_text=chunk_text,
-                                embedding=embedding,
+                                chunk_text=record.chunk_text,
+                                embedding=record.embedding,
+                                chunk_index=record.chunk_index,
+                                page_number=record.page_number,
+                                character_offset_start=record.character_offset_start,
+                                character_offset_end=record.character_offset_end,
                             )
                         )
 
@@ -204,12 +212,13 @@ class SQLAlchemyService(DatabaseService):
             async with self._retrieval_semaphore:
                 async with self.async_session() as session:
                     result = await session.execute(
-                        select(DocumentChunk)
+                        select(DocumentChunk, Document.file_name)
+                        .join(Document, DocumentChunk.document_id == Document.id)
                         .where(DocumentChunk.document_id == doc_id)
                         .order_by(DocumentChunk.embedding.op("<=>")(query_embedding))
                         .limit(match_count)
                     )
-                    chunks = result.scalars().all()
+                    rows = result.all()
 
                     matches = [
                         ChunkMatch(
@@ -218,8 +227,13 @@ class SQLAlchemyService(DatabaseService):
                             document_id=str(chunk.document_id),
                             embedding=chunk.embedding,
                             created_at=str(chunk.created_at) if chunk.created_at else None,
+                            chunk_index=chunk.chunk_index,
+                            page_number=chunk.page_number,
+                            character_offset_start=chunk.character_offset_start,
+                            character_offset_end=chunk.character_offset_end,
+                            file_name=file_name,
                         )
-                        for chunk in chunks
+                        for chunk, file_name in rows
                     ]
 
                     duration_ms = int((time.perf_counter() - start) * 1000)

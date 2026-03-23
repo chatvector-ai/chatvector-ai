@@ -6,7 +6,7 @@ from typing import Any, Callable
 
 from core.config import config
 from core.clients import supabase_client
-from db.base import ChunkMatch, DatabaseService
+from db.base import ChunkMatch, ChunkRecord, DatabaseService
 
 logger = logging.getLogger(__name__)
 
@@ -66,15 +66,19 @@ class SupabaseService(DatabaseService):
     async def store_chunks_with_embeddings(
         self,
         doc_id: str,
-        chunks_with_embeddings: list[tuple[str, list[float]]],
+        chunk_records: list[ChunkRecord],
     ) -> list[str]:
         payload = [
             {
                 "document_id": doc_id,
-                "chunk_text": chunk_text,
-                "embedding": embedding,
+                "chunk_text": record.chunk_text,
+                "embedding": record.embedding,
+                "chunk_index": record.chunk_index,
+                "page_number": record.page_number,
+                "character_offset_start": record.character_offset_start,
+                "character_offset_end": record.character_offset_end,
             }
-            for chunk_text, embedding in chunks_with_embeddings
+            for record in chunk_records
         ]
 
         result = await self._run_io(
@@ -98,17 +102,17 @@ class SupabaseService(DatabaseService):
     async def create_document_with_chunks_atomic(
         self,
         file_name: str,
-        chunks_with_embeddings: list[tuple[str, list[float]]],
+        chunk_records: list[ChunkRecord],
     ) -> tuple[str, list[str]]:
         """Atomic-like behavior with compensating cleanup for Supabase."""
         doc_id = None
         try:
             doc_id = await self.create_document(file_name)
-            chunk_ids = await self.store_chunks_with_embeddings(doc_id, chunks_with_embeddings)
+            chunk_ids = await self.store_chunks_with_embeddings(doc_id, chunk_records)
             await self.update_document_status(
                 doc_id,
                 status="completed",
-                chunks={"total": len(chunks_with_embeddings), "processed": len(chunk_ids)},
+                chunks={"total": len(chunk_records), "processed": len(chunk_ids)},
             )
 
             logger.info(f"[Supabase] Atomic upload: {doc_id} with {len(chunk_ids)} chunks")
@@ -226,6 +230,11 @@ class SupabaseService(DatabaseService):
                     embedding=c.get("embedding"),
                     created_at=c.get("created_at"),
                     similarity=c.get("similarity"),
+                    chunk_index=c.get("chunk_index"),
+                    page_number=c.get("page_number"),
+                    character_offset_start=c.get("character_offset_start"),
+                    character_offset_end=c.get("character_offset_end"),
+                    file_name=c.get("file_name"),
                 )
                 for c in result.data
             ]
