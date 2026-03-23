@@ -18,17 +18,20 @@ if not dotenv_path.exists():
 load_dotenv(dotenv_path)
 logger.debug(f"Loaded environment variables from {dotenv_path}")
 
+# Statuses that indicate a document was mid-flight when the server last stopped.
+STALE_INGESTION_STATUSES = ["queued", "retrying", "extracting", "chunking", "embedding", "storing"]
+
 
 class Settings:
     APP_ENV: str = os.getenv("APP_ENV", "production")
     IS_PROD = APP_ENV.lower() == "production"
-    SUPABASE_URL: str = os.getenv("SUPABASE_URL")
-    SUPABASE_KEY: str = os.getenv("SUPABASE_KEY")
-    GEN_AI_KEY: str = os.getenv("GEN_AI_KEY")
+    SUPABASE_URL: str | None = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY: str | None = os.getenv("SUPABASE_KEY")
+    GEN_AI_KEY: str | None = os.getenv("GEN_AI_KEY")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
     LOG_USE_UTC: bool = os.getenv("LOG_USE_UTC", "false").lower() in ("1", "true", "yes")
     LOG_FORMAT: str = os.getenv("LOG_FORMAT", "TEXT").upper()  # Add this line - TEXT or JSON
-    DATABASE_URL: str = os.getenv("DATABASE_URL")
+    DATABASE_URL: str | None = os.getenv("DATABASE_URL")
 
     MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
     MAX_UPLOAD_SIZE_BYTES: int = MAX_UPLOAD_SIZE_MB * 1024 * 1024
@@ -49,11 +52,11 @@ class Settings:
 
     # Backwards-compatible lowercase properties for accessing config values
     @property
-    def supabase_url(self) -> str:
+    def supabase_url(self) -> str | None:
         return self.SUPABASE_URL
 
     @property
-    def supabase_key(self) -> str:
+    def supabase_key(self) -> str | None:
         return self.SUPABASE_KEY
 
 
