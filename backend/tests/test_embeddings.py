@@ -34,8 +34,8 @@ async def test_embedding_dimension_consistency():
     assert dims == {3072}
 
 
-async def test_embedding_fallback_on_failure(monkeypatch):
-    # synchronous function for to_thread
+async def test_get_embeddings_raises_on_failure(monkeypatch):
+    """Embedding failures must propagate; the zero-vector fallback is gone."""
     def always_fail(*args, **kwargs):
         raise RuntimeError("forced failure")
 
@@ -44,9 +44,33 @@ async def test_embedding_fallback_on_failure(monkeypatch):
         always_fail,
     )
 
-    texts = ["fallback test"]
-    embeddings = await get_embeddings(texts)  # still await your async get_embeddings
+    with pytest.raises(RuntimeError, match="forced failure"):
+        await get_embeddings(["this should raise"])
 
-    assert len(embeddings) == 1
-    assert len(embeddings[0]) == 3072
-    assert all(v == 0.0 for v in embeddings[0])
+
+async def test_get_embeddings_splits_large_batch(monkeypatch):
+    """Inputs exceeding 100 are split into sequential batches of ≤100."""
+    batch_sizes: list[int] = []
+
+    class _FakeEmbedding:
+        values = [0.1] * 3072
+
+    def fake_embed(model, contents):
+        batch_sizes.append(len(contents))
+
+        class _Result:
+            embeddings = [_FakeEmbedding() for _ in contents]
+
+        return _Result()
+
+    monkeypatch.setattr(
+        "services.embedding_service.client.models.embed_content",
+        fake_embed,
+    )
+
+    texts = ["text"] * 150
+    embeddings = await get_embeddings(texts)
+
+    assert len(embeddings) == 150
+    assert batch_sizes == [100, 50]
+    assert all(len(e) == 3072 for e in embeddings)
