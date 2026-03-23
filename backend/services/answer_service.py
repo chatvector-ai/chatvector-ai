@@ -1,4 +1,5 @@
-# answer_service.py - UPDATE TO MATCH EMBEDDING SERVICE
+"""LLM answer generation for RAG chat using the Gemini API (same client stack as embeddings)."""
+
 import asyncio
 from google import genai
 from core.config import config

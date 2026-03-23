@@ -132,7 +132,6 @@ def _build_payload(
     uptime_str: str,
     version: str,
     queue_pending: int,
-    queue_max: int,
     workers_active: int,
 ) -> dict:
     db_component = "connected" if db_ok else "disconnected"
@@ -205,7 +204,6 @@ async def status(request: Request):
     version = _read_version()
     uptime_str = _format_uptime(start)
     q_pending = ingestion_queue.queue_size()
-    q_max = config.QUEUE_MAX_SIZE
     workers_active = _workers_active_count()
 
     payload = _build_payload(
@@ -215,7 +213,6 @@ async def status(request: Request):
         uptime_str=uptime_str,
         version=version,
         queue_pending=q_pending,
-        queue_max=q_max,
         workers_active=workers_active,
     )
 
