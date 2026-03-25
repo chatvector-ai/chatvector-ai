@@ -3,6 +3,23 @@ from services.embedding_service import get_embedding, get_embeddings
 
 pytestmark = pytest.mark.asyncio
 
+@pytest.fixture(autouse=True)
+def mock_genai_client(monkeypatch):
+    class _FakeEmbedding:
+        values = [0.1] * 3072
+
+    def fake_embed(model, contents):
+        if not isinstance(contents, list):
+            contents = [contents]
+        class _Result:
+            embeddings = [_FakeEmbedding() for _ in contents]
+        return _Result()
+
+    monkeypatch.setattr(
+        "services.embedding_service.client.models.embed_content",
+        fake_embed,
+    )
+
 
 async def test_get_embedding_success():
     text = "Hello world"
