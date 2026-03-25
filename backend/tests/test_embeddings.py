@@ -4,7 +4,15 @@ from services.embedding_service import get_embedding, get_embeddings
 pytestmark = pytest.mark.asyncio
 
 
-async def test_get_embedding_success():
+async def test_get_embedding_success(monkeypatch):
+    class _FakeEmbedding:
+        values = [0.5] * 3072
+    def fake_embed(model, contents):
+        class _Result:
+            embeddings = [_FakeEmbedding()]
+        return _Result()
+    monkeypatch.setattr("services.embedding_service.client.models.embed_content", fake_embed)
+
     text = "Hello world"
     embedding = await get_embedding(text)
 
@@ -13,7 +21,15 @@ async def test_get_embedding_success():
     assert all(isinstance(v, float) for v in embedding)
 
 
-async def test_get_embeddings_batch_success():
+async def test_get_embeddings_batch_success(monkeypatch):
+    class _FakeEmbedding:
+        values = [0.5] * 3072
+    def fake_embed(model, contents):
+        class _Result:
+            embeddings = [_FakeEmbedding() for _ in contents]
+        return _Result()
+    monkeypatch.setattr("services.embedding_service.client.models.embed_content", fake_embed)
+
     texts = ["Hello world", "Another sentence"]
     embeddings = await get_embeddings(texts)
 
@@ -26,7 +42,15 @@ async def test_get_embeddings_batch_success():
         assert all(isinstance(v, float) for v in emb)
 
 
-async def test_embedding_dimension_consistency():
+async def test_embedding_dimension_consistency(monkeypatch):
+    class _FakeEmbedding:
+        values = [0.5] * 3072
+    def fake_embed(model, contents):
+        class _Result:
+            embeddings = [_FakeEmbedding() for _ in contents]
+        return _Result()
+    monkeypatch.setattr("services.embedding_service.client.models.embed_content", fake_embed)
+
     texts = ["short text", "longer text with more content"]
     embeddings = await get_embeddings(texts)
 
