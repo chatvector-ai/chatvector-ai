@@ -2,9 +2,10 @@ import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 import db
-from core.config import STALE_INGESTION_STATUSES
+from core.config import STALE_INGESTION_STATUSES, config
 from logging_config.logging_config import setup_logging
 from middleware.request_id import register_request_id_middleware
 from routes.chat import router as chat_router
@@ -44,6 +45,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 register_request_id_middleware(app)
 

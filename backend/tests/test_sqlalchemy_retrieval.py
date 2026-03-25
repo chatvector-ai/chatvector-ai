@@ -19,7 +19,7 @@ class _FakeChunk:
         self.chunk_index = 0
         self.page_number = 1
         self.character_offset_start = 0
-        self.character_offset_end = 5
+        self.character_offset_end = 10
 
 
 class _FakeResult:
@@ -61,7 +61,7 @@ async def test_find_similar_chunks_respects_service_retrieval_limit():
         max_active_calls = max(max_active_calls, active_calls)
         await asyncio.sleep(0.01)
         active_calls -= 1
-        return _FakeResult([(_FakeChunk("chunk-1", "doc-1"), "fake_file.pdf")])
+        return _FakeResult([(_FakeChunk("chunk-1", "doc-1"), "dummy.pdf")])
 
     service.async_session = lambda: _FakeSession(on_execute)
 
