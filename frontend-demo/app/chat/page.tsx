@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Paperclip, Bot, User } from "lucide-react";
+import { Send, Bot, User, FileText } from "lucide-react";
+import UploadButton from "../components/UploadButton";
+import UploadModal from "../components/UploadModal";
 
 type Message = {
   id: number;
@@ -19,6 +21,8 @@ const sampleMessages: Message[] = [
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>(sampleMessages);
   const [input, setInput] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,10 +42,23 @@ export default function ChatPage() {
     if (e.key === "Enter") handleSend();
   };
 
+  const handleUploadSuccess = (fileName: string) => {
+    setUploadedFile(fileName);
+    setMessages((prev) => [
+      ...prev,
+      { id: Date.now(), sender: "ai", text: `Document "${fileName}" uploaded! You can now ask questions about it.` },
+    ]);
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-950 text-white">
+      {showModal && (
+        <UploadModal
+          onClose={() => setShowModal(false)}
+          onUploadSuccess={handleUploadSuccess}
+        />
+      )}
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
         {messages.map((msg) => (
           <div
@@ -59,12 +76,17 @@ export default function ChatPage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
+      {uploadedFile && (
+        <div className="px-4 py-2 bg-gray-900 border-t border-gray-800 flex items-center gap-2">
+          <FileText size={14} className="text-indigo-400" />
+          <span className="text-xs text-gray-400">Active document:</span>
+          <span className="text-xs text-indigo-400 font-medium">{uploadedFile}</span>
+        </div>
+      )}
+
       <div className="px-4 py-3 border-t border-gray-800 bg-gray-900">
         <div className="flex items-center gap-2 bg-gray-800 rounded-xl px-4 py-2">
-          <button className="text-gray-400 hover:text-white transition">
-            <Paperclip size={18} />
-          </button>
+          <UploadButton onClick={() => setShowModal(true)} />
           <input
             type="text"
             value={input}
