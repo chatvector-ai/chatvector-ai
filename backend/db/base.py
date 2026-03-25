@@ -98,6 +98,11 @@ class DatabaseService(ABC):
         pass
 
     @abstractmethod
+    async def delete_document(self, document_id: str) -> None:
+        """Delete a document and all its associated chunks atomically."""
+        pass
+
+    @abstractmethod
     async def fail_stale_documents(self, statuses: list[str]) -> int:
         """
         Bulk-update all documents whose status is in *statuses* to 'failed'.

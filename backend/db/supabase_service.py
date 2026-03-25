@@ -181,6 +181,24 @@ class SupabaseService(DatabaseService):
         )
         logger.info(f"[Supabase] Deleted chunks for failed upload document {doc_id}")
 
+    async def delete_document(self, document_id: str) -> None:
+        # Delete chunks first to respect foreign key constraints
+        await self._run_io(
+            lambda: supabase_client.table("document_chunks")
+            .delete()
+            .eq("document_id", document_id)
+            .execute(),
+            operation_name="delete_document_chunks",
+        )
+        await self._run_io(
+            lambda: supabase_client.table("documents")
+            .delete()
+            .eq("id", document_id)
+            .execute(),
+            operation_name="delete_document",
+        )
+        logger.info(f"[Supabase] Deleted document {document_id} and its chunks")
+
     async def fail_stale_documents(self, statuses: list[str]) -> int:
         result = await self._run_io(
             lambda: supabase_client.table("documents")

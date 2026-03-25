@@ -184,6 +184,21 @@ class SQLAlchemyService(DatabaseService):
             await session.commit()
             logger.info(f"[PostgreSQL] Deleted chunks for failed upload document {doc_id}")
 
+    async def delete_document(self, document_id: str) -> None:
+        async with self.async_session() as session:
+            try:
+                async with session.begin():
+                    await session.execute(
+                        delete(DocumentChunk).where(DocumentChunk.document_id == document_id)
+                    )
+                    await session.execute(
+                        delete(Document).where(Document.id == document_id)
+                    )
+                logger.info(f"[PostgreSQL] Deleted document {document_id} and its chunks")
+            except Exception:
+                logger.error(f"[PostgreSQL] Failed to delete document {document_id}")
+                raise
+
     async def fail_stale_documents(self, statuses: list[str]) -> int:
         async with self.async_session() as session:
             result = await session.execute(

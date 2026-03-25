@@ -183,6 +183,22 @@ async def delete_document_chunks(doc_id: str) -> None:
     )
 
 
+async def delete_document(doc_id: str) -> None:
+    """Delete a document and all its chunks."""
+    service = get_db_service()
+
+    async def _delete():
+        await service.delete_document(doc_id)
+
+    await retry_async(
+        _delete,
+        max_retries=3,
+        base_delay=0.5,
+        backoff=2.0,
+        func_name=f"{service.__class__.__name__}.delete_document",
+    )
+
+
 async def fail_stale_documents(statuses: list[str]) -> int:
     """
     Bulk-fail documents left in an in-progress state by a previous restart.
@@ -213,6 +229,7 @@ __all__ = [
     "update_document_status",
     "get_document_status",
     "delete_document_chunks",
+    "delete_document",
     "fail_stale_documents",
     "ChunkMatch",
     "ChunkRecord",
