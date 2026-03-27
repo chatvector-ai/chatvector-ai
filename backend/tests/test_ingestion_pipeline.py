@@ -1,13 +1,43 @@
 """Ingestion pipeline tests for validation, status tracking, and failure handling."""
 
+import sys
+import types
 from unittest.mock import AsyncMock, call, patch
 
 import pytest
 from fastapi import UploadFile
 
+try:
+    from google import genai as _genai  # noqa: F401
+except Exception:
+    google_module = sys.modules.get("google", types.ModuleType("google"))
+
+    class _FakeGenAIClient:
+        def __init__(self, api_key=None):
+            self.models = types.SimpleNamespace(embed_content=lambda **kwargs: None)
+
+    google_module.genai = types.SimpleNamespace(Client=_FakeGenAIClient)
+    sys.modules["google"] = google_module
+
+try:
+    from pypdf import PdfReader as _PdfReader  # noqa: F401
+except Exception:
+    pypdf_module = types.ModuleType("pypdf")
+
+    class _FakePdfReader:
+        def __init__(self, *args, **kwargs):
+            self.pages = []
+
+    pypdf_module.PdfReader = _FakePdfReader
+    sys.modules["pypdf"] = pypdf_module
+
 from db.base import ChunkRecord
 from services.ingestion_pipeline import (
+    FixedChunkingStrategy,
     IngestionPipeline,
+    ParagraphChunkingStrategy,
+    RecursiveCharacterTextSplitter,
+    SemanticChunkingStrategy,
     UploadPipelineError,
     _build_chunk_records,
     _resolve_page_number,
@@ -18,9 +48,9 @@ from services.extraction_service import PageBoundary
 class _FakeDoc:
     """Minimal stand-in for a LangChain Document object."""
 
-    def __init__(self, text: str, start_index: int):
+    def __init__(self, text: str, start_index: int, **metadata):
         self.page_content = text
-        self.metadata = {"start_index": start_index}
+        self.metadata = {"start_index": start_index, **metadata}
 
 
 class _FixedSplitter:
@@ -47,6 +77,37 @@ class _SingleChunkSplitter:
 
     def split_text(self, text: str) -> list[str]:
         return ["chunk-a"]
+
+
+class _TrackingSplitter:
+    last_init: dict | None = None
+    last_create: dict | None = None
+
+    def __init__(self, chunk_size: int, chunk_overlap: int, add_start_index: bool = False):
+        type(self).last_init = {
+            "chunk_size": chunk_size,
+            "chunk_overlap": chunk_overlap,
+            "add_start_index": add_start_index,
+        }
+
+    def create_documents(self, texts: list[str], metadatas: list[dict] | None = None) -> list[_FakeDoc]:
+        type(self).last_create = {
+            "texts": texts,
+            "metadatas": metadatas,
+        }
+        metadata = (metadatas or [{}])[0]
+        return [_FakeDoc(texts[0], 0, **metadata)]
+
+
+def _doc_snapshots(docs: list) -> list[tuple[str, int | None, str | None]]:
+    return [
+        (
+            doc.page_content,
+            doc.metadata.get("start_index"),
+            doc.metadata.get("heading"),
+        )
+        for doc in docs
+    ]
 
 
 @pytest.mark.asyncio
@@ -299,3 +360,149 @@ async def test_process_document_passes_chunk_records_to_store(monkeypatch):
     assert records[1].chunk_index == 1
     assert records[1].character_offset_start == 7
     assert records[1].character_offset_end == 7 + len("chunk-b")
+
+
+# ---------------------------------------------------------------------------
+# Chunking strategy unit tests (Issue #125)
+# ---------------------------------------------------------------------------
+
+
+def test_fixed_chunking_strategy_matches_legacy_splitter_output():
+    text = "Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda."
+
+    legacy_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=18,
+        chunk_overlap=4,
+        add_start_index=True,
+    )
+    legacy_docs = legacy_splitter.create_documents([text])
+
+    strategy = FixedChunkingStrategy(
+        splitter_cls=RecursiveCharacterTextSplitter,
+        chunk_size=18,
+        chunk_overlap=4,
+    )
+    strategy_docs = strategy.chunk_text(text, metadata={"source": "unit-test"})
+
+    assert _doc_snapshots(strategy_docs) == _doc_snapshots(legacy_docs)
+
+
+def test_fixed_chunking_strategy_uses_splitter_with_expected_arguments():
+    _TrackingSplitter.last_init = None
+    _TrackingSplitter.last_create = None
+
+    strategy = FixedChunkingStrategy(
+        splitter_cls=_TrackingSplitter,
+        chunk_size=11,
+        chunk_overlap=3,
+    )
+
+    docs = strategy.chunk_text("hello world", metadata={"source": "tracking"})
+
+    assert _TrackingSplitter.last_init == {
+        "chunk_size": 11,
+        "chunk_overlap": 3,
+        "add_start_index": True,
+    }
+    assert _TrackingSplitter.last_create == {
+        "texts": ["hello world"],
+        "metadatas": [{"source": "tracking"}],
+    }
+    assert docs[0].metadata["source"] == "tracking"
+    assert docs[0].metadata["start_index"] == 0
+
+
+def test_paragraph_chunking_strategy_splits_on_paragraphs_and_tracks_headings():
+    text = (
+        "# Heading 1\n\n"
+        "First paragraph lives here.\n\n"
+        "Second paragraph is separate.\n\n"
+        "# Heading 2\n\n"
+        "Third paragraph belongs to the second heading."
+    )
+
+    strategy = ParagraphChunkingStrategy(
+        splitter_cls=RecursiveCharacterTextSplitter,
+        chunk_size=60,
+        chunk_overlap=8,
+    )
+    docs = strategy.chunk_text(text, metadata={"source": "unit-test"})
+
+    assert len(docs) == 3
+    assert all(len(doc.page_content) <= 60 for doc in docs)
+
+    assert docs[0].page_content.startswith("First paragraph")
+    assert docs[0].metadata["heading"] == "Heading 1"
+    assert docs[0].metadata["start_index"] == text.index("First paragraph")
+
+    assert docs[1].page_content.startswith("Second paragraph")
+    assert docs[1].metadata["heading"] == "Heading 1"
+    assert docs[1].metadata["start_index"] == text.index("Second paragraph")
+
+    assert docs[2].page_content.startswith("Third paragraph")
+    assert docs[2].metadata["heading"] == "Heading 2"
+    assert docs[2].metadata["start_index"] == text.index("Third paragraph")
+
+
+def test_paragraph_chunking_strategy_splits_large_paragraphs_and_preserves_metadata():
+    long_paragraph = "A" * 55
+    text = f"# Heading 1\n\n{long_paragraph}"
+
+    strategy = ParagraphChunkingStrategy(
+        splitter_cls=RecursiveCharacterTextSplitter,
+        chunk_size=20,
+        chunk_overlap=5,
+    )
+    docs = strategy.chunk_text(text, metadata={"source": "unit-test"})
+
+    assert len(docs) >= 3
+    assert all(len(doc.page_content) <= 20 for doc in docs)
+    assert all(doc.metadata["heading"] == "Heading 1" for doc in docs)
+    assert docs[0].metadata["start_index"] == text.index(long_paragraph)
+    assert docs[0].metadata["source"] == "unit-test"
+    assert [doc.metadata["start_index"] for doc in docs] == sorted(
+        doc.metadata["start_index"] for doc in docs
+    )
+
+
+def test_semantic_chunking_strategy_groups_sentences_and_overlaps():
+    text = "# Topic\n\nSentence one. Sentence two. Sentence three."
+
+    strategy = SemanticChunkingStrategy(
+        splitter_cls=RecursiveCharacterTextSplitter,
+        chunk_size=30,
+        chunk_overlap=15,
+    )
+    docs = strategy.chunk_text(text, metadata={"source": "unit-test"})
+
+    assert len(docs) == 2
+
+    assert docs[0].page_content == "Sentence one. Sentence two."
+    assert docs[0].metadata["heading"] == "Topic"
+    assert docs[0].metadata["start_index"] == text.index("Sentence one.")
+
+    assert docs[1].page_content == "Sentence two. Sentence three."
+    assert docs[1].metadata["heading"] == "Topic"
+    assert docs[1].metadata["start_index"] == text.index("Sentence two.")
+    assert docs[1].page_content.startswith("Sentence two.")
+
+
+def test_semantic_chunking_strategy_splits_large_sentences_and_preserves_metadata():
+    long_sentence = f"{'A' * 45}."
+    text = f"# Topic\n\n{long_sentence}"
+
+    strategy = SemanticChunkingStrategy(
+        splitter_cls=RecursiveCharacterTextSplitter,
+        chunk_size=20,
+        chunk_overlap=5,
+    )
+    docs = strategy.chunk_text(text, metadata={"source": "unit-test"})
+
+    assert len(docs) >= 3
+    assert all(len(doc.page_content) <= 20 for doc in docs)
+    assert all(doc.metadata["heading"] == "Topic" for doc in docs)
+    assert docs[0].metadata["start_index"] == text.index(long_sentence)
+    assert docs[0].metadata["source"] == "unit-test"
+    assert [doc.metadata["start_index"] for doc in docs] == sorted(
+        doc.metadata["start_index"] for doc in docs
+    )

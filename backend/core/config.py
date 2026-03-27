@@ -20,6 +20,18 @@ logger.debug(f"Loaded environment variables from {dotenv_path}")
 
 # Statuses that indicate a document was mid-flight when the server last stopped.
 STALE_INGESTION_STATUSES = ["queued", "retrying", "extracting", "chunking", "embedding", "storing"]
+VALID_CHUNKING_STRATEGIES = {"fixed", "paragraph", "semantic"}
+
+
+def _get_chunking_strategy() -> str:
+    strategy = os.getenv("CHUNKING_STRATEGY", "fixed").strip().lower()
+    if strategy not in VALID_CHUNKING_STRATEGIES:
+        valid_strategies = ", ".join(sorted(VALID_CHUNKING_STRATEGIES))
+        raise ValueError(
+            f"Invalid CHUNKING_STRATEGY={strategy!r}. "
+            f"Expected one of: {valid_strategies}."
+        )
+    return strategy
 
 
 class Settings:
@@ -40,6 +52,9 @@ class Settings:
 
     MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
     MAX_UPLOAD_SIZE_BYTES: int = MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    CHUNK_SIZE: int = max(1, int(os.getenv("CHUNK_SIZE", "1000")))
+    CHUNK_OVERLAP: int = max(0, int(os.getenv("CHUNK_OVERLAP", "200")))
+    CHUNKING_STRATEGY: str = _get_chunking_strategy()
     RETRIEVAL_MAX_CONCURRENCY: int = max(1, int(os.getenv("RETRIEVAL_MAX_CONCURRENCY", "8")))
     SUPABASE_IO_CONCURRENCY: int = max(1, int(os.getenv("SUPABASE_IO_CONCURRENCY", "16")))
     CHAT_BATCH_MAX_ITEMS: int = max(1, int(os.getenv("CHAT_BATCH_MAX_ITEMS", "20")))
