@@ -126,7 +126,7 @@ class ChatVectorClient:
         payload = self._request_json("GET", f"documents/{document_id}/status")
         return DocumentStatus.from_dict(payload)
 
-    def chat(self, question: str, doc_id: str, match_count: int = 3) -> ChatResponse:
+    def chat(self, question: str, doc_id: str, match_count: int = 5) -> ChatResponse:
         """
         Ask a question against a single document.
 
@@ -193,7 +193,7 @@ class ChatVectorClient:
             raise ValueError("interval must be greater than 0.")
 
         deadline = time.monotonic() + timeout
-        last_response: JSONDict | None = None
+        last_response: DocumentStatus | None = None
 
         while True:
             last_response = self.get_status(document_id)
