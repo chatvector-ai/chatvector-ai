@@ -1,8 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 @import "tailwindcss";
 
+
+/* =============================================
+   ChatVector Design Tokens
+   - Background: #0a0c10 (deep dark)
+   - Surface:    #111418
+   - Border:     #1e2530
+   - Text:       #e8edf5
+   - Muted:      #6b7685
+   - Accent:     #00e5a0 (teal green)
+   - Blue:       #0080ff
+   ============================================= */
+
+/* ✅ FIX 4: Google Fonts moved here from useEffect in page.tsx */
+
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0c10;
+  --foreground: #e8edf5;
+  --surface: #111418;
+  --border: #1e2530;
+  --muted: #6b7685;
+  --accent: #00e5a0;
+  --blue: #0080ff;
 }
 
 @theme inline {
@@ -12,15 +33,18 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ✅ FIX 4: body background moved here from useEffect in page.tsx */
+body {
+  background: #0a0c10;
+  color: #e8edf5;
+  font-family: 'DM Sans', sans-serif;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+html {
+  scroll-behavior: smooth;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.85); }
 }

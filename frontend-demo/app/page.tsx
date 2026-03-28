@@ -525,6 +525,7 @@ function WhatIs() {
             marginBottom: "1rem",
           }}
         >
+          {/* what is chatvector */}
           // what is chatvector
         </p>
         <h2
@@ -750,6 +751,7 @@ function Features() {
             marginBottom: "1rem",
           }}
         >
+          {/* capabilities */}
           // capabilities
         </p>
         <h2
@@ -889,6 +891,7 @@ function Developers() {
             marginBottom: "1rem",
           }}
         >
+          {/* built for developers */}
           // built for developers
         </p>
         <h2
@@ -1108,16 +1111,16 @@ function Footer() {
 }
 
 export default function Home() {
+  // ✅ FIX 1 (TypeScript): useEffect cleanup now returns void, not HTMLStyleElement
   useEffect(() => {
     const style = document.createElement("style");
     style.textContent = `
-      @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap');
       html { scroll-behavior: smooth; }
-      body { background: #0a0c10 !important; color: #e8edf5; font-family: 'DM Sans', sans-serif; }
       @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.85)} }
     `;
     document.head.appendChild(style);
-    return () => document.head.removeChild(style);
+    return () => { document.head.removeChild(style); };
+    // ✅ FIX 4: Google Fonts import and body background moved to globals.css
   }, []);
 
   return (
