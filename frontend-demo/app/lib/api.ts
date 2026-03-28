@@ -9,19 +9,22 @@ export async function deleteDocument(
   return "error";
 }
 
-export async function getDocumentStatus(statusEndpoint: string): Promise<{
-  ok: boolean;
-  status: number;
-  data: unknown;
-}> {
-  const res = await fetch(`${API_BASE}${statusEndpoint}`);
-  let data: unknown = null;
-  try {
-    data = await res.json();
-  } catch {
-    data = null;
+export class DocumentNotFoundError extends Error {
+  readonly code = "document_not_found" as const;
+  constructor() {
+    super("Document not found.");
+    this.name = "DocumentNotFoundError";
   }
-  return { ok: res.ok, status: res.status, data };
+}
+
+export async function getDocumentStatus(
+  statusEndpoint: string
+): Promise<{ status: string }> {
+  const res = await fetch(`${API_BASE}${statusEndpoint}`);
+  if (res.status === 404) throw new DocumentNotFoundError();
+  if (!res.ok) throw new Error(`Status check failed: ${res.status}`);
+  const data = await res.json();
+  return { status: String(data?.status ?? "") };
 }
 
 export async function uploadDocument(

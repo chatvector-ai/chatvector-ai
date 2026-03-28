@@ -10,6 +10,7 @@ const SECTION_LINKS = [
   { label: "About", href: "/#about" },
   { label: "Features", href: "/#features" },
   { label: "Developers", href: "/#developers" },
+  { label: "Chat", href: "/chat" },
 ] as const;
 
 function NavLinks({
@@ -19,52 +20,33 @@ function NavLinks({
   onNavigate?: () => void;
   pathname: string | null;
 }) {
-  const demoActive = pathname === "/chat";
-
   return (
     <>
-      {SECTION_LINKS.map(({ label, href }) => (
-        <li key={label}>
-          <Link
-            href={href}
-            onClick={onNavigate}
-            style={{
-              color: "#6b7685",
-              textDecoration: "none",
-              fontSize: "0.9rem",
-              transition: "color .2s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = "#e8edf5";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = "#6b7685";
-            }}
-          >
-            {label}
-          </Link>
-        </li>
-      ))}
-      <li>
-        <Link
-          href="/chat"
-          onClick={onNavigate}
-          style={{
-            color: demoActive ? "#00e5a0" : "#6b7685",
-            textDecoration: "none",
-            fontSize: "0.9rem",
-            transition: "color .2s",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = "#e8edf5";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = demoActive ? "#00e5a0" : "#6b7685";
-          }}
-        >
-          Demo
-        </Link>
-      </li>
+      {SECTION_LINKS.map(({ label, href }) => {
+        const chatActive = href === "/chat" && pathname === "/chat";
+        return (
+          <li key={label}>
+            <Link
+              href={href}
+              onClick={onNavigate}
+              style={{
+                color: chatActive ? "#00e5a0" : "#6b7685",
+                textDecoration: "none",
+                fontSize: "0.9rem",
+                transition: "color .2s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "#e8edf5";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = chatActive ? "#00e5a0" : "#6b7685";
+              }}
+            >
+              {label}
+            </Link>
+          </li>
+        );
+      })}
     </>
   );
 }

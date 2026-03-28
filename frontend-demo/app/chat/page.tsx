@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Send, Bot, User, FileText, X } from "lucide-react";
 import UploadButton from "../components/UploadButton";
 import UploadModal from "../components/UploadModal";
-import { deleteDocument, getDocumentStatus } from "../lib/api";
+import { deleteDocument, DocumentNotFoundError, getDocumentStatus } from "../lib/api";
 
 type Message = {
   id: number;
@@ -50,17 +50,7 @@ export default function ChatPage() {
     const poll = async () => {
       if (cancelled) return;
       try {
-        const result = await getDocumentStatus(statusPath);
-        if (!result.ok) {
-          if (result.status === 404) {
-            setAttachment((curr) =>
-              curr?.documentId === docId ? { ...curr, status: "failed" } : curr
-            );
-          }
-          return;
-        }
-        const data = result.data as { status?: string };
-        const st = data.status;
+        const { status: st } = await getDocumentStatus(statusPath);
         if (st === "completed") {
           let readyName = "";
           setAttachment((curr) => {
@@ -85,7 +75,13 @@ export default function ChatPage() {
             curr?.documentId === docId ? { ...curr, status: "failed" } : curr
           );
         }
-      } catch {
+      } catch (e) {
+        if (e instanceof DocumentNotFoundError) {
+          setAttachment((curr) =>
+            curr?.documentId === docId ? { ...curr, status: "failed" } : curr
+          );
+          return;
+        }
         /* next interval */
       }
     };
