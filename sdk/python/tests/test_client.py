@@ -317,6 +317,102 @@ class ChatVectorClientTests(unittest.TestCase):
         self.assertNotIsInstance(exc_info.exception, ChatVectorRateLimitError)
         self.assertNotIsInstance(exc_info.exception, ChatVectorTimeoutError)
 
+    def test_403_forbidden_raises_chatvector_auth_error(self) -> None:
+        """403 Forbidden should map identically to 401 — both raise ChatVectorAuthError."""
+        response = make_response(
+            403,
+            method="POST",
+            url="https://api.chatvector.test/chat",
+            json_data={
+                "detail": {
+                    "code": "forbidden",
+                    "message": "Forbidden",
+                }
+            },
+        )
+
+        with patch.object(self.client._client, "request", return_value=response):
+            with self.assertRaises(ChatVectorAuthError) as exc_info:
+                self.client.chat("Hello?", "doc-123")
+
+        self.assertEqual(exc_info.exception.status_code, 403)
+
+    def test_408_request_timeout_raises_chatvector_timeout_error(self) -> None:
+        """HTTP 408 status should map to ChatVectorTimeoutError (distinct from httpx.TimeoutException)."""
+        # 408 is in _RETRYABLE_STATUS_CODES so it will retry — provide 3 responses
+        responses = [
+            make_response(
+                408,
+                method="POST",
+                url="https://api.chatvector.test/chat",
+                json_data={"detail": {"code": "request_timeout", "message": "Request timed out"}},
+            )
+            for _ in range(3)
+        ]
+
+        with (
+            patch.object(self.client._client, "request", side_effect=responses),
+            patch("chatvector.client.time.sleep", return_value=None),
+        ):
+            with self.assertRaises(ChatVectorTimeoutError) as exc_info:
+                self.client.chat("Hello?", "doc-123")
+
+        self.assertEqual(exc_info.exception.status_code, 408)
+
+    def test_504_gateway_timeout_raises_chatvector_timeout_error(self) -> None:
+        """HTTP 504 status should map to ChatVectorTimeoutError (distinct from httpx.TimeoutException)."""
+        # 504 is in _RETRYABLE_STATUS_CODES so it will retry — provide 3 responses
+        responses = [
+            make_response(
+                504,
+                method="GET",
+                url="https://api.chatvector.test/documents/doc-123/status",
+                json_data={"detail": {"code": "gateway_timeout", "message": "Gateway timed out"}},
+            )
+            for _ in range(3)
+        ]
+
+        with (
+            patch.object(self.client._client, "request", side_effect=responses),
+            patch("chatvector.client.time.sleep", return_value=None),
+        ):
+            with self.assertRaises(ChatVectorTimeoutError) as exc_info:
+                self.client.get_status("doc-123")
+
+        self.assertEqual(exc_info.exception.status_code, 504)
+
+    def test_parse_json_dict_raises_when_body_is_valid_json_but_not_a_dict(self) -> None:
+        """_parse_json_dict should raise ChatVectorAPIError when the body is a JSON list, not a dict."""
+        response = make_response(
+            200,
+            method="POST",
+            url="https://api.chatvector.test/chat",
+            json_data=[{"answer": "unexpected list"}],
+        )
+
+        with patch.object(self.client._client, "request", return_value=response):
+            with self.assertRaises(ChatVectorAPIError) as exc_info:
+                self.client.chat("Hello?", "doc-123")
+
+        self.assertNotIsInstance(exc_info.exception, ChatVectorAuthError)
+        self.assertNotIsInstance(exc_info.exception, ChatVectorTimeoutError)
+        self.assertIn("unexpected response shape", str(exc_info.exception))
+
+    def test_parse_json_dict_raises_when_body_is_not_valid_json(self) -> None:
+        """_parse_json_dict should raise ChatVectorAPIError when the body is not valid JSON at all."""
+        response = make_response(
+            200,
+            method="POST",
+            url="https://api.chatvector.test/chat",
+            text="this is not json at all <<<>>>",
+        )
+
+        with patch.object(self.client._client, "request", return_value=response):
+            with self.assertRaises(ChatVectorAPIError) as exc_info:
+                self.client.chat("Hello?", "doc-123")
+
+        self.assertIn("non-JSON response", str(exc_info.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
