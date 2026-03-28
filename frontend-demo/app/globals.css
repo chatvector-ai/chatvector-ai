@@ -13,9 +13,6 @@
    - Blue:       #0080ff
    ============================================= */
 
-/* ✅ FIX 4: Google Fonts moved here from useEffect in page.tsx */
-
-
 :root {
   --background: #0a0c10;
   --foreground: #e8edf5;
@@ -33,7 +30,6 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* ✅ FIX 4: body background moved here from useEffect in page.tsx */
 body {
   background: #0a0c10;
   color: #e8edf5;

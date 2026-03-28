@@ -1,97 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useState } from "react";
 
-const NAV_LINKS = ["About", "Features", "Developers"];
-
-function NavBar() {
-  return (
-    <nav
-      style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 100,
-        background: "rgba(10,12,16,0.88)",
-        backdropFilter: "blur(14px)",
-        borderBottom: "1px solid #1e2530",
-        padding: "0 2rem",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        height: 60,
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "JetBrains Mono, monospace",
-          fontSize: "1.05rem",
-          fontWeight: 700,
-          color: "#00e5a0",
-        }}
-      >
-        Chat
-        <span style={{ color: "#e8edf5", opacity: 0.45 }}>&lt;</span>
-        Vector
-        <span style={{ color: "#e8edf5", opacity: 0.45 }}>&gt;</span>
-      </div>
-      <ul
-        style={{
-          listStyle: "none",
-          display: "flex",
-          gap: "2rem",
-          margin: 0,
-          padding: 0,
-        }}
-      >
-        {NAV_LINKS.map((l) => (
-          <li key={l}>
-            <a
-              href={`#${l.toLowerCase()}`}
-              style={{
-                color: "#6b7685",
-                textDecoration: "none",
-                fontSize: "0.9rem",
-                transition: "color .2s",
-              }}
-              onMouseEnter={(e) =>
-                ((e.target as HTMLElement).style.color = "#e8edf5")
-              }
-              onMouseLeave={(e) =>
-                ((e.target as HTMLElement).style.color = "#6b7685")
-              }
-            >
-              {l}
-            </a>
-          </li>
-        ))}
-      </ul>
-      <a
-        href="https://github.com/chatvector-ai/chatvector-ai"
-        style={{
-          background: "transparent",
-          border: "1px solid #00e5a0",
-          color: "#00e5a0",
-          padding: "7px 18px",
-          borderRadius: 6,
-          fontSize: "0.85rem",
-          cursor: "pointer",
-          textDecoration: "none",
-          transition: "all .2s",
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLElement).style.background = "#00e5a0";
-          (e.currentTarget as HTMLElement).style.color = "#000";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLElement).style.background = "transparent";
-          (e.currentTarget as HTMLElement).style.color = "#00e5a0";
-        }}
-      >
-        GitHub
-      </a>
-    </nav>
-  );
-}
+const GITHUB_REPO = "https://github.com/chatvector-ai/chatvector-ai";
 
 function HeroCodeBlock() {
   const lines = [
@@ -350,7 +262,7 @@ function Hero() {
         }}
       >
         <a
-          href="https://github.com/chatvector-ai/chatvector-ai"
+          href={GITHUB_REPO}
           style={{
             background: "#00e5a0",
             color: "#000",
@@ -387,8 +299,8 @@ function Hero() {
           </svg>
           View on GitHub
         </a>
-        <a
-          href="#"
+        <Link
+          href="/chat"
           style={{
             background: "transparent",
             color: "#e8edf5",
@@ -405,12 +317,12 @@ function Hero() {
             transition: "all .2s",
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.borderColor = "#3d4555";
-            (e.currentTarget as HTMLElement).style.background = "#111418";
+            e.currentTarget.style.borderColor = "#3d4555";
+            e.currentTarget.style.background = "#111418";
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.borderColor = "#1e2530";
-            (e.currentTarget as HTMLElement).style.background = "transparent";
+            e.currentTarget.style.borderColor = "#1e2530";
+            e.currentTarget.style.background = "transparent";
           }}
         >
           <svg
@@ -424,7 +336,7 @@ function Hero() {
             <polygon points="5 3 19 12 5 21 5 3" />
           </svg>
           Try the Demo
-        </a>
+        </Link>
       </div>
 
       <HeroCodeBlock />
@@ -525,8 +437,7 @@ function WhatIs() {
             marginBottom: "1rem",
           }}
         >
-          {/* what is chatvector */}
-          // what is chatvector
+          {"// what is chatvector"}
         </p>
         <h2
           style={{
@@ -557,10 +468,8 @@ function WhatIs() {
         </p>
 
         <div
+          className="grid grid-cols-1 gap-12 md:grid-cols-2 md:gap-12"
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "3rem",
             alignItems: "center",
             marginTop: "3rem",
           }}
@@ -751,8 +660,7 @@ function Features() {
             marginBottom: "1rem",
           }}
         >
-          {/* capabilities */}
-          // capabilities
+          {"// capabilities"}
         </p>
         <h2
           style={{
@@ -891,8 +799,7 @@ function Developers() {
             marginBottom: "1rem",
           }}
         >
-          {/* built for developers */}
-          // built for developers
+          {"// built for developers"}
         </p>
         <h2
           style={{
@@ -923,10 +830,8 @@ function Developers() {
         </p>
 
         <div
+          className="grid grid-cols-1 gap-12 md:grid-cols-2 md:gap-12"
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "3rem",
             alignItems: "center",
           }}
         >
@@ -1055,8 +960,19 @@ function Developers() {
   );
 }
 
+const FOOTER_LINKS: { label: string; href: string; external?: boolean }[] = [
+  { label: "GitHub", href: GITHUB_REPO, external: true },
+  { label: "Docs", href: "#" },
+  { label: "Roadmap", href: "#" },
+  { label: "Issues", href: `${GITHUB_REPO}/issues`, external: true },
+  {
+    label: "License (MIT)",
+    href: `${GITHUB_REPO}/blob/main/LICENSE`,
+    external: true,
+  },
+];
+
 function Footer() {
-  const links = ["GitHub", "Docs", "Roadmap", "Issues", "License (MIT)"];
   return (
     <footer style={{ borderTop: "1px solid #1e2530", padding: "2.5rem 2rem" }}>
       <div
@@ -1081,10 +997,13 @@ function Footer() {
           ChatVector
         </div>
         <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}>
-          {links.map((l) => (
+          {FOOTER_LINKS.map(({ label, href, external }) => (
             <a
-              key={l}
-              href="#"
+              key={label}
+              href={href}
+              {...(external
+                ? { target: "_blank", rel: "noopener noreferrer" }
+                : {})}
               style={{
                 color: "#6b7685",
                 textDecoration: "none",
@@ -1098,12 +1017,12 @@ function Footer() {
                 ((e.target as HTMLElement).style.color = "#6b7685")
               }
             >
-              {l}
+              {label}
             </a>
           ))}
         </div>
         <div style={{ color: "#3d4555", fontSize: "0.82rem" }}>
-          © 2025 ChatVector · Open Source · MIT
+          © 2026 ChatVector · Open Source · MIT
         </div>
       </div>
     </footer>
@@ -1111,18 +1030,6 @@ function Footer() {
 }
 
 export default function Home() {
-  // ✅ FIX 1 (TypeScript): useEffect cleanup now returns void, not HTMLStyleElement
-  useEffect(() => {
-    const style = document.createElement("style");
-    style.textContent = `
-      html { scroll-behavior: smooth; }
-      @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.85)} }
-    `;
-    document.head.appendChild(style);
-    return () => { document.head.removeChild(style); };
-    // ✅ FIX 4: Google Fonts import and body background moved to globals.css
-  }, []);
-
   return (
     <div
       style={{
@@ -1132,7 +1039,6 @@ export default function Home() {
         minHeight: "100vh",
       }}
     >
-      <NavBar />
       <Hero />
       <WhatIs />
       <Features />
