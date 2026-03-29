@@ -23,6 +23,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest", "httpx"]
+
 [tool.setuptools.packages.find]
 include = ["chatvector*"]
 
