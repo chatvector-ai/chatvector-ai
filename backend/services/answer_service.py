@@ -2,9 +2,11 @@
 
 import asyncio
 import logging
+from pathlib import Path
 
 import httpx
 from google import genai
+from google.genai import types
 from google.genai.errors import APIError
 
 from core.config import config
@@ -13,6 +15,18 @@ logger = logging.getLogger(__name__)
 
 # Use the SAME client as embedding service
 client = genai.Client(api_key=config.GEN_AI_KEY)
+
+
+def _load_system_prompt() -> str:
+    path = Path(config.SYSTEM_PROMPT_PATH)
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"System prompt file not found at {path} (SYSTEM_PROMPT_PATH is set but the file is missing)."
+        )
+    return path.read_text(encoding="utf-8").strip()
+
+
+_SYSTEM_PROMPT = _load_system_prompt()
 
 
 def _msg_missing_api_key() -> str:
@@ -39,17 +53,7 @@ async def generate_answer(question: str, context: str) -> str:
     """
     Generate an answer using Gemini LLM based on the provided context.
     """
-    prompt = f"""
-    Answer the question based ONLY on the context.
-
-    CONTEXT:
-    {context}
-
-    QUESTION:
-    {question}
-
-    If you cannot answer, say "Not enough information."
-    """
+    contents = f"CONTEXT:\n{context}\n\nQUESTION:\n{question}"
 
     key = config.GEN_AI_KEY
     if key is None or not str(key).strip():
@@ -59,12 +63,19 @@ async def generate_answer(question: str, context: str) -> str:
         )
         return _msg_missing_api_key()
 
+    config_obj = types.GenerateContentConfig(
+        system_instruction=_SYSTEM_PROMPT,
+        temperature=config.LLM_TEMPERATURE,
+        max_output_tokens=config.LLM_MAX_OUTPUT_TOKENS,
+    )
+
     try:
         # Use the new API like embeddings do
         response = await asyncio.to_thread(
             client.models.generate_content,
             model="gemini-2.5-flash",
-            contents=prompt,
+            contents=contents,
+            config=config_obj,
         )
 
         answer = response.text or "No response."

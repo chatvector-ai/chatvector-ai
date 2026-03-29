@@ -70,6 +70,16 @@ class Settings:
     QUEUE_EMBEDDING_RPS: float = max(0.1, float(os.getenv("QUEUE_EMBEDDING_RPS", "2.0")))
     QUEUE_JOB_MAX_RETRIES: int = max(0, int(os.getenv("QUEUE_JOB_MAX_RETRIES", "3")))
 
+    SYSTEM_PROMPT_PATH: str = os.getenv(
+        "SYSTEM_PROMPT_PATH",
+        str(ROOT_DIR / "prompts" / "default_system.txt"),
+    )
+    LLM_TEMPERATURE: float = max(
+        0.0,
+        min(2.0, float(os.getenv("LLM_TEMPERATURE", "0.2"))),
+    )
+    LLM_MAX_OUTPUT_TOKENS: int = max(1, int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "1024")))
+
     # Backwards-compatible lowercase properties for accessing config values
     @property
     def supabase_url(self) -> str | None:
