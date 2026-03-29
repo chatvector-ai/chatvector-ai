@@ -23,6 +23,13 @@ For local development:
 pip install -e ./sdk/python
 ```
 
+## Development / Running Tests
+
+```bash
+pip install -e ".[dev]"
+pytest sdk/python/tests/
+```
+
 ## Quickstart
 
 ```python

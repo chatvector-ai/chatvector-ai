@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from chatvector._retry import WantsRetry, retry_sync  # noqa: E402
+from chatvector._retry import WantsRetry, retry_sync
 
 
 class RetrySyncTests(unittest.TestCase):

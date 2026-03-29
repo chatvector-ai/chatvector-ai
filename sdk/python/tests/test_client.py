@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import sys
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 import httpx
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from chatvector import (  # noqa: E402
+from chatvector import (
     BatchChatQuery,
     BatchChatResponse,
     ChatResponse,
