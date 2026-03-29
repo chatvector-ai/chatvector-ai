@@ -9,6 +9,7 @@ from typing import Any, Mapping, Sequence
 
 import httpx
 
+from ._retry import WantsRetry, retry_sync
 from .exceptions import (
     ChatVectorAPIError,
     ChatVectorAuthError,
@@ -237,35 +238,48 @@ class ChatVectorClient:
         Raises:
             ChatVectorAPIError: If the API or network request fails.
         """
-        attempts = self.max_retries + 1
+        max_attempts = self.max_retries + 1
+        call_idx = [0]
 
-        for attempt in range(1, attempts + 1):
+        def _attempt() -> JSONDict:
+            i = call_idx[0]
+            call_idx[0] += 1
             try:
                 response = self._client.request(method, url, **kwargs)
-                if response.status_code in self._RETRYABLE_STATUS_CODES and attempt < attempts:
-                    self._sleep_before_retry(attempt, response)
-                    continue
+                if response.status_code in self._RETRYABLE_STATUS_CODES:
+                    if i + 1 < max_attempts:
+                        raise WantsRetry(self._retry_after_seconds(response))
+                    response.raise_for_status()
+                    return self._parse_json_dict(response)
                 response.raise_for_status()
                 return self._parse_json_dict(response)
             except httpx.TimeoutException as exc:
-                if attempt < attempts:
-                    self._sleep_before_retry(attempt)
-                    continue
+                if i + 1 < max_attempts:
+                    raise WantsRetry(0.0) from exc
                 raise ChatVectorTimeoutError(self._msg_timeout_or_connection()) from exc
             except (httpx.ConnectError, httpx.NetworkError, httpx.RemoteProtocolError) as exc:
-                if attempt < attempts:
-                    self._sleep_before_retry(attempt)
-                    continue
+                if i + 1 < max_attempts:
+                    raise WantsRetry(0.0) from exc
                 raise ChatVectorTimeoutError(self._msg_timeout_or_connection()) from exc
             except httpx.HTTPStatusError as exc:
-                if exc.response.status_code in self._RETRYABLE_STATUS_CODES and attempt < attempts:
-                    self._sleep_before_retry(attempt, exc.response)
-                    continue
+                if (
+                    exc.response.status_code in self._RETRYABLE_STATUS_CODES
+                    and i + 1 < max_attempts
+                ):
+                    raise WantsRetry(self._retry_after_seconds(exc.response)) from exc
                 raise self._map_http_error(exc.response) from exc
             except httpx.RequestError as exc:
-                raise ChatVectorAPIError(self._msg_unexpected(), details={"error": str(exc)}) from exc
+                raise ChatVectorAPIError(
+                    self._msg_unexpected(), details={"error": str(exc)}
+                ) from exc
 
-        raise ChatVectorAPIError(self._msg_unexpected())
+        return retry_sync(
+            _attempt,
+            max_retries=max_attempts,
+            base_delay=self.retry_backoff,
+            backoff=2.0,
+            func_name="_request_json",
+        )
 
     def _map_http_error(self, response: httpx.Response) -> ChatVectorAPIError:
         """
@@ -362,21 +376,16 @@ class ChatVectorClient:
             return self._msg_timeout_or_connection()
         return self._msg_unexpected()
 
-    def _sleep_before_retry(
-        self,
-        attempt: int,
-        response: httpx.Response | None = None,
-    ) -> None:
-        """Pause briefly before retrying a transient failure."""
-        delay = self.retry_backoff * attempt
-        if response is not None:
-            retry_after = response.headers.get("Retry-After")
-            try:
-                if retry_after is not None:
-                    delay = max(delay, float(retry_after))
-            except ValueError:
-                pass
-        time.sleep(delay)
+    @staticmethod
+    def _retry_after_seconds(response: httpx.Response) -> float:
+        """Parse Retry-After as seconds, or 0.0 if absent or invalid."""
+        retry_after = response.headers.get("Retry-After")
+        if retry_after is None:
+            return 0.0
+        try:
+            return max(0.0, float(retry_after))
+        except ValueError:
+            return 0.0
 
     @staticmethod
     def _serialize_batch_query(query: BatchChatQuery | JSONMapping) -> JSONDict:
