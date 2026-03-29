@@ -4,6 +4,7 @@ import asyncio
 from core.config import config
 from db import find_similar_chunks
 from services.context_service import build_context_from_chunks
+from services.query_service import transform_query
 
 logger = logging.getLogger(__name__)
 
@@ -129,12 +130,22 @@ async def answer_question_for_document(
     """
     logger.info(f"Starting chat for document {doc_id}")
 
-    query_embedding = await get_embedding(question)
-    matching_chunks = await _retrieve_chunks_for_documents(
-        doc_ids=[doc_id],
-        query_embedding=query_embedding,
-        match_count=match_count,
-    )
+    transformed_queries = await transform_query(question)
+    query_embeddings = await get_embeddings(transformed_queries)
+    all_chunks: list = []
+    seen_chunk_keys: set = set()
+    for query_embedding in query_embeddings:
+        chunks = await _retrieve_chunks_for_documents(
+            doc_ids=[doc_id],
+            query_embedding=query_embedding,
+            match_count=match_count,
+        )
+        for chunk in chunks:
+            key = (chunk.document_id, chunk.chunk_index)
+            if key not in seen_chunk_keys:
+                seen_chunk_keys.add(key)
+                all_chunks.append(chunk)
+    matching_chunks = all_chunks
     context = build_context_from_chunks(matching_chunks)
     answer = await generate_answer(question, context)
 
@@ -188,10 +199,14 @@ async def answer_questions_for_documents_batch(
             }
         )
 
-    embeddings = await get_embeddings([q["question"] for q in normalized_queries])
-    if len(embeddings) != len(normalized_queries):
+    transformed_query_lists = await asyncio.gather(
+        *[transform_query(q["question"]) for q in normalized_queries]
+    )
+    flat_queries = [q for queries in transformed_query_lists for q in queries]
+    flat_embeddings = await get_embeddings(flat_queries)
+    if len(flat_embeddings) != len(flat_queries):
         mismatch_message = (
-            f"Embedding mismatch: got {len(embeddings)} embeddings for {len(normalized_queries)} queries"
+            f"Embedding mismatch: got {len(flat_embeddings)} embeddings for {len(flat_queries)} queries"
         )
         logger.error(mismatch_message)
         return [
@@ -208,13 +223,31 @@ async def answer_questions_for_documents_batch(
             for query in normalized_queries
         ]
 
-    async def _process_query(query: dict, query_embedding: list[float]) -> dict:
+    per_query_embeddings: list[list[list[float]]] = []
+    offset = 0
+    for tq_list in transformed_query_lists:
+        n = len(tq_list)
+        per_query_embeddings.append(flat_embeddings[offset : offset + n])
+        offset += n
+
+    async def _process_query(
+        query: dict, query_embeddings: list[list[float]]
+    ) -> dict:
         try:
-            matching_chunks = await _retrieve_chunks_for_documents(
-                doc_ids=query["doc_ids"],
-                query_embedding=query_embedding,
-                match_count=query["match_count"],
-            )
+            all_chunks: list = []
+            seen_chunk_keys: set = set()
+            for query_embedding in query_embeddings:
+                chunks = await _retrieve_chunks_for_documents(
+                    doc_ids=query["doc_ids"],
+                    query_embedding=query_embedding,
+                    match_count=query["match_count"],
+                )
+                for chunk in chunks:
+                    key = (chunk.document_id, chunk.chunk_index)
+                    if key not in seen_chunk_keys:
+                        seen_chunk_keys.add(key)
+                        all_chunks.append(chunk)
+            matching_chunks = all_chunks
             context = build_context_from_chunks(matching_chunks)
             answer = await generate_answer(query["question"], context)
 
@@ -245,7 +278,7 @@ async def answer_questions_for_documents_batch(
 
     return await asyncio.gather(
         *[
-            _process_query(query, embedding)
-            for query, embedding in zip(normalized_queries, embeddings)
+            _process_query(query, embeddings)
+            for query, embeddings in zip(normalized_queries, per_query_embeddings)
         ]
     )

@@ -1,10 +1,20 @@
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
+import services.chat_service as chat_service_mod
 from services.chat_service import answer_question_for_document
 from services.chat_service import answer_questions_for_documents_batch
+
+
+@pytest.fixture(autouse=True)
+def _disable_query_transformation_for_chat_tests(monkeypatch):
+    monkeypatch.setattr(
+        chat_service_mod.config, "QUERY_TRANSFORMATION_ENABLED", False
+    )
 
 
 @dataclass
@@ -16,15 +26,33 @@ class _FakeChunk:
     file_name: Optional[str] = None
     page_number: Optional[int] = None
     chunk_index: Optional[int] = None
+    document_id: Optional[str] = None
 
 
 def test_answer_question_for_document_orchestrates_flow():
     chunks = [
-        _FakeChunk(id="c1", chunk_text="chunk one", file_name="doc.pdf", page_number=1, chunk_index=0),
-        _FakeChunk(id="c2", chunk_text="chunk two", file_name="doc.pdf", page_number=2, chunk_index=1),
+        _FakeChunk(
+            id="c1",
+            chunk_text="chunk one",
+            file_name="doc.pdf",
+            page_number=1,
+            chunk_index=0,
+            document_id="doc-123",
+        ),
+        _FakeChunk(
+            id="c2",
+            chunk_text="chunk two",
+            file_name="doc.pdf",
+            page_number=2,
+            chunk_index=1,
+            document_id="doc-123",
+        ),
     ]
 
-    with patch("services.chat_service.get_embedding", new=AsyncMock(return_value=[0.1, 0.2])) as mock_embedding, patch(
+    with patch(
+        "services.chat_service.get_embeddings",
+        new=AsyncMock(return_value=[[0.1, 0.2]]),
+    ) as mock_embeddings, patch(
         "services.chat_service.find_similar_chunks", new=AsyncMock(return_value=chunks)
     ) as mock_find, patch(
         "services.chat_service.build_context_from_chunks", return_value="combined context"
@@ -46,7 +74,7 @@ def test_answer_question_for_document_orchestrates_flow():
         {"file_name": "doc.pdf", "page_number": 1, "chunk_index": 0},
         {"file_name": "doc.pdf", "page_number": 2, "chunk_index": 1},
     ]
-    mock_embedding.assert_awaited_once_with("What is this about?")
+    mock_embeddings.assert_awaited_once_with(["What is this about?"])
     mock_find.assert_awaited_once_with(
         doc_id="doc-123",
         query_embedding=[0.1, 0.2],
@@ -63,7 +91,15 @@ def test_answer_questions_for_documents_batch_processes_queries():
     ]
 
     async def fake_find_similar_chunks(doc_id: str, query_embedding: list[float], match_count: int):
-        return [_FakeChunk(id=f"{doc_id}-1", chunk_text=f"chunk-{doc_id}-{match_count}")]
+        # Same chunk_index across docs; distinct document_id so dedupe keeps one chunk per document.
+        return [
+            _FakeChunk(
+                id=f"{doc_id}-1",
+                chunk_text=f"chunk-{doc_id}-{match_count}",
+                chunk_index=0,
+                document_id=doc_id,
+            )
+        ]
 
     with patch(
         "services.chat_service.get_embeddings",
@@ -109,7 +145,13 @@ def test_answer_questions_for_documents_batch_respects_retrieval_concurrency_lim
         max_active_calls = max(max_active_calls, active_calls)
         await asyncio.sleep(0.01)
         active_calls -= 1
-        return [_FakeChunk(id=f"{doc_id}-1", chunk_text=f"chunk-{doc_id}")]
+        return [
+            _FakeChunk(
+                id=f"{doc_id}-1",
+                chunk_text=f"chunk-{doc_id}",
+                document_id=doc_id,
+            )
+        ]
 
     with patch(
         "services.chat_service.config.RETRIEVAL_MAX_CONCURRENCY",
@@ -149,7 +191,11 @@ def test_answer_questions_for_documents_batch_returns_partial_failures():
         new=AsyncMock(return_value=[[0.1], [0.2]]),
     ), patch(
         "services.chat_service.find_similar_chunks",
-        new=AsyncMock(return_value=[_FakeChunk(id="c1", chunk_text="ctx")]),
+        new=AsyncMock(
+            side_effect=lambda doc_id, query_embedding, match_count: [
+                _FakeChunk(id="c1", chunk_text="ctx", document_id=doc_id, chunk_index=0)
+            ]
+        ),
     ), patch(
         "services.chat_service.build_context_from_chunks",
         return_value="ctx",
@@ -184,11 +230,27 @@ def test_answer_questions_for_documents_batch_rejects_duplicate_doc_ids():
 
 def test_answer_question_for_document_includes_sources_with_correct_shape():
     chunks = [
-        _FakeChunk(id="c1", chunk_text="text a", file_name="report.pdf", page_number=3, chunk_index=0),
-        _FakeChunk(id="c2", chunk_text="text b", file_name="report.pdf", page_number=5, chunk_index=1),
+        _FakeChunk(
+            id="c1",
+            chunk_text="text a",
+            file_name="report.pdf",
+            page_number=3,
+            chunk_index=0,
+            document_id="doc-1",
+        ),
+        _FakeChunk(
+            id="c2",
+            chunk_text="text b",
+            file_name="report.pdf",
+            page_number=5,
+            chunk_index=1,
+            document_id="doc-1",
+        ),
     ]
 
-    with patch("services.chat_service.get_embedding", new=AsyncMock(return_value=[0.1])), patch(
+    with patch(
+        "services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])
+    ), patch(
         "services.chat_service.find_similar_chunks", new=AsyncMock(return_value=chunks)
     ), patch(
         "services.chat_service.build_context_from_chunks", return_value="ctx"
@@ -206,10 +268,19 @@ def test_answer_question_for_document_includes_sources_with_correct_shape():
 
 def test_answer_question_for_document_sources_none_fields_for_txt():
     chunks = [
-        _FakeChunk(id="c1", chunk_text="plain text", file_name="notes.txt", page_number=None, chunk_index=0),
+        _FakeChunk(
+            id="c1",
+            chunk_text="plain text",
+            file_name="notes.txt",
+            page_number=None,
+            chunk_index=0,
+            document_id="doc-txt",
+        ),
     ]
 
-    with patch("services.chat_service.get_embedding", new=AsyncMock(return_value=[0.1])), patch(
+    with patch(
+        "services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])
+    ), patch(
         "services.chat_service.find_similar_chunks", new=AsyncMock(return_value=chunks)
     ), patch(
         "services.chat_service.build_context_from_chunks", return_value="ctx"
@@ -227,7 +298,14 @@ def test_batch_answer_includes_sources_in_ok_responses():
     queries = [{"question": "Q1", "doc_ids": ["doc-a"]}]
 
     chunks = [
-        _FakeChunk(id="c1", chunk_text="ctx", file_name="slides.pdf", page_number=2, chunk_index=0),
+        _FakeChunk(
+            id="c1",
+            chunk_text="ctx",
+            file_name="slides.pdf",
+            page_number=2,
+            chunk_index=0,
+            document_id="doc-a",
+        ),
     ]
 
     with patch(
