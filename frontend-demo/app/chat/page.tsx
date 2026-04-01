@@ -97,6 +97,7 @@ export default function ChatPage() {
       cancelled = true;
       clearInterval(interval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deps are the primitive values we react to, not the object ref
   }, [attachment?.documentId, attachment?.status]);
 
   const handleSend = async () => {

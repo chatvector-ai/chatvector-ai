@@ -43,14 +43,25 @@ describe("sendMessage", () => {
     );
   });
 
-  it("throws no_document on 422", async () => {
+  it("throws no_document on 404", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(null, { status: 404 })
+    );
+
+    await expect(sendMessage("q", "bad-id")).rejects.toThrow(ChatError);
+    await expect(sendMessage("q", "bad-id")).rejects.toMatchObject({
+      code: "no_document",
+    });
+  });
+
+  it("throws unexpected on 422", async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(null, { status: 422 })
     );
 
     await expect(sendMessage("q", "bad-id")).rejects.toThrow(ChatError);
     await expect(sendMessage("q", "bad-id")).rejects.toMatchObject({
-      code: "no_document",
+      code: "unexpected",
     });
   });
 

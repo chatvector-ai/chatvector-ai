@@ -2,8 +2,8 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type ChatSource = {
   file_name: string;
-  page_number: number;
-  chunk_index: number;
+  page_number: number | null;
+  chunk_index: number | null;
 };
 
 export type ChatResponse = {
@@ -42,7 +42,7 @@ export async function sendMessage(
     );
   }
 
-  if (res.status === 404 || res.status === 422) {
+  if (res.status === 404) {
     throw new ChatError(
       "no_document",
       "Document not found. It may have been deleted."
