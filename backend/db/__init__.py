@@ -49,6 +49,7 @@ async def create_document(filename: str) -> str:
         max_retries=3,
         base_delay=1.0,
         backoff=2.0,
+        timeout=10.0,
         func_name=f"{service.__class__.__name__}.create_document",
     )
 
@@ -67,6 +68,7 @@ async def store_chunks_with_embeddings(
         max_retries=3,
         base_delay=1.0,
         backoff=2.0,
+        timeout=10.0,
         func_name=f"{service.__class__.__name__}.store_chunks_with_embeddings",
     )
 
@@ -82,6 +84,7 @@ async def get_document(doc_id: str) -> dict:
         max_retries=3,
         base_delay=1.0,
         backoff=2.0,
+        timeout=10.0,
         func_name=f"{service.__class__.__name__}.get_document",
     )
 
@@ -101,6 +104,7 @@ async def create_document_with_chunks_atomic(
         max_retries=3,
         base_delay=1.0,
         backoff=2.0,
+        timeout=10.0,
         func_name=f"{service.__class__.__name__}.create_document_with_chunks_atomic",
     )
 
@@ -121,6 +125,7 @@ async def find_similar_chunks(
         max_retries=3,
         base_delay=1.0,
         backoff=2.0,
+        timeout=10.0,
         func_name=f"{service.__class__.__name__}.find_similar_chunks",
     )
 
@@ -147,6 +152,7 @@ async def update_document_status(
         max_retries=3,
         base_delay=0.5,
         backoff=2.0,
+        timeout=10.0,
         func_name=f"{service.__class__.__name__}.update_document_status",
     )
 
@@ -163,6 +169,7 @@ async def get_document_status(doc_id: str) -> dict | None:
         max_retries=3,
         base_delay=0.5,
         backoff=2.0,
+        timeout=10.0,
         func_name=f"{service.__class__.__name__}.get_document_status",
     )
 
@@ -179,6 +186,7 @@ async def delete_document_chunks(doc_id: str) -> None:
         max_retries=3,
         base_delay=0.5,
         backoff=2.0,
+        timeout=10.0,
         func_name=f"{service.__class__.__name__}.delete_document_chunks",
     )
 
@@ -195,6 +203,7 @@ async def delete_document(doc_id: str) -> None:
         max_retries=3,
         base_delay=0.5,
         backoff=2.0,
+        timeout=10.0,
         func_name=f"{service.__class__.__name__}.delete_document",
     )
 
@@ -215,6 +224,7 @@ async def fail_stale_documents(statuses: list[str]) -> int:
         max_retries=3,
         base_delay=1.0,
         backoff=2.0,
+        timeout=10.0,
         func_name=f"{service.__class__.__name__}.fail_stale_documents",
     )
 

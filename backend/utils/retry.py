@@ -46,6 +46,7 @@ The actual retry loop:
 
 import asyncio
 import logging
+import random
 from typing import Type, Tuple, Callable, Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,10 @@ def is_transient_error(exception: Exception) -> bool:
         True if the error is transient and should be retried,
         False if it's permanent and should fail immediately.
     """
+    # asyncio.TimeoutError str() is empty — check by type explicitly
+    if isinstance(exception, asyncio.TimeoutError):
+        return True
+
     error_str = str(exception).lower()
     
     # Log the full error for debugging
@@ -97,6 +102,7 @@ async def retry_async(
     max_retries: int = 3,
     base_delay: float = 1.0,
     backoff: float = 2.0,
+    timeout: float | None = 30.0,
     retryable_exceptions: Tuple[Type[Exception], ...] = (Exception,),
     func_name: Optional[str] = None,
 ) -> Any:
@@ -108,6 +114,7 @@ async def retry_async(
         max_retries: Maximum number of retry attempts
         base_delay: Initial delay in seconds
         backoff: Multiplier for exponential backoff
+        timeout: Per-attempt timeout in seconds; None disables asyncio.wait_for
         retryable_exceptions: Tuple of exception types that might be retryable
         func_name: Optional function name for logging (auto-detected if not provided)
     
@@ -131,7 +138,38 @@ async def retry_async(
     
     for attempt in range(max_retries):
         try:
-            return await func()
+            if timeout is not None:
+                return await asyncio.wait_for(func(), timeout=timeout)
+            else:
+                return await func()
+        except asyncio.TimeoutError as e:
+            last_exception = e
+            if attempt == max_retries - 1:
+                logger.error(
+                    f"Final retry attempt timed out for {func_name}",
+                    extra={
+                        "error_type": "TimeoutError",
+                        "timeout_seconds": timeout,
+                        "attempt": attempt + 1,
+                        "max_retries": max_retries,
+                    },
+                )
+                raise
+            cap = base_delay * (backoff ** attempt)
+            delay = random.uniform(0, cap)
+            logger.warning(
+                f"Attempt {attempt + 1}/{max_retries} timed out for "
+                f"{func_name} after {timeout}s, retrying in {delay:.2f}s",
+                extra={
+                    "error_type": "TimeoutError",
+                    "timeout_seconds": timeout,
+                    "attempt": attempt + 1,
+                    "max_retries": max_retries,
+                    "next_retry_delay": delay,
+                },
+            )
+            await asyncio.sleep(delay)
+            continue
         except retryable_exceptions as e:
             last_exception = e
             
@@ -161,8 +199,9 @@ async def retry_async(
                 )
                 raise
             
-            # Calculate delay with exponential backoff
-            delay = base_delay * (backoff ** attempt)
+            # Full jitter: delay uniform in [0, cap]
+            cap = base_delay * (backoff ** attempt)
+            delay = random.uniform(0, cap)
             
             logger.warning(
                 f"Transient error in {func_name}, "

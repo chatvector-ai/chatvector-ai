@@ -39,7 +39,8 @@ async def get_embeddings(texts: list[str]) -> list[list[float]]:
             max_retries=3,
             base_delay=1.0,
             backoff=2.0,
-            func_name="get_embeddings",
+            timeout=30.0,
+            func_name="embedding_service.get_embeddings",
         )
         all_embeddings.extend(batch_embeddings)
 
