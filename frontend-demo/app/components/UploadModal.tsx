@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { X, Upload } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { X, Upload, Loader2 } from "lucide-react";
 import { uploadDocument } from "../lib/api";
 
 export type UploadAcceptedPayload = {
@@ -10,31 +10,66 @@ export type UploadAcceptedPayload = {
   statusEndpoint: string;
 };
 
+export type UploadModalAttachment = {
+  status: "processing" | "ready" | "failed";
+};
+
 type Props = {
   onClose: () => void;
   /** Run before POST /upload (e.g. delete the prior document so replacement does not orphan rows). */
   onBeforeUpload?: () => Promise<void>;
   onUploadAccepted: (payload: UploadAcceptedPayload) => void;
+  /** Reflects server-side processing for the active upload; used after POST /upload succeeds. */
+  attachment: UploadModalAttachment | null;
 };
 
-export default function UploadModal({ onClose, onBeforeUpload, onUploadAccepted }: Props) {
+export default function UploadModal({
+  onClose,
+  onBeforeUpload,
+  onUploadAccepted,
+  attachment,
+}: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
-  const [error, setError] = useState("");
+  const [lastFile, setLastFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadHttpFailed, setUploadHttpFailed] = useState(false);
+  /** Until parent `attachment` reflects the new doc, avoid flashing the file picker after POST succeeds. */
+  const [awaitingProcessing, setAwaitingProcessing] = useState(false);
+
+  useEffect(() => {
+    if (
+      attachment?.status === "processing" ||
+      attachment?.status === "ready" ||
+      attachment?.status === "failed"
+    ) {
+      setAwaitingProcessing(false);
+    }
+  }, [attachment?.status]);
 
   const handleFile = async (file: File) => {
-    setStatus("uploading");
-    setError("");
+    setLastFile(file);
+    setIsUploading(true);
+    setUploadHttpFailed(false);
     try {
       if (onBeforeUpload) {
         await onBeforeUpload();
       }
       const { documentId, statusEndpoint } = await uploadDocument(file);
       onUploadAccepted({ fileName: file.name, documentId, statusEndpoint });
-      onClose();
-    } catch (e) {
-      setStatus("error");
-      setError(e instanceof Error ? e.message : "Upload failed. Please try again.");
+      setAwaitingProcessing(true);
+    } catch {
+      setUploadHttpFailed(true);
+      setAwaitingProcessing(false);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleRetry = () => {
+    if (lastFile) {
+      void handleFile(lastFile);
+    } else {
+      inputRef.current?.click();
     }
   };
 
@@ -49,6 +84,19 @@ export default function UploadModal({ onClose, onBeforeUpload, onUploadAccepted 
     if (file) handleFile(file);
   };
 
+  const showFailed =
+    !isUploading && (uploadHttpFailed || attachment?.status === "failed");
+  const showProcessing =
+    !showFailed &&
+    !isUploading &&
+    (attachment?.status === "processing" || awaitingProcessing);
+  const showUploading = isUploading;
+  const showPicker =
+    !showUploading && !showProcessing && !showFailed && (attachment === null || attachment.status === "ready");
+
+  const dropZoneInteractive = showPicker;
+  const showDismissWait = showUploading || showProcessing;
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-md mx-4 border border-gray-700">
@@ -59,10 +107,12 @@ export default function UploadModal({ onClose, onBeforeUpload, onUploadAccepted 
           </button>
         </div>
         <div
-          onDrop={handleDrop}
+          onDrop={dropZoneInteractive ? handleDrop : (e) => e.preventDefault()}
           onDragOver={(e) => e.preventDefault()}
-          onClick={() => inputRef.current?.click()}
-          className="border-2 border-dashed border-gray-600 hover:border-indigo-500 rounded-xl p-10 flex flex-col items-center justify-center cursor-pointer transition"
+          onClick={() => dropZoneInteractive && inputRef.current?.click()}
+          className={`border-2 border-dashed border-gray-600 rounded-xl p-10 flex flex-col items-center justify-center transition ${
+            dropZoneInteractive ? "hover:border-indigo-500 cursor-pointer" : ""
+          }`}
         >
           <input
             ref={inputRef}
@@ -71,9 +121,34 @@ export default function UploadModal({ onClose, onBeforeUpload, onUploadAccepted 
             onChange={handleChange}
             className="hidden"
           />
-          {status === "uploading" && <p className="text-indigo-400 text-sm animate-pulse">Uploading...</p>}
-          {status === "error" && <p className="text-red-400 text-sm">{error}</p>}
-          {status === "idle" && (
+          {showUploading && (
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="text-indigo-400 animate-spin" size={28} />
+              <p className="text-indigo-400 text-sm">Uploading…</p>
+            </div>
+          )}
+          {showProcessing && (
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="text-indigo-400 animate-spin" size={28} />
+              <p className="text-indigo-400 text-sm">Processing your document…</p>
+            </div>
+          )}
+          {showFailed && (
+            <div className="flex flex-col items-center gap-3 text-center">
+              <p className="text-red-400 text-sm">Upload failed. Please try again.</p>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRetry();
+                }}
+                className="text-sm text-indigo-400 hover:text-indigo-300"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          {showPicker && (
             <>
               <Upload size={32} className="text-gray-500 mb-3" />
               <p className="text-gray-400 text-sm text-center">
@@ -83,6 +158,15 @@ export default function UploadModal({ onClose, onBeforeUpload, onUploadAccepted 
             </>
           )}
         </div>
+        {showDismissWait && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-3 w-full text-center text-xs text-gray-500 hover:text-gray-400"
+          >
+            Dismiss and wait
+          </button>
+        )}
       </div>
     </div>
   );

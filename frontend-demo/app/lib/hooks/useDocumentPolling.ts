@@ -57,7 +57,6 @@ export function useDocumentPolling(
     setAwaitingProcessing(true);
 
     let cancelled = false;
-    const docId = documentId;
     const path = statusEndpoint;
 
     const poll = async () => {
