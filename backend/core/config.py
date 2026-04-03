@@ -94,6 +94,9 @@ class Settings:
     QUEUE_RETRY_BASE_DELAY: float = max(
         0.1, float(os.getenv("QUEUE_RETRY_BASE_DELAY", "2.0"))
     )
+    HEALTH_CHECK_CACHE_TTL_SECONDS: int = max(
+        0, int(os.getenv("HEALTH_CHECK_CACHE_TTL_SECONDS", "60"))
+    )
 
     RATE_LIMIT_UPLOAD: str = os.getenv("RATE_LIMIT_UPLOAD", "20/hour")
     RATE_LIMIT_CHAT: str = os.getenv("RATE_LIMIT_CHAT", "30/minute")

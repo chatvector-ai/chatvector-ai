@@ -2,6 +2,8 @@ import asyncio
 import logging
 import os
 import time
+from collections.abc import Awaitable, Callable
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
@@ -14,9 +16,6 @@ from sqlalchemy.exc import SQLAlchemyError
 import db
 from core.config import config
 from middleware.rate_limit import limiter
-from core.models import Document as DocumentModel
-from db.sqlalchemy_service import SQLAlchemyService
-from db.supabase_service import SupabaseService
 from routes.root import _is_browser
 from services.queue_service import ingestion_queue
 
@@ -26,6 +25,8 @@ router = APIRouter()
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 _BAR_WIDTH = 10
+_HEALTH_CHECK_CACHE: dict[str, dict[str, Any]] = {}
+_HEALTH_CHECK_CACHE_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 def _read_version() -> str:
@@ -78,7 +79,11 @@ def _workers_active_count() -> int:
 
 async def _database_connected_and_document_count() -> tuple[bool, int | None]:
     service = db.get_db_service()
+    from db.sqlalchemy_service import SQLAlchemyService
+
     if isinstance(service, SQLAlchemyService):
+        from core.models import Document as DocumentModel
+
         try:
             async with service.async_session() as session:
                 await session.execute(text("SELECT 1"))
@@ -90,6 +95,8 @@ async def _database_connected_and_document_count() -> tuple[bool, int | None]:
         except Exception:
             logger.exception("Unexpected error during database health check")
             return False, None
+
+    from db.supabase_service import SupabaseService
 
     if isinstance(service, SupabaseService):
 
@@ -125,6 +132,81 @@ async def _database_connected_and_document_count() -> tuple[bool, int | None]:
 def _short_error_message(exc: BaseException, max_len: int = 120) -> str:
     msg = str(exc).strip() or type(exc).__name__
     return msg[:max_len]
+
+
+def _health_check_checked_at(ts: float) -> str:
+    return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _health_check_response(
+    result: dict[str, Any],
+    *,
+    cached: bool,
+    checked_at: str,
+) -> dict[str, Any]:
+    response = dict(result)
+    response["cached"] = cached
+    response["checked_at"] = checked_at
+    return response
+
+
+def _health_check_cache_is_fresh(entry: dict[str, Any], now_monotonic: float) -> bool:
+    checked_monotonic = entry.get("checked_monotonic")
+    if not isinstance(checked_monotonic, (int, float)):
+        return False
+    return now_monotonic - float(checked_monotonic) < config.HEALTH_CHECK_CACHE_TTL_SECONDS
+
+
+def _health_check_cache_hit(check_name: str, now_monotonic: float) -> dict[str, Any] | None:
+    entry = _HEALTH_CHECK_CACHE.get(check_name)
+    if not entry or not _health_check_cache_is_fresh(entry, now_monotonic):
+        return None
+
+    cached_result = entry.get("result")
+    checked_at = entry.get("checked_at")
+    if not isinstance(cached_result, dict) or not isinstance(checked_at, str):
+        return None
+
+    return _health_check_response(cached_result, cached=True, checked_at=checked_at)
+
+
+def _health_check_lock(check_name: str) -> asyncio.Lock:
+    lock = _HEALTH_CHECK_CACHE_LOCKS.get(check_name)
+    if lock is None:
+        lock = asyncio.Lock()
+        _HEALTH_CHECK_CACHE_LOCKS[check_name] = lock
+    return lock
+
+
+async def _run_health_check_with_cache(
+    check_name: str,
+    health_check: Callable[[], Awaitable[dict[str, Any]]],
+) -> dict[str, Any]:
+    ttl_seconds = config.HEALTH_CHECK_CACHE_TTL_SECONDS
+    if ttl_seconds <= 0:
+        result = await health_check()
+        checked_at = _health_check_checked_at(time.time())
+        return _health_check_response(result, cached=False, checked_at=checked_at)
+
+    now_monotonic = time.monotonic()
+    cached_result = _health_check_cache_hit(check_name, now_monotonic)
+    if cached_result is not None:
+        return cached_result
+
+    async with _health_check_lock(check_name):
+        now_monotonic = time.monotonic()
+        cached_result = _health_check_cache_hit(check_name, now_monotonic)
+        if cached_result is not None:
+            return cached_result
+
+        result = await health_check()
+        checked_at = _health_check_checked_at(time.time())
+        _HEALTH_CHECK_CACHE[check_name] = {
+            "result": dict(result),
+            "checked_at": checked_at,
+            "checked_monotonic": now_monotonic,
+        }
+        return _health_check_response(result, cached=False, checked_at=checked_at)
 
 
 async def _embedding_health_check() -> dict:
@@ -330,8 +412,8 @@ async def status(request: Request):
     start = getattr(request.app.state, "start_time", time.time())
     db_result, embedding_result, llm_result = await asyncio.gather(
         _database_connected_and_document_count(),
-        _embedding_health_check(),
-        _llm_health_check(),
+        _run_health_check_with_cache("embedding", _embedding_health_check),
+        _run_health_check_with_cache("llm", _llm_health_check),
         return_exceptions=True,
     )
 
