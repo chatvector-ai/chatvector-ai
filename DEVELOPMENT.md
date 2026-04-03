@@ -310,13 +310,19 @@ pytest --cov=app # coverage
 
 ### Running Locally
 
+`backend/requirements.txt` installs `psycopg[binary]`, so local pytest
+collection does not require a separate system `libpq` installation. If you
+already have an older local environment, reinstall the backend requirements so
+`psycopg` and `psycopg-binary` stay on matching versions.
+
 ```bash
 cd backend
 pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-(PostgreSQL must be running.)
+The bundled binary wheel removes the extra `libpq` setup step, but tests that
+open real PostgreSQL connections still need a running Postgres instance.
 
 ---
 
