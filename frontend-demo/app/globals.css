@@ -9,6 +9,7 @@
    - Border:     #1e2530
    - Text:       #e8edf5
    - Muted:      #6b7685
+   - Subtle:     #3d4555 (tertiary text — between border and muted)
    - Accent:     #00e5a0 (teal green)
    - Blue:       #0080ff
    ============================================= */
@@ -19,21 +20,31 @@
   --surface: #111418;
   --border: #1e2530;
   --muted: #6b7685;
+  --subtle: #3d4555;
   --accent: #00e5a0;
   --blue: #0080ff;
 }
 
 @theme inline {
+  /* Colors — semantic tokens */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-accent: var(--accent);
+  --color-blue: var(--blue);
+
+  /* Fonts */
+  --font-sans: 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 }
 
 body {
-  background: #0a0c10;
-  color: #e8edf5;
-  font-family: 'DM Sans', sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
 }
 
 html {

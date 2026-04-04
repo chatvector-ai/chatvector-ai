@@ -29,18 +29,11 @@ function NavLinks({
             <Link
               href={href}
               onClick={onNavigate}
-              style={{
-                color: chatActive ? "#00e5a0" : "#6b7685",
-                textDecoration: "none",
-                fontSize: "0.9rem",
-                transition: "color .2s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = "#e8edf5";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = chatActive ? "#00e5a0" : "#6b7685";
-              }}
+              className={`text-[0.9rem] no-underline transition-colors duration-200 ${
+                chatActive
+                  ? "text-accent"
+                  : "text-muted hover:text-foreground"
+              }`}
             >
               {label}
             </Link>
@@ -57,26 +50,7 @@ function GitHubButton({ className }: { className?: string }) {
       href={GITHUB_REPO}
       target="_blank"
       rel="noopener noreferrer"
-      className={className}
-      style={{
-        background: "transparent",
-        border: "1px solid #00e5a0",
-        color: "#00e5a0",
-        padding: "7px 18px",
-        borderRadius: 6,
-        fontSize: "0.85rem",
-        cursor: "pointer",
-        textDecoration: "none",
-        transition: "all .2s",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = "#00e5a0";
-        e.currentTarget.style.color = "#000";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = "transparent";
-        e.currentTarget.style.color = "#00e5a0";
-      }}
+      className={`inline-flex cursor-pointer items-center justify-center rounded-md border border-accent bg-transparent px-[18px] py-[7px] text-[0.85rem] text-accent no-underline transition-all duration-200 hover:bg-accent hover:text-black ${className ?? ""}`}
     >
       GitHub
     </a>
@@ -89,73 +63,33 @@ export default function Navigation() {
 
   return (
     <header
-      style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 100,
-        background: "rgba(10,12,16,0.88)",
-        backdropFilter: "blur(14px)",
-        borderBottom: "1px solid #1e2530",
-      }}
+      className="sticky top-0 z-[100] border-b border-border backdrop-blur-[14px]"
+      style={{ background: "rgba(10,12,16,0.88)" }}
     >
-      <nav
-        style={{
-          maxWidth: 1100,
-          margin: "0 auto",
-          padding: "0 1rem",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "1rem",
-          minHeight: 60,
-        }}
-      >
+      {/* Header scrim: 88% of page background rgba — inline for exact match with backdrop-blur */}
+      <nav className="mx-auto flex min-h-[60px] max-w-[1100px] items-center justify-between gap-4 px-4">
         <Link
           href="/"
-          style={{
-            fontFamily: "JetBrains Mono, monospace",
-            fontSize: "1.05rem",
-            fontWeight: 700,
-            color: "#00e5a0",
-            textDecoration: "none",
-            flexShrink: 0,
-          }}
+          className="shrink-0 font-mono text-[1.05rem] font-bold text-accent no-underline"
         >
           Chat
-          <span style={{ color: "#e8edf5", opacity: 0.45 }}>&lt;</span>
+          <span className="text-foreground/45">&lt;</span>
           Vector
-          <span style={{ color: "#e8edf5", opacity: 0.45 }}>&gt;</span>
+          <span className="text-foreground/45">&gt;</span>
         </Link>
 
-        <ul className="hidden md:flex list-none flex-1 flex-row flex-wrap items-center justify-center gap-8 m-0 p-0">
+        <ul className="m-0 hidden list-none flex-1 flex-row flex-wrap items-center justify-center gap-8 p-0 md:flex">
           <NavLinks pathname={pathname} />
         </ul>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.75rem",
-            flexShrink: 0,
-          }}
-        >
+        <div className="flex shrink-0 items-center gap-3">
           <GitHubButton className="hidden md:inline-flex" />
           <button
             type="button"
             aria-expanded={mobileOpen}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             onClick={() => setMobileOpen((o) => !o)}
-            className="md:hidden"
-            style={{
-              background: "transparent",
-              border: "1px solid #1e2530",
-              color: "#e8edf5",
-              borderRadius: 6,
-              padding: "8px 12px",
-              fontSize: "1rem",
-              lineHeight: 1,
-              cursor: "pointer",
-            }}
+            className="cursor-pointer rounded-md border border-border bg-transparent px-3 py-2 text-base leading-none text-foreground md:hidden"
           >
             {mobileOpen ? "✕" : "☰"}
           </button>
@@ -163,32 +97,14 @@ export default function Navigation() {
       </nav>
 
       {mobileOpen ? (
-        <div
-          className="md:hidden"
-          style={{
-            borderTop: "1px solid #1e2530",
-            padding: "1rem",
-            display: "flex",
-            flexDirection: "column",
-            gap: "1rem",
-          }}
-        >
-          <ul
-            style={{
-              listStyle: "none",
-              margin: 0,
-              padding: 0,
-              display: "flex",
-              flexDirection: "column",
-              gap: "1rem",
-            }}
-          >
+        <div className="flex flex-col gap-4 border-t border-border p-4 md:hidden">
+          <ul className="m-0 flex list-none flex-col gap-4 p-0">
             <NavLinks
               pathname={pathname}
               onNavigate={() => setMobileOpen(false)}
             />
           </ul>
-          <div style={{ alignSelf: "flex-start" }}>
+          <div className="self-start">
             <GitHubButton />
           </div>
         </div>

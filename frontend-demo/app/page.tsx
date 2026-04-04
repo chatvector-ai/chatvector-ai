@@ -1,9 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 
 const GITHUB_REPO = "https://github.com/chatvector-ai/chatvector-ai";
+
+/** Code-sample syntax colors (IDE-style); not part of the seven semantic tokens. */
+const SYNTAX = {
+  kw: "rgb(255, 123, 114)",
+  fn: "rgb(121, 192, 255)",
+  str: "rgb(165, 214, 255)",
+  cm: "rgb(139, 148, 158)",
+  plain: "rgb(201, 209, 217)",
+} as const;
 
 function HeroCodeBlock() {
   const lines = [
@@ -49,85 +57,32 @@ function HeroCodeBlock() {
     { type: "cm", text: "# Cited, accurate" },
   ];
 
-  const colors: Record<string, string> = {
-    kw: "#ff7b72",
-    fn: "#79c0ff",
-    str: "#a5d6ff",
-    cm: "#8b949e",
-    val: "#00e5a0",
-    plain: "#c9d1d9",
-  };
-
   return (
-    <div style={{ maxWidth: 700, width: "100%", marginTop: "3rem" }}>
-      <div
-        style={{
-          background: "#111418",
-          border: "1px solid #1e2530",
-          borderRadius: 12,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "12px 16px",
-            borderBottom: "1px solid #1e2530",
-            background: "#181c22",
-          }}
-        >
-          <div
-            style={{
-              width: 10,
-              height: 10,
-              borderRadius: "50%",
-              background: "#ff5f57",
-            }}
-          />
-          <div
-            style={{
-              width: 10,
-              height: 10,
-              borderRadius: "50%",
-              background: "#febc2e",
-            }}
-          />
-          <div
-            style={{
-              width: 10,
-              height: 10,
-              borderRadius: "50%",
-              background: "#28c840",
-            }}
-          />
-          <span
-            style={{
-              marginLeft: "auto",
-              fontFamily: "JetBrains Mono, monospace",
-              fontSize: "0.75rem",
-              color: "#6b7685",
-            }}
-          >
+    <div className="mt-12 w-full max-w-[700px]">
+      <div className="overflow-hidden rounded-xl border border-border bg-surface">
+        <div className="flex items-center gap-2 border-b border-border bg-[rgb(24,28,34)] px-4 py-3">
+          {/* macOS traffic-light dots — intentional non-token colors */}
+          <div className="size-2.5 rounded-full bg-[rgb(255,95,87)]" />
+          <div className="size-2.5 rounded-full bg-[rgb(254,188,46)]" />
+          <div className="size-2.5 rounded-full bg-[rgb(40,200,64)]" />
+          <span className="ml-auto font-mono text-xs text-muted">
             quickstart.py
           </span>
         </div>
-        <pre
-          style={{
-            padding: "1.25rem 1.5rem",
-            fontFamily: "JetBrains Mono, monospace",
-            fontSize: "0.82rem",
-            lineHeight: 1.75,
-            overflowX: "auto",
-            margin: 0,
-          }}
-        >
+        <pre className="m-0 overflow-x-auto px-6 py-5 font-mono text-[0.82rem] leading-[1.75]">
           {lines.map((t, i) =>
             t.type === "br" ? (
               <br key={i} />
             ) : (
-              <span key={i} style={{ color: colors[t.type] || "#c9d1d9" }}>
+              <span
+                key={i}
+                style={{
+                  color:
+                    t.type === "val"
+                      ? "var(--accent)"
+                      : SYNTAX[t.type as keyof typeof SYNTAX] ?? SYNTAX.plain,
+                }}
+              >
                 {t.text}
               </span>
             )
@@ -142,188 +97,64 @@ function Hero() {
   return (
     <section
       id="hero"
-      style={{
-        minHeight: "90vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        textAlign: "center",
-        padding: "5rem 2rem 4rem",
-        position: "relative",
-        overflow: "hidden",
-      }}
+      className="relative flex min-h-[90vh] flex-col items-center justify-center overflow-hidden px-8 pb-16 pt-20 text-center"
     >
+      {/* Repeating grid: two linear-gradients referencing --border — Tailwind cannot express this */}
       <div
+        className="pointer-events-none absolute inset-0 opacity-30"
         style={{
-          position: "absolute",
-          inset: 0,
           backgroundImage:
-            "linear-gradient(#1e2530 1px,transparent 1px),linear-gradient(90deg,#1e2530 1px,transparent 1px)",
+            "linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)",
           backgroundSize: "60px 60px",
-          opacity: 0.3,
-          pointerEvents: "none",
         }}
       />
+      {/* Radial glow — Tailwind cannot express arbitrary radial-gradient */}
       <div
+        className="pointer-events-none absolute left-1/2 top-[20%] h-[300px] w-[600px] -translate-x-1/2"
         style={{
-          position: "absolute",
-          top: "20%",
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: 600,
-          height: 300,
-          pointerEvents: "none",
           background:
             "radial-gradient(ellipse,rgba(0,229,160,0.13) 0%,transparent 70%)",
         }}
       />
+      {/* Hero chip: sub-10% alpha on accent — kept inline for exact rgba match */}
       <div
+        className="relative z-[1] mb-8 inline-flex items-center gap-2 rounded-full px-[18px] py-1.5 font-mono text-[0.8rem] text-accent"
         style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 8,
           background: "rgba(0,229,160,0.08)",
           border: "1px solid rgba(0,229,160,0.25)",
-          color: "#00e5a0",
-          padding: "6px 18px",
-          borderRadius: 999,
-          fontSize: "0.8rem",
-          fontFamily: "JetBrains Mono, monospace",
-          marginBottom: "2rem",
-          position: "relative",
-          zIndex: 1,
         }}
       >
-        <span
-          style={{
-            width: 7,
-            height: 7,
-            background: "#00e5a0",
-            borderRadius: "50%",
-            animation: "pulse 2s infinite",
-          }}
-        />
+        <span className="size-[7px] rounded-full bg-accent [animation:pulse_2s_infinite]" />
         Open-source · RAG Engine for Developers
       </div>
 
-      <h1
-        style={{
-          fontSize: "clamp(2.4rem,5vw,4.2rem)",
-          fontWeight: 600,
-          lineHeight: 1.12,
-          letterSpacing: "-1.5px",
-          maxWidth: 820,
-          position: "relative",
-          zIndex: 1,
-          color: "#e8edf5",
-        }}
-      >
+      <h1 className="relative z-[1] max-w-[820px] text-[clamp(2.4rem,5vw,4.2rem)] font-semibold leading-[1.12] tracking-[-1.5px] text-foreground">
         Build RAG apps that{" "}
-        <span
-          style={{
-            color: "transparent",
-            background: "linear-gradient(90deg,#00e5a0,#0080ff)",
-            WebkitBackgroundClip: "text",
-            backgroundClip: "text",
-          }}
-        >
+        <span className="bg-gradient-to-r from-accent to-blue bg-clip-text text-transparent">
           actually understand
         </span>{" "}
         your data.
       </h1>
 
-      <p
-        style={{
-          color: "#6b7685",
-          fontSize: "1.1rem",
-          maxWidth: 540,
-          margin: "1.5rem auto 0",
-          fontWeight: 300,
-          lineHeight: 1.7,
-          position: "relative",
-          zIndex: 1,
-        }}
-      >
+      <p className="relative z-[1] mx-auto mt-6 max-w-[540px] text-[1.1rem] font-light leading-[1.7] text-muted">
         ChatVector is a high-performance retrieval-augmented generation engine —
         ingest any document, retrieve semantically, and get LLM-powered answers
         in minutes.
       </p>
 
-      <div
-        style={{
-          display: "flex",
-          gap: "1rem",
-          marginTop: "2.5rem",
-          justifyContent: "center",
-          flexWrap: "wrap",
-          position: "relative",
-          zIndex: 1,
-        }}
-      >
+      <div className="relative z-[1] mt-10 flex flex-wrap justify-center gap-4">
         <a
           href={GITHUB_REPO}
-          style={{
-            background: "#00e5a0",
-            color: "#000",
-            padding: "12px 28px",
-            borderRadius: 8,
-            fontSize: "0.95rem",
-            fontWeight: 600,
-            border: "none",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            textDecoration: "none",
-            transition: "all .2s",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.transform =
-              "translateY(-2px)";
-            (e.currentTarget as HTMLElement).style.boxShadow =
-              "0 8px 24px rgba(0,229,160,0.25)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
-            (e.currentTarget as HTMLElement).style.boxShadow = "none";
-          }}
+          className="flex cursor-pointer items-center gap-2 rounded-lg border-none bg-accent px-7 py-3 text-[0.95rem] font-semibold text-black no-underline transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,229,160,0.25)]"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-          >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.38.6.11.82-.26.82-.57v-2c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.21.08 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5 1 .11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.04.14 3 .4 2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.21.69.82.57C20.56 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z" />
           </svg>
           View on GitHub
         </a>
         <Link
           href="/chat"
-          style={{
-            background: "transparent",
-            color: "#e8edf5",
-            padding: "12px 28px",
-            borderRadius: 8,
-            fontSize: "0.95rem",
-            fontWeight: 500,
-            border: "1px solid #1e2530",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            textDecoration: "none",
-            transition: "all .2s",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = "#3d4555";
-            e.currentTarget.style.background = "#111418";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = "#1e2530";
-            e.currentTarget.style.background = "transparent";
-          }}
+          className="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-transparent px-7 py-3 text-[0.95rem] font-medium text-foreground no-underline transition-all duration-200 hover:border-[rgb(61,69,85)] hover:bg-surface"
         >
           <svg
             width="16"
@@ -354,48 +185,22 @@ function PipelineStep({
   desc: string;
 }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 14,
-        padding: "14px 0",
-        borderBottom: "1px solid #1e2530",
-      }}
-    >
+    <div className="flex items-start gap-3.5 border-b border-border py-3.5">
+      {/* Step badge: sub-20% alpha on accent — kept inline for exact rgba match */}
       <div
+        className="flex size-7 shrink-0 items-center justify-center rounded-md border font-mono text-xs font-bold text-accent"
         style={{
-          fontFamily: "JetBrains Mono, monospace",
-          fontSize: "0.75rem",
-          color: "#00e5a0",
           background: "rgba(0,229,160,0.1)",
-          border: "1px solid rgba(0,229,160,0.2)",
-          width: 28,
-          height: 28,
-          borderRadius: 6,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-          fontWeight: 700,
+          borderColor: "rgba(0,229,160,0.2)",
         }}
       >
         {num}
       </div>
       <div>
-        <h4
-          style={{
-            fontSize: "0.9rem",
-            fontWeight: 500,
-            marginBottom: 3,
-            color: "#e8edf5",
-          }}
-        >
+        <h4 className="mb-0.5 text-[0.9rem] font-medium text-foreground">
           {title}
         </h4>
-        <p style={{ fontSize: "0.82rem", color: "#6b7685", margin: 0 }}>
-          {desc}
-        </p>
+        <p className="m-0 text-[0.82rem] text-muted">{desc}</p>
       </div>
     </div>
   );
@@ -425,84 +230,36 @@ function WhatIs() {
     },
   ];
   return (
-    <section id="about" style={{ padding: "6rem 2rem", background: "#0a0c10" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        <p
-          style={{
-            fontFamily: "JetBrains Mono, monospace",
-            fontSize: "0.78rem",
-            color: "#00e5a0",
-            letterSpacing: "2px",
-            textTransform: "uppercase",
-            marginBottom: "1rem",
-          }}
-        >
+    <section id="about" className="bg-background px-8 py-24">
+      <div className="mx-auto max-w-[1100px]">
+        <p className="mb-4 font-mono text-[0.78rem] uppercase tracking-[2px] text-accent">
           {"// what is chatvector"}
         </p>
-        <h2
-          style={{
-            fontSize: "clamp(1.8rem,3.5vw,2.8rem)",
-            fontWeight: 600,
-            letterSpacing: "-0.8px",
-            lineHeight: 1.2,
-            marginBottom: "1.2rem",
-            color: "#e8edf5",
-          }}
-        >
+        <h2 className="mb-5 text-[clamp(1.8rem,3.5vw,2.8rem)] font-semibold leading-tight tracking-[-0.8px] text-foreground">
           RAG that&apos;s sharp, fast,
           <br />
           and open source.
         </h2>
-        <p
-          style={{
-            color: "#6b7685",
-            fontSize: "1.05rem",
-            fontWeight: 300,
-            maxWidth: 560,
-            lineHeight: 1.7,
-          }}
-        >
+        <p className="max-w-[560px] text-[1.05rem] font-light leading-[1.7] text-muted">
           ChatVector handles the entire retrieval pipeline — from raw documents
           to grounded LLM responses — so you can focus on building, not
           plumbing.
         </p>
 
-        <div
-          className="grid grid-cols-1 gap-12 md:grid-cols-2 md:gap-12"
-          style={{
-            alignItems: "center",
-            marginTop: "3rem",
-          }}
-        >
+        <div className="mt-12 grid grid-cols-1 items-center gap-12 md:grid-cols-2">
           <div>
-            <p
-              style={{
-                color: "#6b7685",
-                fontSize: "0.95rem",
-                lineHeight: 1.8,
-                marginBottom: "1.2rem",
-              }}
-            >
+            <p className="mb-5 text-[0.95rem] leading-[1.8] text-muted">
               Most RAG implementations are fragile, slow, or locked into a
               vendor. ChatVector is different — a clean, composable engine built
               for developers who want full control.
             </p>
-            <p
-              style={{ color: "#6b7685", fontSize: "0.95rem", lineHeight: 1.8 }}
-            >
+            <p className="text-[0.95rem] leading-[1.8] text-muted">
               Swap your vector store, your LLM, or your chunking strategy
               without rewriting your app. Built on battle-tested primitives.
               Runs anywhere Python runs.
             </p>
           </div>
-          <div
-            style={{
-              background: "#111418",
-              border: "1px solid #1e2530",
-              borderRadius: 12,
-              padding: "1.5rem",
-            }}
-          >
+          <div className="rounded-xl border border-border bg-surface p-6">
             {steps.map((s) => (
               <PipelineStep key={s.num} {...s} />
             ))}
@@ -516,7 +273,7 @@ function WhatIs() {
 const FEATURES = [
   {
     icon: "⬆",
-    color: "#00e5a0",
+    color: "var(--accent)",
     bg: "rgba(0,229,160,0.1)",
     title: "Multi-format ingestion",
     desc: "PDF, Markdown, HTML, DOCX, plain text. Drop a folder and go.",
@@ -524,7 +281,7 @@ const FEATURES = [
   },
   {
     icon: "🔍",
-    color: "#0080ff",
+    color: "var(--blue)",
     bg: "rgba(0,128,255,0.1)",
     title: "Semantic retrieval",
     desc: "Dense vector search with optional MMR re-ranking for diverse, accurate hits.",
@@ -532,7 +289,7 @@ const FEATURES = [
   },
   {
     icon: "⚡",
-    color: "#a855f7",
+    color: "rgb(168, 85, 247)",
     bg: "rgba(168,85,247,0.1)",
     title: "LLM-powered answers",
     desc: "Works with Mistral, LLaMA, GPT-4, Claude — any OpenAI-compatible endpoint.",
@@ -540,7 +297,7 @@ const FEATURES = [
   },
   {
     icon: "</>",
-    color: "#fbbf24",
+    color: "rgb(251, 191, 36)",
     bg: "rgba(251,191,36,0.1)",
     title: "Open source, self-hosted",
     desc: "MIT licensed. No cloud dependency. Run on your laptop or your infra.",
@@ -548,7 +305,7 @@ const FEATURES = [
   },
   {
     icon: "✓",
-    color: "#10b981",
+    color: "rgb(16, 185, 129)",
     bg: "rgba(16,185,129,0.1)",
     title: "Cited responses",
     desc: "Every answer links back to source chunks. No hallucinations, full traceability.",
@@ -556,7 +313,7 @@ const FEATURES = [
   },
   {
     icon: "⬡",
-    color: "#ef4444",
+    color: "rgb(239, 68, 68)",
     bg: "rgba(239,68,68,0.1)",
     title: "Pluggable vector stores",
     desc: "FAISS, ChromaDB, Pinecone, Weaviate. Swap with one config line.",
@@ -579,62 +336,24 @@ function FeatureCard({
   desc: string;
   tag: string;
 }) {
-  const [hovered, setHovered] = useState(false);
+  // Pure CSS hover via group — no JS state needed
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        background: "#0a0c10",
-        border: `1px solid ${hovered ? "#3d4555" : "#1e2530"}`,
-        borderRadius: 12,
-        padding: "1.5rem",
-        transform: hovered ? "translateY(-3px)" : "none",
-        transition: "all .25s",
-        cursor: "default",
-      }}
-    >
+    <div className="group cursor-default rounded-xl border border-border bg-background p-6 transition-all duration-[250ms] hover:-translate-y-[3px] hover:border-[rgb(61,69,85)]">
+      {/* Icon tile fill and glyph color are per-card (feature palette, not design tokens) */}
       <div
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: 10,
-          background: bg,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: "1.1rem",
-          marginBottom: "1rem",
-        }}
+        className="mb-4 flex size-10 items-center justify-center rounded-[10px] text-[1.1rem]"
+        style={{ background: bg }}
       >
         <span style={{ color }}>{icon}</span>
       </div>
-      <h3
-        style={{
-          fontSize: "1rem",
-          fontWeight: 500,
-          marginBottom: "0.5rem",
-          color: "#e8edf5",
-        }}
-      >
-        {title}
-      </h3>
-      <p
-        style={{ fontSize: "0.85rem", color: "#6b7685", lineHeight: 1.6, margin: 0 }}
-      >
-        {desc}
-      </p>
+      <h3 className="mb-2 text-base font-medium text-foreground">{title}</h3>
+      <p className="m-0 text-[0.85rem] leading-snug text-muted">{desc}</p>
+      {/* Tag badge: sub-20% alpha on blue — kept inline for exact rgba match */}
       <div
+        className="mt-3 inline-block rounded px-2.5 py-0.5 font-mono text-[0.72rem] text-blue"
         style={{
-          display: "inline-block",
           background: "rgba(0,128,255,0.1)",
           border: "1px solid rgba(0,128,255,0.2)",
-          color: "#0080ff",
-          padding: "2px 10px",
-          borderRadius: 4,
-          fontSize: "0.72rem",
-          fontFamily: "JetBrains Mono, monospace",
-          marginTop: "0.75rem",
         }}
       >
         {tag}
@@ -645,44 +364,17 @@ function FeatureCard({
 
 function Features() {
   return (
-    <section
-      id="features"
-      style={{ padding: "6rem 2rem", background: "#111418" }}
-    >
-      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        <p
-          style={{
-            fontFamily: "JetBrains Mono, monospace",
-            fontSize: "0.78rem",
-            color: "#00e5a0",
-            letterSpacing: "2px",
-            textTransform: "uppercase",
-            marginBottom: "1rem",
-          }}
-        >
+    <section id="features" className="bg-surface px-8 py-24">
+      <div className="mx-auto max-w-[1100px]">
+        <p className="mb-4 font-mono text-[0.78rem] uppercase tracking-[2px] text-accent">
           {"// capabilities"}
         </p>
-        <h2
-          style={{
-            fontSize: "clamp(1.8rem,3.5vw,2.8rem)",
-            fontWeight: 600,
-            letterSpacing: "-0.8px",
-            lineHeight: 1.2,
-            marginBottom: "3rem",
-            color: "#e8edf5",
-          }}
-        >
+        <h2 className="mb-12 text-[clamp(1.8rem,3.5vw,2.8rem)] font-semibold leading-tight tracking-[-0.8px] text-foreground">
           Everything you need.
           <br />
           Nothing you don&apos;t.
         </h2>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
-            gap: "1.5rem",
-          }}
-        >
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-6">
           {FEATURES.map((f) => (
             <FeatureCard key={f.title} {...f} />
           ))}
@@ -713,236 +405,131 @@ const DEV_POINTS = [
 
 function Developers() {
   const codeLines = [
-    { parts: [{ c: "#8b949e", t: "# Swap components without rewriting" }] },
+    { parts: [{ c: SYNTAX.cm, t: "# Swap components without rewriting" }] },
     {
       parts: [
-        { c: "#c9d1d9", t: "cv = " },
-        { c: "#79c0ff", t: "ChatVector" },
-        { c: "#c9d1d9", t: "(" },
+        { c: SYNTAX.plain, t: "cv = " },
+        { c: SYNTAX.fn, t: "ChatVector" },
+        { c: SYNTAX.plain, t: "(" },
       ],
     },
     {
       parts: [
-        { c: "#c9d1d9", t: "  embedder=" },
-        { c: "#79c0ff", t: "HuggingFaceEmbedder" },
-        { c: "#c9d1d9", t: "(" },
+        { c: SYNTAX.plain, t: "  embedder=" },
+        { c: SYNTAX.fn, t: "HuggingFaceEmbedder" },
+        { c: SYNTAX.plain, t: "(" },
       ],
     },
     {
       parts: [
-        { c: "#c9d1d9", t: "    model=" },
-        { c: "#a5d6ff", t: '"BAAI/bge-small-en"' },
+        { c: SYNTAX.plain, t: "    model=" },
+        { c: SYNTAX.str, t: '"BAAI/bge-small-en"' },
       ],
     },
-    { parts: [{ c: "#c9d1d9", t: "  )," }] },
+    { parts: [{ c: SYNTAX.plain, t: "  )," }] },
     {
       parts: [
-        { c: "#c9d1d9", t: "  store=" },
-        { c: "#79c0ff", t: "ChromaStore" },
-        { c: "#c9d1d9", t: "(path=" },
-        { c: "#a5d6ff", t: '"./db"' },
-        { c: "#c9d1d9", t: ")," },
-      ],
-    },
-    {
-      parts: [
-        { c: "#c9d1d9", t: "  llm=" },
-        { c: "#79c0ff", t: "OllamaLLM" },
-        { c: "#c9d1d9", t: "(model=" },
-        { c: "#a5d6ff", t: '"llama3"' },
-        { c: "#c9d1d9", t: ")," },
+        { c: SYNTAX.plain, t: "  store=" },
+        { c: SYNTAX.fn, t: "ChromaStore" },
+        { c: SYNTAX.plain, t: "(path=" },
+        { c: SYNTAX.str, t: '"./db"' },
+        { c: SYNTAX.plain, t: ")," },
       ],
     },
     {
       parts: [
-        { c: "#c9d1d9", t: "  retriever=" },
-        { c: "#79c0ff", t: "MMRRetriever" },
-        { c: "#c9d1d9", t: "(k=" },
-        { c: "#00e5a0", t: "6" },
-        { c: "#c9d1d9", t: ")," },
+        { c: SYNTAX.plain, t: "  llm=" },
+        { c: SYNTAX.fn, t: "OllamaLLM" },
+        { c: SYNTAX.plain, t: "(model=" },
+        { c: SYNTAX.str, t: '"llama3"' },
+        { c: SYNTAX.plain, t: ")," },
       ],
     },
-    { parts: [{ c: "#c9d1d9", t: ")" }] },
+    {
+      parts: [
+        { c: SYNTAX.plain, t: "  retriever=" },
+        { c: SYNTAX.fn, t: "MMRRetriever" },
+        { c: SYNTAX.plain, t: "(k=" },
+        { c: "var(--accent)", t: "6" },
+        { c: SYNTAX.plain, t: ")," },
+      ],
+    },
+    { parts: [{ c: SYNTAX.plain, t: ")" }] },
     { parts: [] },
-    { parts: [{ c: "#8b949e", t: "# Full control, clean API" }] },
+    { parts: [{ c: SYNTAX.cm, t: "# Full control, clean API" }] },
     {
       parts: [
-        { c: "#c9d1d9", t: "docs = cv." },
-        { c: "#79c0ff", t: "retrieve" },
-        { c: "#c9d1d9", t: "(query, top_k=" },
-        { c: "#00e5a0", t: "8" },
-        { c: "#c9d1d9", t: ")" },
+        { c: SYNTAX.plain, t: "docs = cv." },
+        { c: SYNTAX.fn, t: "retrieve" },
+        { c: SYNTAX.plain, t: "(query, top_k=" },
+        { c: "var(--accent)", t: "8" },
+        { c: SYNTAX.plain, t: ")" },
       ],
     },
     {
       parts: [
-        { c: "#c9d1d9", t: "answer = cv." },
-        { c: "#79c0ff", t: "generate" },
-        { c: "#c9d1d9", t: "(query, docs)" },
+        { c: SYNTAX.plain, t: "answer = cv." },
+        { c: SYNTAX.fn, t: "generate" },
+        { c: SYNTAX.plain, t: "(query, docs)" },
       ],
     },
   ];
 
   return (
-    <section
-      id="developers"
-      style={{ padding: "6rem 2rem", background: "#0a0c10" }}
-    >
-      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        <p
-          style={{
-            fontFamily: "JetBrains Mono, monospace",
-            fontSize: "0.78rem",
-            color: "#00e5a0",
-            letterSpacing: "2px",
-            textTransform: "uppercase",
-            marginBottom: "1rem",
-          }}
-        >
+    <section id="developers" className="bg-background px-8 py-24">
+      <div className="mx-auto max-w-[1100px]">
+        <p className="mb-4 font-mono text-[0.78rem] uppercase tracking-[2px] text-accent">
           {"// built for developers"}
         </p>
-        <h2
-          style={{
-            fontSize: "clamp(1.8rem,3.5vw,2.8rem)",
-            fontWeight: 600,
-            letterSpacing: "-0.8px",
-            lineHeight: 1.2,
-            marginBottom: "1rem",
-            color: "#e8edf5",
-          }}
-        >
+        <h2 className="mb-4 text-[clamp(1.8rem,3.5vw,2.8rem)] font-semibold leading-tight tracking-[-0.8px] text-foreground">
           Designed for people who
           <br />
           read the source code.
         </h2>
-        <p
-          style={{
-            color: "#6b7685",
-            fontSize: "1.05rem",
-            fontWeight: 300,
-            maxWidth: 540,
-            lineHeight: 1.7,
-            marginBottom: "3rem",
-          }}
-        >
+        <p className="mb-12 max-w-[540px] text-[1.05rem] font-light leading-[1.7] text-muted">
           No drag-and-drop. No &quot;AI magic&quot;. Just clean Python APIs,
           sensible defaults, and full control when you need it.
         </p>
 
-        <div
-          className="grid grid-cols-1 gap-12 md:grid-cols-2 md:gap-12"
-          style={{
-            alignItems: "center",
-          }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <div className="grid grid-cols-1 items-center gap-12 md:grid-cols-2">
+          <div className="flex flex-col gap-4">
             {DEV_POINTS.map((p) => (
               <div
                 key={p.title}
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 14,
-                  padding: "1rem 1.2rem",
-                  background: "#111418",
-                  border: "1px solid #1e2530",
-                  borderLeft: "3px solid #00e5a0",
-                  borderRadius: "0 10px 10px 0",
-                }}
+                className="flex items-start gap-3.5 rounded-r-[10px] border border-border border-l-[3px] border-l-accent bg-surface py-4 pl-5 pr-4"
               >
                 <svg
                   width="16"
                   height="16"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="#00e5a0"
+                  stroke="currentColor"
                   strokeWidth="2.5"
-                  style={{ flexShrink: 0, marginTop: 3 }}
+                  className="mt-0.5 shrink-0 text-accent"
                 >
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
                 <div>
-                  <h4
-                    style={{
-                      fontSize: "0.92rem",
-                      fontWeight: 500,
-                      marginBottom: 3,
-                      color: "#e8edf5",
-                    }}
-                  >
+                  <h4 className="mb-0.5 text-[0.92rem] font-medium text-foreground">
                     {p.title}
                   </h4>
-                  <p style={{ fontSize: "0.82rem", color: "#6b7685", margin: 0 }}>
-                    {p.desc}
-                  </p>
+                  <p className="m-0 text-[0.82rem] text-muted">{p.desc}</p>
                 </div>
               </div>
             ))}
           </div>
 
-          <div
-            style={{
-              background: "#111418",
-              border: "1px solid #1e2530",
-              borderRadius: 12,
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "12px 16px",
-                borderBottom: "1px solid #1e2530",
-                background: "#181c22",
-              }}
-            >
-              <div
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: "50%",
-                  background: "#ff5f57",
-                }}
-              />
-              <div
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: "50%",
-                  background: "#febc2e",
-                }}
-              />
-              <div
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: "50%",
-                  background: "#28c840",
-                }}
-              />
-              <span
-                style={{
-                  marginLeft: "auto",
-                  fontFamily: "JetBrains Mono, monospace",
-                  fontSize: "0.75rem",
-                  color: "#6b7685",
-                }}
-              >
+          <div className="overflow-hidden rounded-xl border border-border bg-surface">
+            <div className="flex items-center gap-2 border-b border-border bg-[rgb(24,28,34)] px-4 py-3">
+              {/* macOS traffic-light dots — intentional non-token colors */}
+              <div className="size-2.5 rounded-full bg-[rgb(255,95,87)]" />
+              <div className="size-2.5 rounded-full bg-[rgb(254,188,46)]" />
+              <div className="size-2.5 rounded-full bg-[rgb(40,200,64)]" />
+              <span className="ml-auto font-mono text-xs text-muted">
                 custom_pipeline.py
               </span>
             </div>
-            <pre
-              style={{
-                padding: "1.25rem 1.5rem",
-                fontFamily: "JetBrains Mono, monospace",
-                fontSize: "0.82rem",
-                lineHeight: 1.75,
-                overflowX: "auto",
-                margin: 0,
-              }}
-            >
+            <pre className="m-0 overflow-x-auto px-6 py-5 font-mono text-[0.82rem] leading-[1.75]">
               {codeLines.map((line, i) => (
                 <div key={i}>
                   {line.parts.map((p, j) => (
@@ -974,29 +561,12 @@ const FOOTER_LINKS: { label: string; href: string; external?: boolean }[] = [
 
 function Footer() {
   return (
-    <footer style={{ borderTop: "1px solid #1e2530", padding: "2.5rem 2rem" }}>
-      <div
-        style={{
-          maxWidth: 1100,
-          margin: "0 auto",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: "1.5rem",
-        }}
-      >
-        <div
-          style={{
-            fontFamily: "JetBrains Mono, monospace",
-            fontSize: "1rem",
-            fontWeight: 700,
-            color: "#00e5a0",
-          }}
-        >
+    <footer className="border-t border-border px-8 py-10">
+      <div className="mx-auto flex max-w-[1100px] flex-wrap items-center justify-between gap-6">
+        <div className="font-mono text-base font-bold text-accent">
           ChatVector
         </div>
-        <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}>
+        <div className="flex flex-wrap gap-8">
           {FOOTER_LINKS.map(({ label, href, external }) => (
             <a
               key={label}
@@ -1004,24 +574,14 @@ function Footer() {
               {...(external
                 ? { target: "_blank", rel: "noopener noreferrer" }
                 : {})}
-              style={{
-                color: "#6b7685",
-                textDecoration: "none",
-                fontSize: "0.88rem",
-                transition: "color .2s",
-              }}
-              onMouseEnter={(e) =>
-                ((e.target as HTMLElement).style.color = "#e8edf5")
-              }
-              onMouseLeave={(e) =>
-                ((e.target as HTMLElement).style.color = "#6b7685")
-              }
+              className="text-[0.88rem] text-muted no-underline transition-colors duration-200 hover:text-foreground"
             >
               {label}
             </a>
           ))}
         </div>
-        <div style={{ color: "#3d4555", fontSize: "0.82rem" }}>
+        {/* --subtle is dimmer than --muted but still readable on --background (unlike --border) */}
+        <div className="text-[0.82rem] text-subtle">
           © 2026 ChatVector · Open Source · MIT
         </div>
       </div>
@@ -1030,15 +590,9 @@ function Footer() {
 }
 
 export default function Home() {
+  // Font and background set globally in globals.css body rule — no inline style needed here
   return (
-    <div
-      style={{
-        background: "#0a0c10",
-        color: "#e8edf5",
-        fontFamily: "'DM Sans', sans-serif",
-        minHeight: "100vh",
-      }}
-    >
+    <div className="min-h-screen bg-background text-foreground">
       <Hero />
       <WhatIs />
       <Features />
