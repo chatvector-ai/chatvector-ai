@@ -74,8 +74,8 @@ function FeatureCard({
       >
         <span style={{ color }}>{icon}</span>
       </div>
-      <h3 className="mb-2 text-base font-medium text-foreground">{title}</h3>
-      <p className="m-0 text-[0.85rem] leading-snug text-muted">{desc}</p>
+      <h3 className="mb-2 text-[1.05rem] font-medium text-foreground">{title}</h3>
+      <p className="m-0 text-[0.92rem] leading-snug text-muted">{desc}</p>
       {/* Tag badge: sub-20% alpha on blue — kept inline for exact rgba match */}
       <div
         className="mt-3 inline-block rounded px-2.5 py-0.5 font-mono text-[0.72rem] text-blue"

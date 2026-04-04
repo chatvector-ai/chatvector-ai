@@ -27,14 +27,14 @@ export default function Footer() {
               {...(external
                 ? { target: "_blank", rel: "noopener noreferrer" }
                 : {})}
-              className="text-[0.88rem] text-muted no-underline transition-colors duration-200 hover:text-foreground"
+              className="text-[0.93rem] text-muted no-underline transition-colors duration-200 hover:text-foreground"
             >
               {label}
             </a>
           ))}
         </div>
         {/* --subtle is dimmer than --muted but still readable on --background (unlike --border) */}
-        <div className="text-[0.82rem] text-subtle">
+        <div className="text-[0.87rem] text-subtle">
           © 2026 ChatVector · Open Source · MIT
         </div>
       </div>

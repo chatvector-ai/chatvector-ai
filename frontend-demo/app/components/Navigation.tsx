@@ -30,7 +30,7 @@ function NavLinks({
             <Link
               href={href}
               onClick={onNavigate}
-              className={`text-[0.9rem] no-underline transition-colors duration-200 ${
+              className={`text-[0.95rem] no-underline transition-colors duration-200 ${
                 chatActive
                   ? "text-accent"
                   : "text-muted hover:text-foreground"
@@ -51,7 +51,7 @@ function GitHubButton({ className }: { className?: string }) {
       href={GITHUB_REPO}
       target="_blank"
       rel="noopener noreferrer"
-      className={`inline-flex cursor-pointer items-center justify-center rounded-md border border-accent bg-transparent px-[18px] py-[7px] text-[0.85rem] text-accent no-underline transition-all duration-200 hover:bg-accent hover:text-black ${className ?? ""}`}
+      className={`inline-flex cursor-pointer items-center justify-center rounded-md border border-accent bg-transparent px-[18px] py-[7px] text-[0.9rem] text-accent no-underline transition-all duration-200 hover:bg-accent hover:text-black ${className ?? ""}`}
     >
       GitHub
     </a>
@@ -71,7 +71,7 @@ export default function Navigation() {
       <nav className="mx-auto flex min-h-[60px] max-w-[1100px] items-center justify-between gap-4 px-4">
         <Link
           href="/"
-          className="flex shrink-0 items-center gap-2.5 font-mono text-xl font-bold no-underline md:text-[1.35rem]"
+          className="flex shrink-0 items-center gap-2.5 font-mono text-[1.1rem] font-bold no-underline"
         >
           <Image
             src="/chatvector-logo.svg"

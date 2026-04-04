@@ -73,7 +73,7 @@ export default function Developers() {
           <br />
           read the source code.
         </h2>
-        <p className="mb-12 max-w-[540px] text-[1.05rem] font-light leading-[1.7] text-muted">
+        <p className="mb-12 max-w-[540px] text-[1.1rem] font-light leading-[1.7] text-muted">
           Spin up an instance, point the SDK at it, and start querying your
           documents over HTTP. No magic, no lock-in — just a clean API you can
           read and trust.
@@ -101,7 +101,7 @@ export default function Developers() {
                   <h4 className="mb-0.5 text-[0.92rem] font-medium text-foreground">
                     {p.title}
                   </h4>
-                  <p className="m-0 text-[0.82rem] text-muted">{p.desc}</p>
+                  <p className="m-0 text-[0.9rem] text-muted">{p.desc}</p>
                 </div>
               </div>
             ))}

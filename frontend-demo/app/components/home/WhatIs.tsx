@@ -20,10 +20,10 @@ function PipelineStep({
         {num}
       </div>
       <div>
-        <h4 className="mb-0.5 text-[0.9rem] font-medium text-foreground">
+        <h4 className="mb-0.5 text-[0.95rem] font-medium text-foreground">
           {title}
         </h4>
-        <p className="m-0 text-[0.82rem] text-muted">{desc}</p>
+        <p className="m-0 text-[0.9rem] text-muted">{desc}</p>
       </div>
     </div>
   );
@@ -63,7 +63,7 @@ export default function WhatIs() {
           <br />
           and open source.
         </h2>
-        <p className="max-w-[560px] text-[1.05rem] font-light leading-[1.7] text-muted">
+        <p className="max-w-[560px] text-[1.1rem] font-light leading-[1.7] text-muted">
           ChatVector handles the entire retrieval pipeline — from raw documents
           to grounded LLM responses — so you can focus on building, not
           plumbing.
@@ -76,7 +76,7 @@ export default function WhatIs() {
               vendor. ChatVector is different — a deployable service you host
               yourself, with a clean HTTP API and no cloud dependency.
             </p>
-            <p className="text-[0.95rem] leading-[1.8] text-muted">
+            <p className="text-[1rem] leading-[1.8] text-muted">
               Spin up the Docker container, point the SDK at it, and start
               querying your documents in minutes. Built on FastAPI and pgvector.
               Runs anywhere Docker runs.
