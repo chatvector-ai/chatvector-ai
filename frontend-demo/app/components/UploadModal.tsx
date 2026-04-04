@@ -138,15 +138,13 @@ export default function UploadModal({
         className="w-full max-w-[420px] rounded-3xl border border-white/[0.08] bg-zinc-950/90 p-6 shadow-2xl shadow-black/50 ring-1 ring-white/[0.04]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-5 flex items-start justify-between gap-4">
+        <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-semibold tracking-tight text-white">
               Upload document
             </h2>
-            <p className="mt-1 text-sm text-zinc-500">
-              PDF, TXT, or DOCX — we&apos;ll index it for chat
-            </p>
-            <div className="mt-2 flex min-h-[2.5rem] items-center">
+            <p className="mt-1 text-sm text-zinc-500">PDF, TXT, or DOCX</p>
+            <div className="mt-1 flex min-h-[2.5rem] items-center">
               <button
                 type="button"
                 onClick={onClose}
