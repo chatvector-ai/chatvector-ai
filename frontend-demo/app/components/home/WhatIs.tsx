@@ -39,7 +39,7 @@ export default function WhatIs() {
     {
       num: "02",
       title: "Index",
-      desc: "FAISS, Chroma, or your custom vector store. Your choice.",
+      desc: "Embeddings stored in pgvector via Supabase. Fast, reliable, SQL-native.",
     },
     {
       num: "03",
@@ -73,13 +73,13 @@ export default function WhatIs() {
           <div>
             <p className="mb-5 text-[0.95rem] leading-[1.8] text-muted">
               Most RAG implementations are fragile, slow, or locked into a
-              vendor. ChatVector is different — a clean, composable engine built
-              for developers who want full control.
+              vendor. ChatVector is different — a deployable service you host
+              yourself, with a clean HTTP API and no cloud dependency.
             </p>
             <p className="text-[0.95rem] leading-[1.8] text-muted">
-              Swap your vector store, your LLM, or your chunking strategy
-              without rewriting your app. Built on battle-tested primitives.
-              Runs anywhere Python runs.
+              Spin up the Docker container, point the SDK at it, and start
+              querying your documents in minutes. Built on FastAPI and pgvector.
+              Runs anywhere Docker runs.
             </p>
           </div>
           <div className="rounded-xl border border-border bg-surface p-6">
