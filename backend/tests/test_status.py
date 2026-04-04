@@ -182,3 +182,43 @@ async def test_run_health_check_with_cache_tracks_embedding_and_llm_independentl
 )
 def test_overall_status_combinations(db_ok, embedding_ok, llm_ok, expected):
     assert _overall_status(db_ok, embedding_ok, llm_ok) == expected
+
+
+# NEW TEST: failing result cached, then refreshed after TTL
+@pytest.mark.asyncio
+async def test_run_health_check_with_cache_failing_result_cached_then_refreshed_after_ttl(monkeypatch):
+    clock = _FakeClock()
+    monkeypatch.setattr(status_module.time, "monotonic", clock.monotonic)
+    monkeypatch.setattr(status_module.time, "time", clock.time)
+    monkeypatch.setattr(status_module.config, "HEALTH_CHECK_CACHE_TTL_SECONDS", 60)
+    health_check = AsyncMock(
+        side_effect=[
+            {"status": "error", "error": "timeout"},
+            {"status": "ok", "latency_ms": 42},
+        ]
+    )
+
+    # First call — failing result, not cached
+    first = await _run_health_check_with_cache("embedding", health_check)
+
+    # Within TTL — same failing result served from cache
+    clock.advance(30)
+    second = await _run_health_check_with_cache("embedding", health_check)
+
+    # After TTL — fresh call, now returns ok
+    clock.advance(31)
+    third = await _run_health_check_with_cache("embedding", health_check)
+
+    assert first["cached"] is False
+    assert first["status"] == "error"
+
+    assert second["cached"] is True
+    assert second["status"] == "error"
+    assert second["checked_at"] == first["checked_at"]
+
+    assert third["cached"] is False
+    assert third["status"] == "ok"
+    assert third["latency_ms"] == 42
+    assert third["checked_at"] != first["checked_at"]
+
+    assert health_check.await_count == 2

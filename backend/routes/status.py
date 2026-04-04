@@ -401,9 +401,15 @@ def _format_ascii(data: dict) -> str:
     return "\n".join(lines)
 
 
+# FIX: Added cached=False and checked_at fields to match response contract
 def _status_fallback_health_dict(exc: BaseException, label: str) -> dict:
     logger.exception("%s health check raised unexpectedly", label)
-    return {"status": "error", "error": _short_error_message(exc)}
+    return {
+        "status": "error",
+        "error": _short_error_message(exc),
+        "cached": False,
+        "checked_at": datetime.utcnow().isoformat() + "Z",
+    }
 
 
 @router.get("/status")
