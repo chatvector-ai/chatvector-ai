@@ -244,7 +244,15 @@ export default function ChatPage() {
           onClose={() => setShowModal(false)}
           onBeforeUpload={handleBeforeUpload}
           onUploadAccepted={handleUploadAccepted}
-          attachment={attachment}
+          attachment={
+            attachment
+              ? {
+                  status: attachment.status,
+                  stage: poll.stage,
+                  chunks: poll.chunks,
+                }
+              : null
+          }
         />
       )}
 

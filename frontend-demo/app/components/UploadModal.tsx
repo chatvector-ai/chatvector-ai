@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect } from "react";
 import { X, Upload, Loader2 } from "lucide-react";
 import { uploadDocument } from "../lib/api";
+import { STAGE_LABELS } from "../lib/stageLabels";
 
 export type UploadAcceptedPayload = {
   fileName: string;
@@ -12,6 +13,8 @@ export type UploadAcceptedPayload = {
 
 export type UploadModalAttachment = {
   status: "processing" | "ready" | "failed";
+  stage?: string;
+  chunks?: { total: number; processed: number };
 };
 
 type Props = {
@@ -130,7 +133,14 @@ export default function UploadModal({
           {showProcessing && (
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="text-indigo-400 animate-spin" size={28} />
-              <p className="text-indigo-400 text-sm">Processing your document…</p>
+              <p className="text-indigo-400 text-sm">
+                {attachment?.stage
+                  ? STAGE_LABELS[attachment.stage] ?? attachment.stage
+                  : "Processing your document…"}
+                {attachment?.stage === "embedding" && attachment?.chunks?.total
+                  ? ` (${attachment.chunks.total} chunks)`
+                  : ""}
+              </p>
             </div>
           )}
           {showFailed && (
