@@ -30,10 +30,10 @@ function NavLinks({
             <Link
               href={href}
               onClick={onNavigate}
-              className={`text-[0.95rem] no-underline transition-colors duration-200 ${
+              className={`text-[1.05rem] no-underline transition-colors duration-200 ${
                 chatActive
-                  ? "text-accent"
-                  : "text-muted hover:text-foreground"
+                  ? "text-blue"
+                  : "text-white hover:text-accent"
               }`}
             >
               {label}
@@ -51,7 +51,7 @@ function GitHubButton({ className }: { className?: string }) {
       href={GITHUB_REPO}
       target="_blank"
       rel="noopener noreferrer"
-      className={`inline-flex cursor-pointer items-center justify-center rounded-md border border-accent bg-transparent px-[18px] py-[7px] text-[0.9rem] text-accent no-underline transition-all duration-200 hover:bg-accent hover:text-black ${className ?? ""}`}
+      className={`inline-flex cursor-pointer items-center justify-center rounded-md border border-white/25 bg-transparent px-[18px] py-[7px] text-[1.05rem] text-white no-underline transition-all duration-200 hover:border-accent hover:bg-accent/10 hover:text-accent ${className ?? ""}`}
     >
       GitHub
     </a>
@@ -71,17 +71,17 @@ export default function Navigation() {
       <nav className="mx-auto flex min-h-[60px] max-w-[1100px] items-center justify-between gap-4 px-4">
         <Link
           href="/"
-          className="flex shrink-0 items-center gap-2.5 font-mono text-[1.1rem] font-bold no-underline"
+          className="flex shrink-0 items-center gap-2.5 font-mono text-[1.25rem] font-bold no-underline"
         >
           <Image
             src="/chatvector-logo.svg"
             alt=""
-            width={36}
-            height={36}
+            width={40}
+            height={40}
             unoptimized
-            className="size-9 shrink-0"
+            className="size-10 shrink-0"
           />
-          <span className="bg-gradient-to-r from-accent to-blue bg-clip-text text-transparent">
+          <span className="text-[1.5rem] bg-gradient-to-r from-accent to-blue bg-clip-text text-transparent">
             ChatVector
           </span>
         </Link>
@@ -97,7 +97,7 @@ export default function Navigation() {
             aria-expanded={mobileOpen}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             onClick={() => setMobileOpen((o) => !o)}
-            className="cursor-pointer rounded-md border border-border bg-transparent px-3 py-2 text-base leading-none text-foreground md:hidden"
+            className="cursor-pointer rounded-md border border-border bg-transparent px-3 py-2 text-lg leading-none text-white hover:text-blue md:hidden"
           >
             {mobileOpen ? "✕" : "☰"}
           </button>

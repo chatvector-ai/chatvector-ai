@@ -16,8 +16,10 @@ export default function Footer() {
   return (
     <footer className="border-t border-border px-8 py-10">
       <div className="mx-auto flex max-w-[1100px] flex-wrap items-center justify-between gap-6">
-        <div className="font-mono text-base font-bold text-accent">
-          ChatVector
+        <div className="font-mono text-[1.2rem] font-bold text-accent">
+        <span className="bg-gradient-to-r from-accent to-blue bg-clip-text text-transparent">
+            ChatVector
+          </span>
         </div>
         <div className="flex flex-wrap gap-8">
           {FOOTER_LINKS.map(({ label, href, external }) => (
@@ -34,7 +36,7 @@ export default function Footer() {
           ))}
         </div>
         {/* --subtle is dimmer than --muted but still readable on --background (unlike --border) */}
-        <div className="text-[0.87rem] text-subtle">
+        <div className="text-[0.95rem] text-subtle">
           © 2026 ChatVector · Open Source · MIT
         </div>
       </div>
