@@ -14,12 +14,23 @@ import {
 } from "../lib/api";
 import { useDocumentPolling } from "../lib/hooks/useDocumentPolling";
 
+function deduplicatedSources(sources: ChatSource[]): ChatSource[] {
+  const seen = new Set<string>();
+  return sources.filter((s) => {
+    const key = `${s.file_name}::${s.page_number ?? "null"}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 type Message = {
   id: number;
-  sender: "ai" | "user";
+  sender: "user" | "ai";
   text: string;
   document_id?: string;
   sources?: ChatSource[];
+  chunks?: number;
 };
 
 const welcomeMessages: Message[] = [
@@ -159,6 +170,7 @@ export default function ChatPage() {
           sender: "ai",
           text: response.answer,
           sources: response.sources,
+          chunks: response.chunks,
         },
       ]);
     } catch (e) {
@@ -261,6 +273,21 @@ export default function ChatPage() {
             </div>
             <div className={`max-w-[75%] md:max-w-[60%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${msg.sender === "ai" ? "bg-gray-800 text-gray-100 rounded-bl-none" : "bg-indigo-600 text-white rounded-br-none"}`}>
               {msg.text}
+              {msg.sender === "ai" && msg.sources && msg.sources.length > 0 && (
+                <div className="mt-2 flex flex-col gap-1">
+                  {deduplicatedSources(msg.sources).map((s, i) => (
+                    <span key={i} className="text-xs text-gray-500">
+                      {s.file_name}
+                      {s.page_number != null ? ` · p.${s.page_number}` : ""}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {msg.sender === "ai" && msg.chunks === 0 && (
+                <p className="mt-1 text-xs text-gray-500 italic">
+                  No relevant content found in this document.
+                </p>
+              )}
             </div>
           </div>
         ))}
