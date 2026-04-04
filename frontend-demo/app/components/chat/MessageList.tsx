@@ -2,8 +2,7 @@
 
 import type { RefObject } from "react";
 import { Bot, User } from "lucide-react";
-import type { ChatSource } from "../../lib/api";
-import type { Message } from "../../lib/hooks/useChat";
+import type { ChatSource, Message } from "../../lib/api";
 
 type Props = {
   messages: Message[];

@@ -6,18 +6,9 @@ import {
   sendMessage,
   ChatError,
   type AttachmentState,
-  type ChatSource,
+  type Message,
 } from "../api";
 import { useDocumentPolling } from "./useDocumentPolling";
-
-export type Message = {
-  id: number;
-  sender: "user" | "ai";
-  text: string;
-  document_id?: string;
-  sources?: ChatSource[];
-  chunks?: number;
-};
 
 const welcomeMessages: Message[] = [
   {

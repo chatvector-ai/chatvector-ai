@@ -6,6 +6,15 @@ export type ChatSource = {
   chunk_index: number | null;
 };
 
+export type Message = {
+  id: number;
+  sender: "user" | "ai";
+  text: string;
+  document_id?: string;
+  sources?: ChatSource[];
+  chunks?: number;
+};
+
 export type ChatResponse = {
   question: string;
   chunks: number;
