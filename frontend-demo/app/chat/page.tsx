@@ -1,17 +1,18 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, FileText, X } from "lucide-react";
+import { Send, Bot, User } from "lucide-react";
 import UploadButton from "../components/UploadButton";
 import UploadModal from "../components/UploadModal";
+import AttachmentChip from "../components/AttachmentChip";
 import {
   deleteDocument,
-  DocumentNotFoundError,
-  getDocumentStatus,
   sendMessage,
   ChatError,
+  type AttachmentState,
+  type ChatSource,
 } from "../lib/api";
-import type { ChatSource } from "../lib/api";
+import { useDocumentPolling } from "../lib/hooks/useDocumentPolling";
 
 type Message = {
   id: number;
@@ -19,13 +20,6 @@ type Message = {
   text: string;
   document_id?: string;
   sources?: ChatSource[];
-};
-
-type AttachmentState = {
-  fileName: string;
-  documentId: string;
-  statusEndpoint: string;
-  status: "processing" | "ready" | "failed";
 };
 
 const welcomeMessages: Message[] = [
@@ -44,65 +38,68 @@ export default function ChatPage() {
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [inflight, setInflight] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const readyAnnouncedForDocRef = useRef<string | null>(null);
+
+  const poll = useDocumentPolling(
+    attachment?.documentId,
+    attachment?.statusEndpoint,
+    attachment?.status
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, inflight]);
 
   useEffect(() => {
-    if (!attachment || attachment.status !== "processing") return;
+    if (poll.status === "ready") {
+      setShowModal(false);
+    }
+  }, [poll.status]);
 
+  useEffect(() => {
+    readyAnnouncedForDocRef.current = null;
+  }, [attachment?.documentId]);
+
+  useEffect(() => {
+    if (poll.status !== "ready" || !attachment || attachment.status !== "processing") {
+      return;
+    }
     const docId = attachment.documentId;
-    const statusPath = attachment.statusEndpoint;
-    let cancelled = false;
-
-    const poll = async () => {
-      if (cancelled) return;
-      try {
-        const { status: st } = await getDocumentStatus(statusPath);
-        if (st === "completed") {
-          let readyName = "";
-          setAttachment((curr) => {
-            if (!curr || curr.documentId !== docId || curr.status !== "processing") {
-              return curr;
-            }
-            readyName = curr.fileName;
-            return { ...curr, status: "ready" };
-          });
-          if (readyName) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: Date.now(),
-                sender: "ai",
-                text: `Document "${readyName}" is ready. You can ask questions about it.`,
-              },
-            ]);
-          }
-        } else if (st === "failed") {
-          setAttachment((curr) =>
-            curr?.documentId === docId ? { ...curr, status: "failed" } : curr
-          );
-        }
-      } catch (e) {
-        if (e instanceof DocumentNotFoundError) {
-          setAttachment((curr) =>
-            curr?.documentId === docId ? { ...curr, status: "failed" } : curr
-          );
-          return;
-        }
-        /* next interval */
+    if (readyAnnouncedForDocRef.current === docId) {
+      return;
+    }
+    readyAnnouncedForDocRef.current = docId;
+    const name = attachment.fileName;
+    setAttachment((curr) => {
+      if (!curr || curr.documentId !== docId || curr.status !== "processing") {
+        return curr;
       }
-    };
+      return {
+        ...curr,
+        status: "ready",
+        stage: "completed",
+        chunks: poll.chunks,
+      };
+    });
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        sender: "ai",
+        text: `Document "${name}" is ready. You can ask questions about it.`,
+      },
+    ]);
+  }, [poll.status, poll.chunks, attachment]);
 
-    void poll();
-    const interval = setInterval(poll, 2500);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- deps are the primitive values we react to, not the object ref
-  }, [attachment?.documentId, attachment?.status]);
+  useEffect(() => {
+    if (poll.status !== "failed" || !attachment || attachment.status !== "processing") {
+      return;
+    }
+    const docId = attachment.documentId;
+    setAttachment((curr) =>
+      curr?.documentId === docId ? { ...curr, status: "failed" } : curr
+    );
+  }, [poll.status, attachment]);
 
   const handleSend = async () => {
     const text = input.trim();
@@ -210,13 +207,6 @@ export default function ChatPage() {
     }
   };
 
-  const chipLabel =
-    attachment?.status === "processing"
-      ? "Processing…"
-      : attachment?.status === "failed"
-        ? "Processing failed"
-        : attachment?.fileName ?? "";
-
   const sendDisabled =
     inflight || !input.trim() || attachment?.status === "processing";
 
@@ -258,38 +248,14 @@ export default function ChatPage() {
       </div>
 
       {attachment && (
-        <div className="px-4 py-2 bg-gray-900 border-t border-gray-800 flex items-center gap-2">
-          <FileText
-            size={14}
-            className={
-              attachment.status === "failed"
-                ? "text-red-400"
-                : attachment.status === "processing"
-                  ? "text-amber-400"
-                  : "text-indigo-400"
-            }
-          />
-          <span className="text-xs text-gray-400">Active document:</span>
-          <span
-            className={`text-xs font-medium flex-1 truncate ${
-              attachment.status === "failed"
-                ? "text-red-400"
-                : attachment.status === "processing"
-                  ? "text-amber-400"
-                  : "text-indigo-400"
-            }`}
-          >
-            {chipLabel}
-          </span>
-          <button
-            type="button"
-            onClick={handleRemoveAttachment}
-            className="p-1 rounded-md text-gray-500 hover:text-white hover:bg-gray-800 transition shrink-0"
-            aria-label="Remove attachment"
-          >
-            <X size={16} />
-          </button>
-        </div>
+        <AttachmentChip
+          fileName={attachment.fileName}
+          status={attachment.status}
+          stage={poll.stage}
+          chunks={poll.chunks}
+          awaitingProcessing={poll.awaitingProcessing}
+          onRemove={() => void handleRemoveAttachment()}
+        />
       )}
       {attachment?.status === "processing" && (
         <p className="px-4 pb-1 text-xs text-amber-400 bg-gray-900">

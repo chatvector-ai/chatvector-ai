@@ -76,14 +76,47 @@ export class DocumentNotFoundError extends Error {
   }
 }
 
+export type AttachmentState = {
+  fileName: string;
+  documentId: string;
+  statusEndpoint: string;
+  status: "processing" | "ready" | "failed";
+  stage?: string;
+  chunks?: { total: number; processed: number };
+};
+
+export type DocumentStatusPayload = {
+  status: string;
+  stage?: string;
+  chunks?: { total: number; processed: number } | null;
+};
+
+function parseChunks(raw: unknown): { total: number; processed: number } | undefined {
+  if (raw == null || typeof raw !== "object") return undefined;
+  const o = raw as Record<string, unknown>;
+  const total = o.total;
+  const processed = o.processed;
+  if (typeof total !== "number" || typeof processed !== "number") return undefined;
+  return { total, processed };
+}
+
 export async function getDocumentStatus(
   statusEndpoint: string
-): Promise<{ status: string }> {
+): Promise<DocumentStatusPayload> {
   const res = await fetch(`${API_BASE}${statusEndpoint}`);
   if (res.status === 404) throw new DocumentNotFoundError();
   if (!res.ok) throw new Error(`Status check failed: ${res.status}`);
-  const data = await res.json();
-  return { status: String(data?.status ?? "") };
+  const data = (await res.json()) as Record<string, unknown>;
+  const status = String(data?.status ?? "");
+  const stageRaw = data?.stage;
+  const stage =
+    typeof stageRaw === "string" && stageRaw.length > 0 ? stageRaw : undefined;
+  const chunks = parseChunks(data?.chunks);
+  return {
+    status,
+    ...(stage !== undefined ? { stage } : {}),
+    ...(chunks !== undefined ? { chunks } : {}),
+  };
 }
 
 export async function uploadDocument(
