@@ -10,6 +10,7 @@ import db
 from core.config import STALE_INGESTION_STATUSES, config
 from logging_config.logging_config import setup_logging
 from middleware.rate_limit import limiter, rate_limit_exceeded_handler
+from middleware.security_headers import SecurityHeadersMiddleware
 from middleware.request_id import register_request_id_middleware
 from routes.chat import router as chat_router
 from routes.documents import router as documents_router
@@ -51,6 +52,7 @@ app = FastAPI(lifespan=lifespan)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
