@@ -12,6 +12,7 @@ const SECTION_LINKS = [
   { label: "Features", href: "/#features" },
   { label: "Developers", href: "/#developers" },
   { label: "Chat", href: "/chat" },
+  { label: "Contributors", href: "/contributors" },
 ] as const;
 
 function NavLinks({
@@ -27,7 +28,7 @@ function NavLinks({
   return (
     <>
       {SECTION_LINKS.map(({ label, href }) => {
-        const chatActive = href === "/chat" && pathname === "/chat";
+        const isActive = pathname === href;
         return (
           <li
             key={label}
@@ -37,7 +38,7 @@ function NavLinks({
               href={href}
               onClick={onNavigate}
               className={`text-[1.05rem] no-underline transition-colors duration-200 ${
-                chatActive
+                isActive
                   ? "text-accent"
                   : "text-white hover:text-accent"
               }`}
