@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import bisect
 import logging
+import pathlib
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -639,7 +640,11 @@ class _FileMetadata:
     content_type: str
     filename: str
 
-
+def _sanitize_filename(name: str, max_length: int = 255) -> str:
+    name = pathlib.Path(name).name  # strip path components
+    name = re.sub(r"[^\w\s\-.]", "", name)  # strip control/special chars
+    name = name.strip()[:max_length]
+    return name or "upload"
 class UploadPipelineError(Exception):
     def __init__(
         self,
@@ -721,6 +726,25 @@ class IngestionPipeline:
                 ),
             )
 
+        if file.content_type == "application/pdf" and not file_bytes.startswith(b"%PDF-"):
+            raise UploadPipelineError(
+                status_code=400,
+                code="invalid_file_content",
+                stage=stage,
+                message="File content does not match the declared PDF type.",
+            )
+
+        if file.content_type == "text/plain":
+            try:
+                file_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                raise UploadPipelineError(
+                    status_code=400,
+                    code="invalid_file_content",
+                    stage=stage,
+                    message="File content is not valid UTF-8 text.",
+                )
+
     async def _update_status(
         self,
         doc_id: str,
@@ -752,7 +776,8 @@ class IngestionPipeline:
             logger.error(f"Failed to cleanup chunks for document {doc_id}: {cleanup_error}")
 
     async def process_document(self, file: UploadFile) -> dict:
-        logger.info(f"Starting upload for file: {file.filename} ({file.content_type})")
+        safe_filename = _sanitize_filename(file.filename or "")
+        logger.info(f"Starting upload for file: {safe_filename} ({file.content_type})")
 
         doc_id: str | None = None
         stage = "validation"
@@ -762,12 +787,13 @@ class IngestionPipeline:
             self.validate_file(file, file_bytes)
 
             stage = "uploaded"
-            doc_id = await db.create_document(file.filename)
+            doc_id = await db.create_document(safe_filename)
             await self._update_status(doc_id=doc_id, status="uploaded")
 
             stage = "extracting"
             await self._update_status(doc_id=doc_id, status="extracting")
-            file_text, page_boundaries = await extract_text_with_metadata(file, file_bytes)
+            file_meta = _FileMetadata(content_type=file.content_type, filename=safe_filename)
+            file_text, page_boundaries = await extract_text_with_metadata(file_meta, file_bytes)
             file_text = clean_text(file_text)
 
             if not file_text:
@@ -782,7 +808,7 @@ class IngestionPipeline:
             await self._update_status(doc_id=doc_id, status="chunking")
             langchain_docs = self._chunk_document_text(
                 file_text,
-                file_name=file.filename,
+                file_name=safe_filename,
                 content_type=file.content_type,
             )
 
@@ -849,7 +875,7 @@ class IngestionPipeline:
             if doc_id:
                 await self._handle_error(doc_id=doc_id, stage=stage, message=str(e))
 
-            logger.error(f"Upload failed at stage={stage} for file {file.filename}: {e}")
+            logger.error(f"Upload failed at stage={stage} for file {safe_filename}: {e}")
             raise UploadPipelineError(
                 status_code=500,
                 code="upload_failed",
@@ -873,7 +899,8 @@ class IngestionPipeline:
         Called exclusively by background workers; raises on unrecoverable error
         so the worker can apply retry / DLQ logic.
         """
-        file_meta = _FileMetadata(content_type=content_type, filename=file_name)
+        safe_filename = _sanitize_filename(file_name)
+        file_meta = _FileMetadata(content_type=content_type, filename=safe_filename)
         stage = "extracting"
 
         try:
@@ -894,7 +921,7 @@ class IngestionPipeline:
             await self._update_status(doc_id=doc_id, status="chunking")
             langchain_docs = self._chunk_document_text(
                 file_text,
-                file_name=file_name,
+                file_name=safe_filename,
                 content_type=content_type,
             )
 

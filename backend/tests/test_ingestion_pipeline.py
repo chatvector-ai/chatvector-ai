@@ -115,7 +115,7 @@ async def test_process_document_success_tracks_status_and_returns_status_endpoin
     mock_file = AsyncMock(spec=UploadFile)
     mock_file.filename = "test.pdf"
     mock_file.content_type = "application/pdf"
-    mock_file.read = AsyncMock(return_value=b"fake-pdf-bytes")
+    mock_file.read = AsyncMock(return_value=b"%PDF-fake-pdf-bytes")
 
     monkeypatch.setattr("services.ingestion_pipeline.config.MAX_UPLOAD_SIZE_BYTES", 10 * 1024 * 1024)
     monkeypatch.setattr("services.ingestion_pipeline.config.MAX_UPLOAD_SIZE_MB", 10)
@@ -192,7 +192,7 @@ async def test_process_document_marks_failed_when_no_text_extracted(monkeypatch)
     mock_file = AsyncMock(spec=UploadFile)
     mock_file.filename = "empty.pdf"
     mock_file.content_type = "application/pdf"
-    mock_file.read = AsyncMock(return_value=b"fake-pdf-bytes")
+    mock_file.read = AsyncMock(return_value=b"%PDF-fake-pdf-bytes")
 
     monkeypatch.setattr("services.ingestion_pipeline.config.MAX_UPLOAD_SIZE_BYTES", 10 * 1024 * 1024)
 
@@ -223,7 +223,7 @@ async def test_process_document_marks_failed_on_storage_error(monkeypatch):
     mock_file = AsyncMock(spec=UploadFile)
     mock_file.filename = "store-fail.pdf"
     mock_file.content_type = "application/pdf"
-    mock_file.read = AsyncMock(return_value=b"fake-pdf-bytes")
+    mock_file.read = AsyncMock(return_value=b"%PDF-fake-pdf-bytes")
 
     monkeypatch.setattr("services.ingestion_pipeline.config.MAX_UPLOAD_SIZE_BYTES", 10 * 1024 * 1024)
 
@@ -323,7 +323,7 @@ async def test_process_document_passes_chunk_records_to_store(monkeypatch):
     mock_file = AsyncMock(spec=UploadFile)
     mock_file.filename = "report.pdf"
     mock_file.content_type = "application/pdf"
-    mock_file.read = AsyncMock(return_value=b"fake-pdf-bytes")
+    mock_file.read = AsyncMock(return_value=b"%PDF-fake-pdf-bytes")
 
     monkeypatch.setattr("services.ingestion_pipeline.config.MAX_UPLOAD_SIZE_BYTES", 10 * 1024 * 1024)
     monkeypatch.setattr("services.ingestion_pipeline.config.MAX_UPLOAD_SIZE_MB", 10)
