@@ -640,8 +640,8 @@ class _FileMetadata:
     content_type: str
     filename: str
 
-def _sanitize_filename(name: str, max_length: int = 255) -> str:
-    name = pathlib.Path(name).name  
+def _sanitize_filename(name: str | None, max_length: int = 255) -> str:
+    name = pathlib.Path(name or "").name
     name = re.sub(r"[^\w \-.]", "", name)
     name = name.strip()[:max_length]
     return name or "upload"

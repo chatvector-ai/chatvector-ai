@@ -45,8 +45,8 @@ async def upload(request: Request, file: UploadFile = File(...)):
     doc_id: str | None = None
 
     try:
-        file_bytes = await file.read()
         safe_filename = _sanitize_filename(file.filename)
+        file_bytes = await file.read()
 
         # Validate synchronously before touching the DB
         ingestion_pipeline.validate_file(file, file_bytes)
@@ -117,7 +117,7 @@ async def upload(request: Request, file: UploadFile = File(...)):
                 status="failed",
                 error={"stage": "queued", "message": str(e)[:500]},
             )
-        logger.error(f"Unexpected error during upload of {file.filename!r}: {e}")
+        logger.error(f"Unexpected error during upload of {safe_filename!r}: {e}")
         raise _http_error(
             status_code=500,
             code="upload_failed",
