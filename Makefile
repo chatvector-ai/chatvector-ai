@@ -1,4 +1,4 @@
-.PHONY: help up build down reset logs db sync dev stop
+.PHONY: help up build down reset logs db sync dev stop prod-up prod-down prod-build ci clean
 
 # ==========================================
 # Auto-detect Docker Compose (v1 or v2)
@@ -44,6 +44,11 @@ help:
 	@echo "$(GREEN)make logs$(RESET)    📊 Follow API logs"
 	@echo "$(GREEN)make db$(RESET)      🐘 Open Postgres shell"
 	@echo "$(GREEN)make sync$(RESET)    🔄 Sync with upstream main"
+	@echo "$(GREEN)make prod-up$(RESET)   🚀 Start production stack (compose override)"
+	@echo "$(GREEN)make prod-down$(RESET) 🛑 Stop production stack"
+	@echo "$(GREEN)make prod-build$(RESET) 🔧 Rebuild & start production stack"
+	@echo "$(GREEN)make ci$(RESET)      ✅ Run backend tests (CI parity)"
+	@echo "$(GREEN)make clean$(RESET)   🧹 Remove containers, volumes, and orphans"
 	@echo ""
 	@echo "Using: $(CYAN)$(DOCKER_COMPOSE)$(RESET)"
 	@echo ""
@@ -82,6 +87,26 @@ down:
 reset:
 	$(DOCKER_COMPOSE) down -v
 	@echo "$(YELLOW)💣 Containers and volumes removed$(RESET)"
+
+prod-up:
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml up -d
+	@echo "$(GREEN)🚀 ChatVector production stack started$(RESET)"
+
+prod-down:
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml down
+	@echo "$(YELLOW)🛑 Production stack stopped$(RESET)"
+
+prod-build:
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+	@echo "$(GREEN)🔧 Production containers rebuilt & started$(RESET)"
+
+ci:
+	cd backend && pytest tests/ -v --tb=short
+	@echo "$(GREEN)✅ CI tests complete$(RESET)"
+
+clean:
+	$(DOCKER_COMPOSE) down -v --remove-orphans
+	@echo "$(YELLOW)🧹 Containers, volumes, and orphans removed$(RESET)"
 
 logs:
 	$(DOCKER_COMPOSE) logs -f api

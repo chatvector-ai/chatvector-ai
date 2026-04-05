@@ -12,6 +12,8 @@ Think of it as an engine developers can use to build document-aware applications
   <img src="https://img.shields.io/badge/AI-RAG%20Engine-orange" alt="AI RAG">
 </p>
 
+![CI](https://github.com/chatvector-ai/chatvector-ai/actions/workflows/ci.yml/badge.svg)
+
 ![Python Version](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=github)
 ![FastAPI Version](https://img.shields.io/badge/FastAPI-0.101-green?style=for-the-badge&logo=github)
 ---

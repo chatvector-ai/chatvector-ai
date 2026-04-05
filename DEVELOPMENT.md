@@ -9,6 +9,8 @@
 - [Working with the Database Layer](#working-with-the-database-layer)
 - [Embedding Queue Architecture](#embedding-queue-architecture)
 - [Tests](#tests)
+- [Deployment](#deployment)
+- [CI](#ci)
 - [Advanced Local Development](#advanced-local-development)
 - [Git Workflow](#git-workflow)
 - [Common Tasks](#common-tasks)
@@ -323,6 +325,72 @@ pytest tests/ -v
 
 The bundled binary wheel removes the extra `libpq` setup step, but tests that
 open real PostgreSQL connections still need a running Postgres instance.
+
+---
+
+## Deployment
+
+### Local development
+
+For day-to-day work, use the [Quick Start](#quick-start) flow (`docker compose up --build` or `make up` / `make dev`). That stack mounts live backend code and uses development defaults.
+
+### Local production simulation
+
+To exercise the production Compose override (no code bind mounts, multi-worker API, JSON logs, stricter env):
+
+```bash
+# Copy and configure production env
+cp backend/.env.example backend/.env.prod
+# Edit .env.prod with real values
+
+# Start production stack
+make prod-up
+# or
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+Docker Compose expands `${VAR}` from your process environment or from a `.env` file in the project root. If you keep values only in `backend/.env.prod`, either `export` them before `make prod-up` or pass `--env-file backend/.env.prod` to the `docker compose` command.
+
+**Compose merge note:** `volumes` lists are merged across Compose files, not replaced, so `volumes: []` in `docker-compose.prod.yml` does not strip dev bind mounts from `docker-compose.yml`. Production overrides for `environment`, `command`, `healthcheck`, `restart`, and resource limits still apply.
+
+### Production environment variables
+
+| Variable | Required / optional | Notes |
+| --- | --- | --- |
+| `GEN_AI_KEY` | **Required** | Google AI Studio / Gemini API key |
+| `DATABASE_URL` | **Required** | Async SQLAlchemy URL (e.g. `postgresql+asyncpg://…`) pointing at your Postgres instance |
+| `APP_ENV=production` | **Required** | Disables `/docs` (and related OpenAPI UI), enables JSON-friendly logging expectations |
+| `CORS_ORIGINS` | **Required** | Comma-separated list of allowed browser origins |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | **Required** | Used by the `db` service when using the production override |
+| `LOG_LEVEL` | Optional | Default: `INFO` |
+| `QUEUE_WORKER_COUNT` | Optional | Default: `3` |
+| `QUEUE_EMBEDDING_RPS` | Optional | Default: `2.0` |
+| `LLM_HTTP_TIMEOUT_MS` | Optional | Default: `60000` |
+
+See `backend/.env.example` for the full list of tunables.
+
+### Queue persistence
+
+The Redis queue (#123) is not yet implemented — the current in-memory queue does not persist across restarts. Plan for this in production deployments.
+
+### Ports
+
+- **8000** — HTTP API (expose as needed behind your reverse proxy or load balancer).
+- **5432** — Postgres; keep **internal** to your network or Docker network in production rather than exposing it publicly.
+
+---
+
+## CI
+
+Pull requests and pushes to `main` run the GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml): backend tests against Postgres (pgvector) and a Docker build of the API image. The job is split so it typically finishes within a few minutes.
+
+To run the same test command locally (with Postgres reachable and env vars set as in CI), use:
+
+```bash
+make ci
+```
+
+`pytest` picks up [`backend/pytest.ini`](backend/pytest.ini) when run from the `backend` directory.
 
 ---
 
