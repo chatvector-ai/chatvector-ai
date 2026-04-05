@@ -16,19 +16,19 @@ router = APIRouter()
 
 
 class ChatBatchItem(BaseModel):
-    question: str = Field(..., min_length=1)
+    question: str = Field(..., min_length=1, max_length=2000)
     doc_ids: list[str] = Field(..., min_length=1)
-    match_count: int = Field(default=5, ge=1)
+    match_count: int = Field(default=5, ge=1, le=20)
 
 
 class ChatBatchRequest(BaseModel):
-    queries: list[ChatBatchItem] = Field(..., min_length=1)
+    queries: list[ChatBatchItem] = Field(..., min_length=1, max_length=20)
 
 
 class ChatRequest(BaseModel):
-    question: str = Field(..., min_length=1)
-    doc_id: str = Field(..., min_length=1)
-    match_count: int = Field(default=5, ge=1)
+    question: str = Field(..., min_length=1, max_length=2000)
+    doc_id: str = Field(..., min_length=1, max_length=100)
+    match_count: int = Field(default=5, ge=1, le=20)
 
 
 @router.post("/chat")

@@ -134,3 +134,19 @@ class Settings:
 
 
 config = Settings()
+
+
+def _validate_cors_origins(origins: list[str]) -> None:
+    for origin in origins:
+        if origin.strip() == "*":
+            import warnings
+
+            warnings.warn(
+                "CORS_ORIGINS contains '*' but allow_credentials=True is set. "
+                "Browsers will reject credentialed requests to wildcard origins. "
+                "Set explicit origins in CORS_ORIGINS.",
+                stacklevel=2,
+            )
+
+
+_validate_cors_origins(config.CORS_ORIGINS)
