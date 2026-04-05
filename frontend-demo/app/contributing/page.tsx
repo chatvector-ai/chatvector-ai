@@ -1,12 +1,12 @@
 export default function ContributingPage() {
   return (
-    <div className="max-w-[720px] mx-auto px-4 py-10 text-muted">
+    <div className="max-w-[720px] mx-auto px-4 py-10">
       
-      <h1 className="text-3xl font-bold mb-6 text-accent">
+      <h1 className="text-3xl font-bold mb-6 text-foreground">
         Contributing
       </h1>
 
-      <p className="mb-6 text-[1rem] leading-[1.8]">
+      <p className="text-foreground text-[1rem] leading-[1.8] mb-6">
         Learn how to get started with contributing to ChatVector and find ways to get involved.
       </p>
 
@@ -15,9 +15,12 @@ export default function ContributingPage() {
         Finding Issues
       </h2>
       <div className="bg-surface border border-border border-l-[3px] border-l-accent p-4 mb-6">
-        <p className="text-[1rem] leading-[1.8]">
-          Look for issues labeled <span className="text-accent">good first issue</span> to get started easily. 
-          You can also explore the project board to see what is currently being worked on or find tasks that match your interests.
+        <p className="text-foreground text-[1rem] leading-[1.8]">
+          Look for issues labeled{" "}
+          <code className="px-1 py-0.5 bg-surface border border-border rounded">
+            good first issue
+          </code>{" "}
+          to get started easily. You can also explore the project board to see what is currently being worked on or find tasks that match your interests.
         </p>
       </div>
 
@@ -26,11 +29,24 @@ export default function ContributingPage() {
         Branch & Commit Naming
       </h2>
       <div className="bg-surface border border-border border-l-[3px] border-l-accent p-4 mb-6">
-        <p className="text-[1rem] leading-[1.8]">
-          Use a clear naming convention like <span className="text-accent">type/description</span>. 
-          Examples include <span className="text-accent">feat/add-feature</span>, 
-          <span className="text-accent">fix/bug-fix</span>, and <span className="text-accent">docs/update-readme</span>. 
-          Keep your commits focused and descriptive.
+        <p className="text-foreground text-[1rem] leading-[1.8]">
+          Use a clear naming convention like{" "}
+          <code className="px-1 py-0.5 bg-surface border border-border rounded">
+            type/description
+          </code>
+          . Examples include{" "}
+          <code className="px-1 py-0.5 bg-surface border border-border rounded">
+            feat/add-feature
+          </code>
+          ,{" "}
+          <code className="px-1 py-0.5 bg-surface border border-border rounded">
+            fix/bug-fix
+          </code>
+          , and{" "}
+          <code className="px-1 py-0.5 bg-surface border border-border rounded">
+            docs/update-readme
+          </code>
+          . Keep your commits focused and descriptive.
         </p>
       </div>
 
@@ -39,7 +55,7 @@ export default function ContributingPage() {
         Pull Request Process
       </h2>
       <div className="bg-surface border border-border border-l-[3px] border-l-accent p-4 mb-6">
-        <p className="text-[1rem] leading-[1.8]">
+        <p className="text-foreground text-[1rem] leading-[1.8]">
           Create a new branch, implement your changes, and open a pull request from your fork to the main repository. 
           Make sure to clearly describe what your PR does, how it was tested, and follow the checklist before submitting.
         </p>
@@ -92,8 +108,8 @@ export default function ContributingPage() {
         </li>
       </ul>
 
-      {/* Footer Reference */}
-      <p className="mt-6 text-sm text-muted">
+      {/* Footer */}
+      <p className="text-foreground text-[1rem] leading-[1.8]">
         For the full contribution guide, see{" "}
         <a 
           href="https://github.com/chatvector-ai/chatvector-ai/blob/main/CONTRIBUTING.md"
