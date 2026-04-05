@@ -34,7 +34,7 @@ export default function ChatInput({
   onUploadClick,
 }: Props) {
   return (
-    <>
+    <div className="shrink-0 bg-background">
       {attachment && (
         <AttachmentChip
           fileName={attachment.fileName}
@@ -96,6 +96,6 @@ export default function ChatInput({
           ChatVector may make mistakes. Always verify important information.
         </p>
       </div>
-    </>
+    </div>
   );
 }
