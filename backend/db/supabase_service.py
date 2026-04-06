@@ -125,7 +125,11 @@ class SupabaseService(DatabaseService):
                 await self.update_document_status(
                     doc_id,
                     status="failed",
-                    error={"stage": "storing", "message": str(e)},
+                    error={
+                        "stage": "storing", 
+                        "code": "pipeline_error", 
+                        "message": "Document processing failed."
+                    },
                 )
             raise
 

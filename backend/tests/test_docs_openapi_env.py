@@ -39,3 +39,27 @@ def test_docs_returns_200_when_app_env_development(monkeypatch):
 
     with TestClient(main.app) as client:
         assert client.get("/docs").status_code == 200
+
+
+def test_global_exception_handler_masks_errors(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "development")
+    import core.config
+    import main
+
+    importlib.reload(core.config)
+    importlib.reload(main)
+
+    @main.app.get("/force-error-for-test")
+    def force_error():
+        raise RuntimeError("SENSITIVE_DB_PASSWORD_LEAK")
+
+    with TestClient(main.app, raise_server_exceptions=False) as client:
+        response = client.get("/force-error-for-test")
+
+    assert response.status_code == 500
+    data = response.json()
+    
+    assert data["detail"]["code"] == "internal_error"
+    assert data["detail"]["message"] == "An unexpected error occurred."
+    
+    assert "SENSITIVE_DB_PASSWORD_LEAK" not in response.text
