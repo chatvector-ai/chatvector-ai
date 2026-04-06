@@ -765,12 +765,15 @@ class IngestionPipeline:
         )
 
     async def _handle_error(self, doc_id: str, stage: str, message: str) -> None:
-        safe_message = message[:500]
         try:
             await self._update_status(
                 doc_id=doc_id,
                 status="failed",
-                error={"stage": stage, "message": safe_message},
+                error={
+                    "stage": stage,
+                    "code": "pipeline_error",
+                    "message": "An error occurred during document processing."
+                },
             )
         except Exception as status_error:
             logger.error(f"Failed to mark document {doc_id} as failed: {status_error}")

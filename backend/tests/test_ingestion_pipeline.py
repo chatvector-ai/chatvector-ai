@@ -253,6 +253,8 @@ async def test_process_document_marks_failed_on_storage_error(monkeypatch):
     assert mock_update.await_args_list[-1].kwargs["status"] == "failed"
     assert mock_update.await_args_list[-1].kwargs["error"]["stage"] == "storing"
 
+    assert mock_update.await_args_list[-1].kwargs["error"]["message"] == "An error occurred during document processing."
+    assert "db down" not in mock_update.await_args_list[-1].kwargs["error"]["message"]
 
 # ---------------------------------------------------------------------------
 # Metadata generation unit tests (Issue #23)

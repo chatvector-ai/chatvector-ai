@@ -272,7 +272,7 @@ async def answer_questions_for_documents_batch(
                 "chunks": 0,
                 "error": {
                     "code": "query_processing_failed",
-                    "message": str(e),
+                    "message": "An error occurred processing this query.",
                 },
             }
 

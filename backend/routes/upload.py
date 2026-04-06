@@ -115,7 +115,11 @@ async def upload(request: Request, file: UploadFile = File(...)):
             await db.update_document_status(
                 doc_id=doc_id,
                 status="failed",
-                error={"stage": "queued", "message": str(e)[:500]},
+                error={
+                    "stage": "queued", 
+                    "code": "upload_failed", 
+                    "message": "An unexpected error occurred during upload."
+                },
             )
         logger.error(f"Unexpected error during upload of {safe_filename!r}: {e}")
         raise _http_error(

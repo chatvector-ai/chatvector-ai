@@ -209,6 +209,8 @@ def test_answer_questions_for_documents_batch_returns_partial_failures():
     assert result[0]["status"] == "ok"
     assert result[1]["status"] == "error"
     assert result[1]["error"]["code"] == "query_processing_failed"
+    assert result[1]["error"]["message"] == "An error occurred processing this query."
+    assert "LLM timeout" not in result[1]["error"]["message"]
 
 
 def test_answer_questions_for_documents_batch_rejects_duplicate_doc_ids():
