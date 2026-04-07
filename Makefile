@@ -1,4 +1,4 @@
-.PHONY: help up build down reset logs db sync dev stop prod-up prod-down prod-build ci clean
+.PHONY: help up build down reset logs db sync dev stop prod-up prod-down prod-build ci tests cleanup clean
 
 # ==========================================
 # Auto-detect Docker Compose (v1 or v2)
@@ -36,19 +36,20 @@ help:
 	@echo ""
 	@echo "$(YELLOW)Available Commands$(RESET)"
 	@echo "-------------------------------------"
-	@echo "$(GREEN)make dev$(RESET)     ⚡ Start backend + frontend together"
-	@echo "$(GREEN)make up$(RESET)      🚀 Start containers"
-	@echo "$(GREEN)make build$(RESET)   🔧 Rebuild & start containers"
-	@echo "$(GREEN)make down$(RESET)    🛑 Stop containers"
-	@echo "$(GREEN)make reset$(RESET)   💣 Stop and remove volumes"
-	@echo "$(GREEN)make logs$(RESET)    📊 Follow API logs"
-	@echo "$(GREEN)make db$(RESET)      🐘 Open Postgres shell"
-	@echo "$(GREEN)make sync$(RESET)    🔄 Sync with upstream main"
+	@echo "$(GREEN)make dev$(RESET)       ⚡ Start backend + frontend together"
+	@echo "$(GREEN)make up$(RESET)        🚀 Start containers"
+	@echo "$(GREEN)make build$(RESET)     🔧 Rebuild & start containers"
+	@echo "$(GREEN)make down$(RESET)      🛑 Stop containers"
+	@echo "$(GREEN)make reset$(RESET)     💣 Stop and remove volumes"
+	@echo "$(GREEN)make logs$(RESET)      📊 Follow API logs"
+	@echo "$(GREEN)make db$(RESET)        🐘 Open Postgres shell"
+	@echo "$(GREEN)make sync$(RESET)      🔄 Sync with upstream main"
 	@echo "$(GREEN)make prod-up$(RESET)   🚀 Start production stack (standalone compose)"
 	@echo "$(GREEN)make prod-down$(RESET) 🛑 Stop production stack"
 	@echo "$(GREEN)make prod-build$(RESET) 🔧 Rebuild & start production stack"
-	@echo "$(GREEN)make ci$(RESET)      ✅ Run backend tests (CI parity)"
-	@echo "$(GREEN)make clean$(RESET)   🧹 Remove containers, volumes, and orphans"
+	@echo "$(GREEN)make tests$(RESET)     ✅ Run tests via Docker (docker compose run --rm tests)"
+	@echo "$(GREEN)make cleanup$(RESET)   🌿 Delete all local branches except main"
+	@echo "$(GREEN)make clean$(RESET)     🧹 Remove containers, volumes, and orphans"
 	@echo ""
 	@echo "Using: $(CYAN)$(DOCKER_COMPOSE)$(RESET)"
 	@echo ""
@@ -100,9 +101,9 @@ prod-build:
 	$(DOCKER_COMPOSE) -f docker-compose.prod.yml up --build -d
 	@echo "$(GREEN)🔧 Production containers rebuilt & started$(RESET)"
 
-ci:
-	cd backend && pytest tests/ -v --tb=short
-	@echo "$(GREEN)✅ CI tests complete$(RESET)"
+tests:
+	$(DOCKER_COMPOSE) run --rm tests
+	@echo "$(GREEN)✅ Tests complete$(RESET)"
 
 clean:
 	$(DOCKER_COMPOSE) down -v --remove-orphans
@@ -122,3 +123,8 @@ sync:
 	git rebase upstream/main
 	git push --force-with-lease
 	@echo "$(GREEN)🔄 Synced with upstream/main$(RESET)"
+
+cleanup:
+	@echo "$(YELLOW)🌿 Deleting all local branches except main...$(RESET)"
+	@git branch | grep -v "^* main$$" | grep -v "^  main$$" | xargs -r git branch -D
+	@echo "$(GREEN)✅ Local branches cleaned up$(RESET)"

@@ -1,86 +1,80 @@
-# ChatVector-AI
+# ChatVector
 
 ### Open-Source Backend-First RAG Engine for Document Intelligence
 
-ChatVector-AI is an open-source Retrieval-Augmented Generation (RAG) engine for ingesting, indexing, and querying unstructured documents such as PDFs and text files.
+ChatVector is an open-source Retrieval-Augmented Generation (RAG) engine for ingesting, indexing, and querying unstructured documents such as PDFs and text files.
 
 Think of it as an engine developers can use to build document-aware applications — such as research assistants, contract analysis tools, or internal knowledge systems — without having to reinvent the RAG pipeline.
 
 <p>
-  <img src="https://img.shields.io/badge/Status-Backend%20MVP-brightgreen" alt="Status">
+  <img src="https://img.shields.io/badge/Status-Active-brightgreen" alt="Status">
   <img src="https://img.shields.io/badge/PRs-Welcome-brightgreen" alt="PRs Welcome">
   <img src="https://img.shields.io/badge/AI-RAG%20Engine-orange" alt="AI RAG">
+  <img src="https://github.com/chatvector-ai/chatvector-ai/actions/workflows/ci.yml/badge.svg" alt="CI">
 </p>
 
-![CI](https://github.com/chatvector-ai/chatvector-ai/actions/workflows/ci.yml/badge.svg)
-
 ![Python Version](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=github)
-![FastAPI Version](https://img.shields.io/badge/FastAPI-0.101-green?style=for-the-badge&logo=github)
+![FastAPI Version](https://img.shields.io/badge/FastAPI-0.121-green?style=for-the-badge&logo=github)
+
 ---
 
 ⭐ **Star the repo to follow progress and support the project!**
 
 [![GitHub stars](https://img.shields.io/github/stars/chatvector-ai/chatvector-ai?style=social)](https://github.com/chatvector-ai/chatvector-ai)
-**Next Milestone:** 25
 
 ---
 
 ## 🔗 Quick Links
 
-[![Good First Issues](https://img.shields.io/badge/Good%20First%20Issues-Start%20Here-brightgreen?style=for-the-badge&logo=github)](https://github.com/chatvector-ai/chatvector-ai/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22) [![Roadmap](https://img.shields.io/badge/Roadmap-Project%20Plan-1f6feb?style=for-the-badge&logo=bookstack&logoColor=white)](ROADMAP.md) [![Quick Setup](https://img.shields.io/badge/Quick%20Setup-5%20Min-2496ED?style=for-the-badge&logo=docker&logoColor=white)](#backend-setup) [![Project Board](https://img.shields.io/badge/Project%20Board-Track%20Progress-6f42c1?style=for-the-badge&logo=github&logoColor=white)](https://github.com/orgs/chatvector-ai/projects/2) [![Dev Notes](https://img.shields.io/badge/Dev%20Notes-Maintainer%20Guide-6e7781?style=for-the-badge&logo=markdown&logoColor=white)](DEVELOPMENT.md) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge&logo=markdown&logoColor=white)](https://opensource.org/license/mit) [![Contributing Docs](https://img.shields.io/badge/Contributing%20Docs-Read%20Guide-0E8A16?style=for-the-badge&logo=bookstack&logoColor=white)](CONTRIBUTING.md) [![Contributing Video](https://img.shields.io/badge/Contributing%20Video-Watch-F24E1E?style=for-the-badge&logo=loom&logoColor=white)](https://www.loom.com/share/c41bdbff541f47d49efcb48920cba382) [![Discussions](https://img.shields.io/badge/Discussions-Ask%20%26%20Share-2da44e?style=for-the-badge&logo=github&logoColor=white)](https://github.com/chatvector-ai/chatvector-ai/discussions/51)
+[![Good First Issues](https://img.shields.io/badge/Good%20First%20Issues-Start%20Here-brightgreen?style=for-the-badge&logo=github)](https://github.com/chatvector-ai/chatvector-ai/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22) [![Roadmap](https://img.shields.io/badge/Roadmap-Project%20Plan-1f6feb?style=for-the-badge&logo=bookstack&logoColor=white)](ROADMAP.md) [![Quick Setup](https://img.shields.io/badge/Quick%20Setup-5%20Min-2496ED?style=for-the-badge&logo=docker&logoColor=white)](#backend-setup) [![Project Board](https://img.shields.io/badge/Project%20Board-Track%20Progress-6f42c1?style=for-the-badge&logo=github&logoColor=white)](https://github.com/orgs/chatvector-ai/projects/2) [![Dev Notes](https://img.shields.io/badge/Dev%20Notes-Maintainer%20Guide-6e7781?style=for-the-badge&logo=markdown&logoColor=white)](DEVELOPMENT.md) [![Architecture](https://img.shields.io/badge/Architecture-Overview-purple?style=for-the-badge&logo=markdown&logoColor=white)](ARCHITECTURE.md) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge&logo=markdown&logoColor=white)](https://opensource.org/license/mit) [![Contributing Docs](https://img.shields.io/badge/Contributing%20Docs-Read%20Guide-0E8A16?style=for-the-badge&logo=bookstack&logoColor=white)](CONTRIBUTING.md) [![Contributing Video](https://img.shields.io/badge/Contributing%20Video-Watch-F24E1E?style=for-the-badge&logo=loom&logoColor=white)](https://www.loom.com/share/c41bdbff541f47d49efcb48920cba382) [![Discussions](https://img.shields.io/badge/Discussions-Ask%20%26%20Share-2da44e?style=for-the-badge&logo=github&logoColor=white)](https://github.com/chatvector-ai/chatvector-ai/discussions/51)
 
 ---
 
 ## 📌 Table of Contents
 
-- [![What is ChatVector-AI?](https://img.shields.io/badge/What%20is-ChatVector%20AI-brightgreen?style=for-the-badge&logo=github)](#-what-is-chatvector-ai)
-- [![ChatVector-AI vs Frameworks](https://img.shields.io/badge/ChatVector%20AI-vs%20Frameworks%20-1f6feb?style=for-the-badge&logo=loom&logoColor=white)](#chatvector-vs-frameworks)
-- [![Who is this for?](https://img.shields.io/badge/Who_is_this_for-Users-blue?style=for-the-badge&logo=target&logoColor=white)](#-who-is-this-for)
-- [![Current Status](https://img.shields.io/badge/Current_Status-Active-success?style=for-the-badge&logo=githubactions&logoColor=white)](#-current-status)
-- [![Architecture Overview](https://img.shields.io/badge/Architecture-Overview-purple?style=for-the-badge&logo=docker&logoColor=white)](#-architecture-overview)
-  - [![Backend Core](https://img.shields.io/badge/Backend_Layer-Core-blue?style=for-the-badge&logo=target&logoColor=white)](#backend-layer-core)
-  - [![AI Retrieval](https://img.shields.io/badge/AI_&_Retrieval-Layer-purple?style=for-the-badge&logo=open-source-initiative&logoColor=white)](#ai--retrieval-layer)
-  - [![Data Layer](https://img.shields.io/badge/Data-Layer-success?style=for-the-badge&logo=fastapi&logoColor=white)](#data-layer)
-  - [![Reference Frontend](https://img.shields.io/badge/Reference_Frontend-Non--Core-orange?style=for-the-badge&logo=react&logoColor=white)](#reference-frontend-non-core)
-- [![Quick Start](https://img.shields.io/badge/Quick_Start-5_Minutes-red?style=for-the-badge&logo=rocket&logoColor=white)](#-quick-start-run-in-5-minutes)
-  - [![Backend Setup](https://img.shields.io/badge/Backend-Setup-blue?style=for-the-badge&logo=fastapi&logoColor=white)](#backend-setup)
-  - [![Frontend Demo](https://img.shields.io/badge/Frontend-Demo-purple?style=for-the-badge&logo=react&logoColor=white)](#frontend-layer-non-core)
-- [![Contributing](https://img.shields.io/badge/Contributing-Welcome-brightgreen?style=for-the-badge&logo=github&logoColor=white)](#-contributing)
-- [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge&logo=open-source-initiative&logoColor=white)](#-license)
+- [What is ChatVector?](#-what-is-chatvector)
+- [ChatVector vs Frameworks](#chatvector-vs-frameworks)
+- [Who is this for?](#-who-is-this-for)
+- [Current Status](#-current-status)
+- [Architecture Overview](#-architecture-overview)
+- [Quick Start](#-quick-start-run-in-5-minutes)
+- [Contributing](#-contributing)
+- [License](#-license)
 
 ---
 
-## 🔎 What is ChatVector-AI?
+## 🔎 What is ChatVector?
 
-ChatVector-AI provides a **clean, extensible backend foundation for RAG-based document intelligence**. It handles the full lifecycle of document Q&A:
+ChatVector provides a **clean, extensible backend foundation for RAG-based document intelligence**. It handles the full lifecycle of document Q&A:
 
-- Document ingestion (PDF, text)
-- Text extraction and chunking
-- Vector embedding and storage
-- Semantic retrieval
-- LLM-powered answer generation
+- Document ingestion (PDF, text) with configurable chunking strategies
+- Text extraction, cleaning, and semantic chunking
+- Vector embedding and storage via pgvector
+- Semantic retrieval with optional query transformations
+- LLM-powered answer generation with cited responses
+- Background processing queue with rate limiting and retry logic
 
-The goal is to offer a **developer-focused RAG engine** that can be embedded into other applications, tools, or products — not a polished end-user SaaS.
+The goal is to offer a **developer-focused RAG engine** you can deploy as a service and integrate via HTTP — not a polished end-user SaaS, and not a framework you have to assemble yourself.
 
 ---
 
 ## ChatVector vs Frameworks
 
-ChatVector-AI is designed as a **production-ready backend engine**, not a general-purpose framework. If you need a running, reliable API for document Q&A, this project provides a complete, opinionated solution. Here's how it compares to the approach of using a modular framework:
+ChatVector is designed as a **production-ready backend service**, not a general-purpose framework. Here's how it compares:
 
-| Aspect                        | **ChatVector-AI (This Project)**                                                                                 | **General AI Framework (e.g., LangChain)**                                                                          |
-| :---------------------------- | :--------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------ |
-| **Primary Goal**              | Deliver a **deployable backend service** for document intelligence.                                              | Provide **modular components** to build a wide variety of AI applications.                                          |
-| **Out-of-the-Box Experience** | A fully functional FastAPI service with logging, testing, and a clean API.                                       | A collection of tools and abstractions you must wire together and productionize.                                    |
-| **Architecture**              | **Batteries-included, opinionated engine.** Get a working system for one use case.                               | **Modular building blocks.** Assemble and customize components for many use cases.                                  |
-| **Best For**                  | Developers, startups, or teams who need a **document Q&A API now** and want to focus on their application layer. | Developers and researchers building novel, complex AI agents or exploring multiple LLM patterns from the ground up. |
-| **Path to Production**        | **Short.** Configure, deploy, and integrate via API. Built-in observability and scaling patterns.                | **Long.** Requires significant additional work on API layers, monitoring, deployment, and performance tuning.       |
+| Aspect | **ChatVector (This Project)** | **General AI Framework (e.g., LangChain)** |
+| :--- | :--- | :--- |
+| **Primary Goal** | Deliver a **deployable backend service** for document intelligence. | Provide **modular components** to build a wide variety of AI applications. |
+| **Out-of-the-Box Experience** | A fully functional FastAPI service with logging, testing, rate limiting, and a clean API. | A collection of tools and abstractions you must wire together and productionize. |
+| **Architecture** | **Batteries-included, opinionated engine.** Get a working system for one use case. | **Modular building blocks.** Assemble and customize components for many use cases. |
+| **Best For** | Developers, startups, or teams who need a **document Q&A API now** and want to focus on their application layer. | Developers and researchers building novel, complex AI agents or exploring multiple LLM patterns from the ground up. |
+| **Path to Production** | **Short.** Configure, deploy, and integrate via API. Built-in observability, rate limiting, and scaling patterns. | **Long.** Requires significant additional work on API layers, monitoring, deployment, and performance tuning. |
 
 ---
 
 ## 👥 Who is this for?
 
-ChatVector-AI is designed for:
+ChatVector is designed for:
 
 - **Developers** building document intelligence tools or internal knowledge systems
 - **Backend engineers** who want a solid RAG foundation without heavy abstractions
@@ -91,28 +85,38 @@ ChatVector-AI is designed for:
 
 ## 🚀 Current Status
 
-### Backend MVP (Core Engine)
+### Phase 2 — Largely Complete
 
-The core RAG backend is **complete and functional**.
+The core RAG backend and frontend demo are fully functional. Phase 2 focused on developer experience, retrieval quality, and production hardening.
 
-**What works today:**
+**What's working today:**
 
-- ✅ PDF text extraction
-- ✅ Basic chunking pipeline
-- ✅ Vector embeddings
-- ✅ Semantic search (pgvector)
-- ✅ LLM-powered answers
-- ✅ Supabase integration
+**Backend**
+- ✅ PDF and text document ingestion
+- ✅ Configurable chunking strategies (fixed, paragraph, semantic)
+- ✅ Vector embeddings + semantic search via pgvector
+- ✅ LLM-powered answers with source citations
+- ✅ Query transformations (rewrite, expand, stepback)
+- ✅ Configurable system prompt and LLM parameters
+- ✅ Background ingestion queue with rate limiting, retry, and DLQ
+- ✅ Structured logging with request ID tracing
+- ✅ Health checks with TTL caching on /status
+- ✅ Per-IP rate limiting on all public endpoints
+- ✅ Security headers, CORS hardening, input validation
+- ✅ Production Compose config + GitHub Actions CI
+- ✅ Python client SDK
 
-**Backend improvements in progress:**
+**Frontend Demo**
+- ✅ Document upload with live pipeline stage display
+- ✅ Real-time ingestion status polling
+- ✅ Full RAG chat with source citations
+- ✅ Responsive design with dark developer aesthetic
 
-- 🚧 Advanced chunking strategies
-- 🚧 Error handling & logging
-- 🚧 API rate limiting
-- 🚧 Performance optimization
-- 🚧 Authentication & access control
-
-Frontend Demo: A lightweight UI for testing the backend API. Not production-ready.
+**In progress / Phase 3:**
+- 🚧 Redis-backed durable ingestion queue (#123)
+- 🚧 Pluggable LLM & embedding providers (Gemini, OpenAI, Ollama)
+- 🚧 Authentication & multi-tenancy
+- 🚧 Streaming LLM responses
 
 ---
 
@@ -120,162 +124,125 @@ Frontend Demo: A lightweight UI for testing the backend API. Not production-read
 
 ### Backend Layer (Core)
 
-- **FastAPI** — modern Python API framework with automatic OpenAPI docs
+- **FastAPI** — modern Python API framework
 - **Uvicorn** — high-performance ASGI server
-- **Design goals:** clarity, extensibility, and debuggability
+- **slowapi** — per-IP rate limiting
+- **Design goals:** clarity, extensibility, resilience, and security by default
 
 ### AI & Retrieval Layer
 
-- **Google AI Studio (Gemini)** — LLM + embeddings
-- **Features:** chunking, semantic retrieval, prompt construction
+- **Google Gemini** — LLM generation + embeddings (pluggable providers planned)
+- **Configurable chunking** — fixed, paragraph, or semantic strategies
+- **Query transformations** — rewrite, expand, or stepback before retrieval
+- **Prompt configuration** — externalized system prompt and LLM parameters
 
 ### Data Layer
 
-- **Supabase** — PostgreSQL backend
-- **pgvector** — native vector similarity search
-- **Storage:** document metadata and embeddings
+- **PostgreSQL + pgvector** — vector similarity search
+- **SQLAlchemy** (development) / **Supabase** (production)
+- **Strategy pattern** — swap backends without touching business logic
 
 ### Reference Frontend (Non-Core)
 
 - **Next.js + TypeScript**
-- Exists solely to demonstrate backend usage
-- Not production-ready
-- Subject to breaking changes
+- Full end-to-end demo — upload, ingest, chat, citations
+- Not production-ready — exists to demonstrate and test backend capabilities
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for full system design details.
 
 ---
 
 ## 🎯 Quick Start: Run in 5 Minutes
 
-## Backend Setup
-
-Follow these steps to get the backend running in under 5 minutes.
-
 ### Prerequisites
 
-- Docker & Docker Compose installed
-  - [Install Docker](https://docs.docker.com/get-docker/) (Mac/Windows/Linux)
+- Docker & Docker Compose — [Install Docker](https://docs.docker.com/get-docker/)
+- Google AI Studio API Key — [Get Key](https://aistudio.google.com/)
 
-- Google AI Studio API Key ([Get Key](https://aistudio.google.com/))
+### Backend Setup
 
-### Setup `.env`
-
+**1. Create `backend/.env`:**
 ```bash
-cd backend
+cp backend/.env.example backend/.env
+```
 
-# Create .env file
-Create .env file in /backend and paste in the following values
-
+Edit `backend/.env` and set your API key:
+```env
 APP_ENV=development
 LOG_LEVEL=INFO
-LOG_USE_UTC=false
 GEN_AI_KEY=your_google_ai_studio_api_key_here
-# Replace GEN_AI_KEY with your actual API key
-
-# Upload validation
 MAX_UPLOAD_SIZE_MB=10
 ```
 
-### Launch Backend
-
-Note: Make sure Docker Desktop is running (Mac/Windows) before executing this command.
-
-Run from the project root (where `docker-compose.yml` is located):
-
+**2. Start the stack:**
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
-**What happens:**
+This starts Postgres with pgvector and the API with live reload.
 
-- Postgres with pgvector starts automatically and initializes tables + vector functions
-- API waits for Postgres healthcheck
-- Live reload enabled for backend code
+**3. Test the API:**
 
-### Test the API
+- Root: http://localhost:8000
+- Swagger UI: http://localhost:8000/docs
 
-- Root: [http://localhost:8000](http://localhost:8000)
-- Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
+**Try the endpoints:**
 
-**Try endpoints:**
-
-1. `/upload` - Upload a PDF and get a `document_id` and `status_endpoint`
-2. `/documents/{document_id}/status` - Poll upload stage/progress metadata
-3. `/chat` - Ask questions using the `document_id`
+1. `POST /upload` — upload a PDF, get a `document_id` and `status_endpoint`
+2. `GET /documents/{document_id}/status` — poll ingestion stage and progress
+3. `POST /chat` — ask questions using the `document_id`
 
 ---
 
-## 2️⃣ Extra Docker Commands
+### Extra Docker Commands
 
-| Command                                      | Purpose                                                                   |
-|----------------------------------------------|---------------------------------------------------------------------------|
-| `docker-compose up`                          | Start containers without rebuilding (normal start).                       |
-| `docker-compose down`                        | Stop containers and preserve data (normal stop).                          |
-| `docker-compose down -v`                     | Stop containers and delete all database data. Use to completely reset DB. |
-| `docker-compose up --build`                  | Rebuild containers after code changes or DB reset.                        |
-| `docker-compose logs -f api`                 | Follow API logs in real time.                                             |
-| `docker-compose exec db psql -U postgres`    | Connect to Postgres inside Docker for manual queries.                     |
+| Command | Purpose |
+|---|---|
+| `docker compose up` | Start containers without rebuilding |
+| `docker compose down` | Stop containers, preserve data |
+| `docker compose down -v` | Stop containers and delete all DB data |
+| `docker compose up --build` | Rebuild containers after code changes |
+| `docker compose logs -f api` | Follow API logs in real time |
+| `docker compose exec db psql -U postgres` | Connect to Postgres directly |
+
+Or use the Makefile shortcuts — run `make help` to see all available commands.
 
 ---
 
-## 3️⃣ Run Python Scripts Outside Docker (Optional / Advanced)
-
-If you want to run scripts or the API **without Docker**:
-
+### Frontend Demo (Non-Core)
 ```bash
-# 1. Create virtual environment
-python -m venv venv
-source venv/bin/activate   # Mac/Linux
-venv\Scripts\activate      # Windows
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Set DATABASE_URL in .env if different from Docker
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
-
-# 4. Run scripts or start API manually
-python scripts/your_script.py
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-**Notes:**
-
-- Requires a running Postgres instance with pgvector enabled
-- Only needed for local development outside Docker
-
----
-
-✅ **Result**
-
-- Docker-first setup is simple, cross-platform, and fully initialized
-- Optional sections give control for resets, logs, or running scripts manually
-
----
-
-## Frontend Layer (Non-Core)
-
-Note: The frontend serves as the web presence for the OSS, and as a testing demo -- but is not central to the actual OSS.
-
-<h4>Prerequisites</h4>
-<ul>
-  <li>Node.js 18+</li>
-  <li>npm or yarn</li>
-</ul>
-
-<h4>Setup Instructions</h4>
-
-```bash
-# 1. Navigate to frontend directory
 cd frontend-demo
-
-# 2. Install dependencies
 npm install
 
-# 3. Start development server
-npm run dev
+# Create frontend env
+echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
 
-#4. Run in browser
-The frontend will run on http://localhost:3000
+npm run dev
+```
+
+Frontend runs at http://localhost:3000
+
+Or start backend + frontend together:
+```bash
+make dev
+```
+
+---
+
+### Python SDK
+```bash
+pip install ./sdk/python
+```
+```python
+from chatvector import ChatVectorClient
+
+with ChatVectorClient("http://localhost:8000") as client:
+    doc = client.upload_document("report.pdf")
+    client.wait_for_ready(doc.document_id, timeout=90)
+    answer = client.chat("What are the key findings?", doc.document_id)
+    print(answer.answer)
+    for source in answer.sources:
+        print(source.file_name, source.page_number)
 ```
 
 ---
@@ -286,19 +253,21 @@ High-impact contribution areas:
 
 - Ingestion & indexing pipelines
 - Retrieval quality & evaluation
-- Chunking strategies
+- Chunking and query transformation strategies
 - API design & refactoring
 - Performance & scaling
+- Security hardening
+- SDK development
 - Documentation & examples
 
 Frontend contributions are welcome but considered **non-core**.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details and
+[Good First Issues](https://github.com/chatvector-ai/chatvector-ai/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
+to get started.
 
 ---
 
 ## 📄 License
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/chatvector-ai/chatvector-ai/blob/main/LICENSE)
-
-

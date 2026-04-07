@@ -97,6 +97,9 @@ async def test_create_document_with_chunks_atomic_supabase_failure_cleanup(monke
     assert cleanup_calls == ["doc-rollback"]
     assert status_updates[0][0] == "doc-rollback"
     assert status_updates[0][1]["status"] == "failed"
+    update_call_args = status_updates[0][1]
+    assert update_call_args["error"]["message"] == "Document processing failed."
+    assert "chunk insert failed" not in str(update_call_args)
 
 
 async def test_ingest_document_atomic_rejects_mismatched_lengths():

@@ -7,10 +7,11 @@
 - [Docker Reference](#docker-reference)
 - [Database Initialization](#database-initialization)
 - [Working with the Database Layer](#working-with-the-database-layer)
-- [Embedding Queue Architecture](#embedding-queue-architecture)
+- [Ingestion Queue](#ingestion-queue)
 - [Tests](#tests)
 - [Deployment](#deployment)
 - [CI](#ci)
+- [Frontend](#frontend)
 - [Advanced Local Development](#advanced-local-development)
 - [Git Workflow](#git-workflow)
 - [Common Tasks](#common-tasks)
@@ -21,8 +22,8 @@
 
 ## API Access
 
-Backend: http://localhost:8000  
-API Docs (Swagger UI): http://localhost:8000/docs  
+Backend: http://localhost:8000
+API Docs (Swagger UI): http://localhost:8000/docs _(disabled when `APP_ENV=production`)_
 Database: PostgreSQL with pgvector (port 5432)
 
 ---
@@ -35,7 +36,7 @@ Start the full backend stack (API + database):
 docker compose up --build
 ```
 
-Backend: http://localhost:8000  
+Backend: http://localhost:8000
 Docs: http://localhost:8000/docs
 
 ---
@@ -72,26 +73,31 @@ docker compose restart
 docker exec -it chatvector-db psql -U postgres -d postgres
 ```
 
-
 ### Makefile Commands
 
-To simplify Docker workflows, the project includes a `Makefile` with short, memorable commands.
-
-These are wrappers around standard `docker compose` commands.  
-You can still use Docker directly if preferred.
-
+The project includes a `Makefile` with short, memorable commands as
+wrappers around standard `docker compose` commands.
 
 ```bash
-make up      # Start containers (detached)
-make build   # Rebuild and start containers
-make down    # Stop containers
-make reset   # Stop containers and remove volumes
-make logs    # Follow API logs
-make db      # Open Postgres shell
-make help    # Show all available commands
+make dev        # Start backend (detached) + frontend dev server
+make up         # Start containers (detached)
+make build      # Rebuild and start containers
+make down       # Stop containers
+make reset      # Stop containers and remove volumes
+make logs       # Follow API logs
+make db         # Open Postgres shell
+make tests      # Run tests via Docker (docker compose run --rm tests)
+make prod-up    # Start production stack (standalone compose)
+make prod-down  # Stop production stack
+make prod-build # Rebuild and start production stack
+make clean      # Remove containers, volumes, and orphans
+make cleanup    # Delete all local branches except main
+make sync       # Sync fork with upstream main
+make help       # Show all available commands
 ```
 
-### Frontend (Local Node )
+Direct `docker compose` usage still works if preferred.
+
 ---
 
 ## Database Initialization
@@ -143,151 +149,52 @@ async def new_operation(self, param: str) -> str:
 ### 3. Use via factory
 
 ```python
-from app.db import new_operation
+import db
 
-result = await new_operation("test")
+result = await db.new_operation("test")
 ```
 
-The factory automatically:
+The factory automatically selects the correct environment, applies
+retry logic with timeouts and jitter, and handles logging.
 
-- Selects the correct environment
-- Applies retry logic
-- Handles logging
+See [ARCHITECTURE.md](ARCHITECTURE.md) for full details on the
+database strategy pattern and retry behavior.
 
 ---
 
-## Embedding Queue Architecture
+## Ingestion Queue
 
-`POST /upload` returns in under 500 ms regardless of file size. The heavy
-work — text extraction, chunking, embedding, and storage — happens in the
-background via an in-memory asyncio queue drained by a pool of worker tasks.
+`POST /upload` returns immediately with a `document_id` and
+`status_endpoint`. Processing happens in the background via an async
+worker pool. Poll `GET /documents/{id}/status` for progress.
 
-### Upload flow
+**Status flow:**
 
 ```
-Client                   API                       Worker pool
-  │                       │                             │
-  │── POST /upload ───────▶│                             │
-  │                       │ validate file               │
-  │                       │ create document (DB)        │
-  │                       │ update status → "queued"    │
-  │                       │ enqueue(job)                │
-  │◀─ 202 {doc_id,        │                             │
-  │    queue_position} ───│                             │
-  │                       │            pick up job ─────▶
-  │                       │            update → extracting
-  │                       │            update → chunking
-  │                       │            rate-limit token
-  │                       │            update → embedding
-  │                       │            update → storing
-  │                       │            update → completed
-  │                       │                             │
-  │── GET /documents/{id}/status ─────────────────────▶ │
-  │◀─ {status: "completed", chunks_processed: 42} ──── │
+queued → extracting → chunking → embedding → storing → completed
+                                                      ↘ failed
 ```
 
-Poll `GET /documents/{id}/status` for progress. While the job is still
-pending, the response also includes a live `queue_position` field.
-
-### Worker pool
-
-Workers are plain asyncio tasks started when the application boots and
-cancelled cleanly on shutdown. The pool size is set with `QUEUE_WORKER_COUNT`
-(default `3`, maximum `5`).
+**Key config:**
 
 ```env
-QUEUE_WORKER_COUNT=3   # number of concurrent background workers (1–5)
-QUEUE_MAX_SIZE=100     # maximum pending jobs; uploads beyond this return 503
+QUEUE_WORKER_COUNT=3      # concurrent background workers (1–5)
+QUEUE_MAX_SIZE=100        # max pending jobs; uploads beyond this return 503
+QUEUE_EMBEDDING_RPS=2.0   # max Gemini embedding API calls/sec across workers
+QUEUE_JOB_MAX_RETRIES=3   # retries before a job moves to DLQ
+QUEUE_RETRY_BASE_DELAY=2.0 # base seconds for retry backoff
 ```
 
-**When to increase workers:** if documents stay in `"queued"` status for a
-long time while the server is otherwise idle, more workers will drain the
-backlog faster. Keep in mind that each worker makes independent embedding
-API calls, so raising `QUEUE_WORKER_COUNT` without also raising
-`QUEUE_EMBEDDING_RPS` will cause workers to serialize on the rate limiter
-rather than truly run in parallel.
-
-### Token bucket rate limiter
-
-The embedding step calls the Google Gemini API. To protect against rate-limit
-errors under load, each worker must acquire a token from a shared token bucket
-before calling `get_embeddings()`. Jobs that fail during extraction or
-chunking (before reaching the embedding step) never consume a token.
-
-```env
-QUEUE_EMBEDDING_RPS=2.0   # max Gemini API calls per second across all workers
-```
-
-The bucket refills continuously at `QUEUE_EMBEDDING_RPS` tokens per second
-with a burst capacity equal to one second of throughput. If all workers race
-to embed at the same time, they queue behind the limiter and are released
-at the configured rate.
-
-**Tuning:** consult your Google AI Studio project's quota page. A typical
-free-tier project allows around 2 requests/second; a paid project may allow
-significantly more. Set `QUEUE_EMBEDDING_RPS` to ~80% of your actual quota
-to leave headroom for the chat endpoint's embedding calls.
-
-### Retry logic and dead-letter queue
-
-If a worker fails at any stage, it retries the full job (extraction through
-storage) up to `QUEUE_JOB_MAX_RETRIES` times. Between attempts the document
-status is set to `"retrying"` so polling clients see a meaningful state
-rather than a transient `"failed"`.
-
-```env
-QUEUE_JOB_MAX_RETRIES=3   # retries before a job is moved to the DLQ
-```
-
-After all retries are exhausted the job is appended to the **dead-letter
-queue (DLQ)** — an in-memory list of lightweight records (no file bytes).
-Inspect it at any time:
+Inspect the dead-letter queue at any time:
 
 ```bash
 curl http://localhost:8000/queue/stats
 ```
 
-```json
-{
-  "queue_size": 2,
-  "worker_count": 3,
-  "dlq_size": 1,
-  "dlq": [
-    {
-      "doc_id": "a1b2c3d4-...",
-      "file_name": "report.pdf",
-      "attempt": 3,
-      "error": "embedding API unavailable",
-      "failed_at": "2026-03-20T21:14:05.123456+00:00"
-    }
-  ]
-}
-```
+> **Note:** The current queue is in-memory and does not persist across
+> restarts. Redis-backed durability is planned in [#123](https://github.com/chatvector-ai/chatvector-ai/issues/123).
 
-The DLQ is in-memory only — it is cleared on server restart. The document's
-`status` in the database is set to `"failed"` with a `failed_stage` and
-`error_message` for durable inspection via `GET /documents/{id}/status`.
-
-### Server restart and in-flight jobs
-
-Because the queue is in-memory, any jobs still pending or being processed at
-the moment the server stops are lost. On the next startup, before workers
-begin accepting new jobs, the application scans the database for documents
-left in any in-progress state and bulk-updates them to `"failed"`:
-
-| Status reset to `"failed"` on startup |
-|---|
-| `queued` |
-| `retrying` |
-| `extracting` |
-| `chunking` |
-| `embedding` |
-| `storing` |
-
-This ensures clients polling for a stale document receive a definitive
-`"failed"` response rather than waiting indefinitely. The original file is
-not retained after the upload request completes, so these documents cannot
-be automatically retried — the client must re-upload.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for full queue and pipeline details.
 
 ---
 
@@ -298,24 +205,15 @@ This project uses `pytest` and `pytest-asyncio`.
 ### Using Docker (Recommended)
 
 ```bash
+make tests
+# or
 docker compose run --rm tests
-```
-
-Common options:
-
-```bash
-pytest -v        # verbose
-pytest -x        # stop on first failure
-pytest -s        # show print statements
-pytest --cov=app # coverage
 ```
 
 ### Running Locally
 
 `backend/requirements.txt` installs `psycopg[binary]`, so local pytest
-collection does not require a separate system `libpq` installation. If you
-already have an older local environment, reinstall the backend requirements so
-`psycopg` and `psycopg-binary` stay on matching versions.
+collection does not require a separate system `libpq` installation.
 
 ```bash
 cd backend
@@ -323,8 +221,17 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-The bundled binary wheel removes the extra `libpq` setup step, but tests that
-open real PostgreSQL connections still need a running Postgres instance.
+Tests that open real PostgreSQL connections still need a running
+Postgres instance — use `docker compose up -d db` first.
+
+Common options:
+
+```bash
+pytest -v         # verbose
+pytest -x         # stop on first failure
+pytest -s         # show print statements
+pytest -k "chat"  # run tests matching pattern
+```
 
 ---
 
@@ -332,11 +239,16 @@ open real PostgreSQL connections still need a running Postgres instance.
 
 ### Local development
 
-For day-to-day work, use the [Quick Start](#quick-start) flow (`docker compose up --build` or `make up` / `make dev`). That stack mounts live backend code and uses development defaults.
+For day-to-day work use the [Quick Start](#quick-start) flow
+(`docker compose up --build` or `make up` / `make dev`). That stack
+mounts live backend code and uses development defaults.
 
 ### Local production simulation
 
-To exercise production-style Compose (no API bind mounts, multi-worker `uvicorn`, JSON logs, stricter env): use `docker-compose.prod.yml`, which is a **standalone** file — it does not extend or merge with `docker-compose.yml`; define the full `db` and `api` stack there.
+`docker-compose.prod.yml` is a **standalone** file — it does not
+extend or merge with `docker-compose.yml`. It disables code bind
+mounts, runs multi-worker uvicorn, enables JSON logging, and applies
+resource limits.
 
 ```bash
 # Copy and configure production env
@@ -344,57 +256,114 @@ cp backend/.env.example backend/.env.prod
 # Edit .env.prod with real values
 
 # Start production stack
-docker compose -f docker-compose.prod.yml up -d
-# or
 make prod-up
+# or
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-Docker Compose expands `${VAR}` from your process environment or from a `.env` file in the project root. If you keep values only in `backend/.env.prod`, either `export` them before `make prod-up` or pass `--env-file backend/.env.prod` to the `docker compose` command.
+Docker Compose expands `${VAR}` from your process environment or a
+`.env` file in the project root. If values are only in
+`backend/.env.prod`, either `export` them first or pass
+`--env-file backend/.env.prod` to the `docker compose` command.
 
 ### Production environment variables
 
-| Variable | Required / optional | Notes |
-| --- | --- | --- |
-| `GEN_AI_KEY` | **Required** | Google AI Studio / Gemini API key |
-| `DATABASE_URL` | **Required** | Async SQLAlchemy URL (e.g. `postgresql+asyncpg://…`) pointing at your Postgres instance |
-| `APP_ENV=production` | **Required** | Disables `/docs` (and related OpenAPI UI), enables JSON-friendly logging expectations |
-| `CORS_ORIGINS` | **Required** | Comma-separated list of allowed browser origins |
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | **Required** | Used by the `db` service in `docker-compose.prod.yml` |
-| `LOG_LEVEL` | Optional | Default: `INFO` |
-| `QUEUE_WORKER_COUNT` | Optional | Default: `3` |
-| `QUEUE_EMBEDDING_RPS` | Optional | Default: `2.0` |
-| `LLM_HTTP_TIMEOUT_MS` | Optional | Default: `60000` |
+| Variable              | Required     | Notes                                                           |
+| --------------------- | ------------ | --------------------------------------------------------------- |
+| `GEN_AI_KEY`          | **Required** | Google AI Studio / Gemini API key                               |
+| `DATABASE_URL`        | **Required** | `postgresql+asyncpg://…` pointing at your Postgres instance     |
+| `APP_ENV=production`  | **Required** | Disables `/docs`, enables JSON logging                          |
+| `CORS_ORIGINS`        | **Required** | Comma-separated list of allowed browser origins                 |
+| `POSTGRES_USER`       | **Required** | Used by `db` service in `docker-compose.prod.yml`               |
+| `POSTGRES_PASSWORD`   | **Required** | As above                                                        |
+| `POSTGRES_DB`         | **Required** | As above                                                        |
+| `LOG_LEVEL`           | Optional     | Default: `INFO`                                                 |
+| `LOG_FORMAT`          | Optional     | `TEXT` or `JSON` (default: `TEXT`; use `JSON` for log shipping) |
+| `QUEUE_WORKER_COUNT`  | Optional     | Default: `3`                                                    |
+| `QUEUE_EMBEDDING_RPS` | Optional     | Default: `2.0`                                                  |
+| `LLM_HTTP_TIMEOUT_MS` | Optional     | Default: `60000`                                                |
+| `CHUNKING_STRATEGY`   | Optional     | `fixed` (default), `paragraph`, or `semantic`                   |
 
 See `backend/.env.example` for the full list of tunables.
 
-### Queue persistence
-
-The Redis queue (#123) is not yet implemented — the current in-memory queue does not persist across restarts. Plan for this in production deployments.
-
 ### Ports
 
-- **8000** — HTTP API (expose as needed behind your reverse proxy or load balancer).
-- **5432** — Postgres; keep **internal** to your network or Docker network in production rather than exposing it publicly.
+- **8000** — HTTP API. Expose behind a reverse proxy or load balancer.
+- **5432** — Postgres. Keep internal to your network in production.
+
+### Queue persistence
+
+The current in-memory queue does not persist across restarts. Plan
+for this in production deployments until Redis (#123) lands.
 
 ---
 
 ## CI
 
-Pull requests and pushes to `main` run the GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml): backend tests against Postgres (pgvector) and a Docker build of the API image. The job is split so it typically finishes within a few minutes.
+Pull requests and pushes to `main` run the GitHub Actions workflow in
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml): backend tests
+against a real pgvector Postgres instance, plus a Docker build of
+the API image.
 
-To run the same test command locally (with Postgres reachable and env vars set as in CI), use:
+To run tests locally in the same Docker environment as CI:
 
 ```bash
-make ci
+make tests
 ```
 
-`pytest` picks up [`backend/pytest.ini`](backend/pytest.ini) when run from the `backend` directory.
+To run tests directly without Docker (requires Postgres running and
+env vars set):
+
+```bash
+cd backend && pytest tests/ -v --tb=short
+```
+
+---
+
+## Frontend
+
+The frontend demo lives in `frontend-demo/` and is a Next.js app.
+
+### Prerequisites
+
+- Node.js 18+
+- npm or yarn
+
+### Setup
+
+```bash
+cd frontend-demo
+npm install
+```
+
+### Environment
+
+Create `frontend-demo/.env.local`:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+### Start dev server
+
+```bash
+npm run dev
+```
+
+Frontend runs at http://localhost:3000
+
+### Start backend + frontend together
+
+```bash
+make dev
+```
+
+This starts the backend stack in detached mode and the frontend dev
+server in the foreground.
 
 ---
 
 ## Advanced Local Development
-
-For contributors running Python directly.
 
 ### Option 1: Docker Database Only
 
@@ -412,8 +381,6 @@ export GEN_AI_KEY="your-key"
 
 uvicorn main:app --reload --port 8000
 ```
-
----
 
 ### Option 2: Fully Local PostgreSQL
 
@@ -456,6 +423,12 @@ git push --force-with-lease
 
 Open PR → `your-fork → main`
 
+Clean up local branches after merging:
+
+```bash
+make cleanup
+```
+
 ---
 
 ## Common Tasks
@@ -476,21 +449,37 @@ docker compose up -d db
 ### Health Check
 
 ```bash
-curl http://localhost:8000/
+curl http://localhost:8000/status
+```
+
+### View Queue Stats
+
+```bash
+curl http://localhost:8000/queue/stats
 ```
 
 ---
 
 ## Environment Variables
 
-Create `backend/.env`:
+Create `backend/.env` from the example:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Minimum required for local development:
 
 ```env
-GEN_AI_KEY=your_google_ai_studio_key
 APP_ENV=development
+GEN_AI_KEY=your_google_ai_studio_key
 DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/postgres
 LOG_LEVEL=INFO
 ```
+
+See `backend/.env.example` for the full list including chunking
+strategy, rate limits, LLM timeouts, prompt configuration, and
+observability settings.
 
 ---
 
@@ -515,3 +504,8 @@ docker compose ps
 docker compose down -v
 docker compose up --build
 ```
+
+### API Docs Not Showing
+
+`/docs` is disabled when `APP_ENV=production`. Set `APP_ENV=development`
+in `backend/.env` for local development.
