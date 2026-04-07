@@ -8,21 +8,21 @@ const phases = [
     title: "Stabilize & Optimize Core Engine",
     status: "Complete",
     statusStyles: "bg-accent text-black",
-    description: "Core RAG backend hardened for reliability, observability, and performance. All work shipped."
+    description: "Core RAG backend hardened for reliability, observability, and performance. Shipped features include a robust ingestion pipeline, centralized retry logic, and built-in observability."
   },
   {
     number: "Phase 2",
     title: "Enhance Developer Experience",
     status: "Current",
-    statusStyles: "bg-blue-600 text-white", // Note: Ensure 'bg-blue-600' exists or use project's blue token
-    description: "Backend and frontend improvements focused on making the project easier to use and contribute to."
+    statusStyles: "bg-blue text-white",
+    description: "Active work areas focusing on a Redis-backed durable ingestion queue, improved observability, advanced chunking strategies, and wiring up the document upload UI."
   },
   {
     number: "Phase 3",
     title: "Scale & Specialize",
     status: "Later",
     statusStyles: "bg-surface text-muted border border-border",
-    description: "Production-ready document intelligence platform. Authentication, multi-tenancy, specialized pipelines, ecosystem growth."
+    description: "Long-term vision for a production-ready document intelligence platform. Future goals include authentication, multi-tenancy, specialized pipelines, and ecosystem growth."
   }
 ];
 
