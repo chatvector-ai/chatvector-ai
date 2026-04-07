@@ -3,7 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 const GITHUB_REPO = "https://github.com/chatvector-ai/chatvector-ai";
 
@@ -15,19 +16,37 @@ const SECTION_LINKS = [
   { label: "Contributors", href: "/contributors" },
 ] as const;
 
+const DOC_LINKS = [
+  { label: "Getting Started", href: "/getting-started" },
+  { label: "Architecture", href: "/architecture" },
+  { label: "SDK", href: "/sdk" },
+  { label: "Roadmap", href: "/roadmap" },
+  { label: "Contributing", href: "/contributing" },
+] as const;
+
+const SECTION_LINKS_BEFORE = SECTION_LINKS.slice(0, 3);
+const SECTION_LINKS_AFTER = SECTION_LINKS.slice(3);
+
+function isDocsActive(pathname: string | null): boolean {
+  if (!pathname) return false;
+  return DOC_LINKS.some((l) => pathname.startsWith(l.href));
+}
+
 function NavLinks({
   onNavigate,
   pathname,
   centerOnMobile = false,
+  links,
 }: {
   onNavigate?: () => void;
   pathname: string | null;
   /** Stack + center link text (hamburger menu on small screens only). */
   centerOnMobile?: boolean;
+  links: readonly (typeof SECTION_LINKS)[number][];
 }) {
   return (
     <>
-      {SECTION_LINKS.map(({ label, href }) => {
+      {links.map(({ label, href }) => {
         const isActive = pathname === href;
         return (
           <li
@@ -68,6 +87,23 @@ function GitHubButton({ className }: { className?: string }) {
 export default function Navigation() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [docsDropdownOpen, setDocsDropdownOpen] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
+  const docsDesktopRef = useRef<HTMLLIElement>(null);
+
+  useEffect(() => {
+    if (!docsDropdownOpen) return;
+    const onMouseDown = (e: MouseEvent) => {
+      const el = docsDesktopRef.current;
+      if (el && !el.contains(e.target as Node)) {
+        setDocsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [docsDropdownOpen]);
+
+  const docsActive = isDocsActive(pathname);
 
   return (
     <header
@@ -94,7 +130,47 @@ export default function Navigation() {
         </Link>
 
         <ul className="m-0 hidden list-none flex-1 flex-row flex-wrap items-center justify-center gap-8 p-0 md:flex">
-          <NavLinks pathname={pathname} />
+          <NavLinks pathname={pathname} links={SECTION_LINKS_BEFORE} />
+          <li ref={docsDesktopRef} className="relative">
+            <button
+              type="button"
+              aria-expanded={docsDropdownOpen}
+              aria-haspopup="true"
+              onClick={() => setDocsDropdownOpen((o) => !o)}
+              className={`flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[1.05rem] no-underline transition-colors duration-200 ${
+                docsActive
+                  ? "text-accent"
+                  : "text-white hover:text-accent"
+              }`}
+            >
+              Docs
+              <ChevronDown
+                aria-hidden
+                className={`size-[1em] shrink-0 transition-transform duration-200 ${
+                  docsDropdownOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            {docsDropdownOpen ? (
+              <div
+                className="absolute top-full z-50 mt-2 min-w-[180px] rounded-xl border border-border bg-surface py-2"
+                role="menu"
+              >
+                {DOC_LINKS.map(({ label, href }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    role="menuitem"
+                    onClick={() => setDocsDropdownOpen(false)}
+                    className="block px-4 py-2 text-[0.9rem] text-muted no-underline transition-colors hover:text-foreground"
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            ) : null}
+          </li>
+          <NavLinks pathname={pathname} links={SECTION_LINKS_AFTER} />
         </ul>
 
         <div className="flex shrink-0 items-center gap-3">
@@ -118,6 +194,51 @@ export default function Navigation() {
               pathname={pathname}
               centerOnMobile
               onNavigate={() => setMobileOpen(false)}
+              links={SECTION_LINKS_BEFORE}
+            />
+            <li className="w-full text-center">
+              <button
+                type="button"
+                aria-expanded={docsOpen}
+                onClick={() => setDocsOpen((o) => !o)}
+                className={`inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[1.05rem] no-underline transition-colors duration-200 ${
+                  docsActive
+                    ? "text-accent"
+                    : "text-white hover:text-accent"
+                }`}
+              >
+                Docs
+                <ChevronDown
+                  aria-hidden
+                  className={`size-[1em] shrink-0 transition-transform duration-200 ${
+                    docsOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {docsOpen ? (
+                <ul className="m-0 mt-3 flex list-none flex-col items-stretch gap-2 p-0 pl-4">
+                  {DOC_LINKS.map(({ label, href }) => (
+                    <li key={href} className="w-full text-center">
+                      <Link
+                        href={href}
+                        onClick={() => {
+                          setMobileOpen(false);
+                          setDocsOpen(false);
+                        }}
+                        className="block px-4 py-2 text-[0.9rem] text-muted no-underline transition-colors hover:text-foreground"
+                      >
+                        {label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+            <NavLinks
+              pathname={pathname}
+              centerOnMobile
+              onNavigate={() => setMobileOpen(false)}
+              links={SECTION_LINKS_AFTER}
             />
           </ul>
           <div className="flex justify-center">
