@@ -210,7 +210,7 @@ class SupabaseService(DatabaseService):
             logger.error(f"[Supabase] Deletion failed for document {document_id}: {e}")
             raise
 
-    async def fail_stale_documents(self, statuses: list[str]) -> int:
+    async def fail_stale_documents(self, statuses: list[str]) -> set[str]:
         result = await self._run_io(
             lambda: supabase_client.table("documents")
             .update(
@@ -227,9 +227,9 @@ class SupabaseService(DatabaseService):
             .execute(),
             operation_name="fail_stale_documents",
         )
-        count = len(result.data) if result.data else 0
-        logger.info(f"[Supabase] Marked {count} stale document(s) as failed on startup")
-        return count
+        doc_ids = {row["id"] for row in result.data} if result.data else set()
+        logger.info(f"[Supabase] Marked {len(doc_ids)} stale document(s) as failed on startup")
+        return doc_ids
 
     async def find_similar_chunks(
         self,

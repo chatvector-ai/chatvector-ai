@@ -1,6 +1,5 @@
 import logging
 
-import asyncio
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
 from core.config import config
@@ -8,7 +7,7 @@ from middleware.rate_limit import limiter
 
 import db
 from services.ingestion_pipeline import IngestionPipeline, UploadPipelineError, _sanitize_filename
-from services.queue_service import QueueJob, ingestion_queue
+from services.queue_service import QueueFull, QueueJob, ingestion_queue
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -64,7 +63,7 @@ async def upload(request: Request, file: UploadFile = File(...)):
 
         try:
             queue_position = await ingestion_queue.enqueue(job)
-        except asyncio.QueueFull:
+        except QueueFull:
             # Roll back the document record so the DB stays clean
             await db.update_document_status(
                 doc_id=doc_id,

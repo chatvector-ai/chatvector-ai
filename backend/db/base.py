@@ -103,12 +103,10 @@ class DatabaseService(ABC):
         pass
 
     @abstractmethod
-    async def fail_stale_documents(self, statuses: list[str]) -> int:
+    async def fail_stale_documents(self, statuses: list[str]) -> set[str]:
         """
-        Bulk-update all documents whose status is in *statuses* to 'failed'.
+        Mark documents in any of the given statuses as failed.
 
-        Used at startup to resolve documents that were left in an in-progress
-        state by a previous server crash or restart.  Returns the number of
-        documents updated.
+        Returns the set of document IDs that were updated.
         """
         pass

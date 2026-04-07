@@ -20,12 +20,26 @@ services:
       retries: 10
       start_period: 5s
 
+  redis:
+    image: redis:7-alpine
+    container_name: chatvector-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+    restart: unless-stopped
+
   api:
     build:
       context: ./backend
     container_name: chatvector-api
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "8000:8000"
@@ -34,6 +48,8 @@ services:
       DATABASE_URL: "postgresql+asyncpg://postgres:postgres@db:5432/postgres"
       APP_ENV: "development"
       PYTHONPATH: /app
+      REDIS_URL: "redis://redis:6379/0"
+      QUEUE_BACKEND: "memory"  # default to memory; set to "redis" to enable
     working_dir: /app
     volumes:
       - ./backend:/app

@@ -86,6 +86,10 @@ class Settings:
     )
     SQLALCHEMY_RETRIEVAL_CONCURRENCY: int = max(1, int(os.getenv("SQLALCHEMY_RETRIEVAL_CONCURRENCY", "8")))
 
+    # Queue backend selection
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    QUEUE_BACKEND: str = os.getenv("QUEUE_BACKEND", "memory").strip().lower()
+
     # Background ingestion queue
     QUEUE_WORKER_COUNT: int = max(1, min(5, int(os.getenv("QUEUE_WORKER_COUNT", "3"))))
     QUEUE_MAX_SIZE: int = max(1, int(os.getenv("QUEUE_MAX_SIZE", "100")))
@@ -133,7 +137,19 @@ class Settings:
         return self.SUPABASE_KEY
 
 
+VALID_QUEUE_BACKENDS = {"memory", "redis"}
+
+
+def _validate_queue_backend(backend: str) -> None:
+    if backend not in VALID_QUEUE_BACKENDS:
+        valid = ", ".join(sorted(VALID_QUEUE_BACKENDS))
+        raise ValueError(
+            f"Invalid QUEUE_BACKEND={backend!r}. Expected one of: {valid}."
+        )
+
+
 config = Settings()
+_validate_queue_backend(config.QUEUE_BACKEND)
 
 
 def _validate_cors_origins(origins: list[str]) -> None:

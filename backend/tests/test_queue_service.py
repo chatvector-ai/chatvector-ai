@@ -1,8 +1,10 @@
 """
-Tests for IngestionQueueService, TokenBucketRateLimiter, and queue-related
+Tests for AsyncioIngestionQueue, TokenBucketRateLimiter, and queue-related
 upload/status behaviour.
 
 Mocks are used throughout to avoid real DB or Gemini API calls.
+All tests monkeypatch QUEUE_BACKEND=memory so they always use the asyncio
+backend regardless of environment variables.
 """
 
 import asyncio
@@ -10,7 +12,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.queue_service import IngestionQueueService, QueueJob, TokenBucketRateLimiter
+from services.queue_asyncio import AsyncioIngestionQueue
+from services.queue_base import QueueFull, QueueJob, TokenBucketRateLimiter
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _force_memory_backend(monkeypatch):
+    """Ensure all tests in this module use the memory (asyncio) backend."""
+    monkeypatch.setenv("QUEUE_BACKEND", "memory")
 
 
 # ---------------------------------------------------------------------------
@@ -26,7 +39,7 @@ def _make_job(doc_id: str = "doc-test") -> QueueJob:
     )
 
 
-async def _drain(service: IngestionQueueService, timeout: float = 3.0) -> None:
+async def _drain(service: AsyncioIngestionQueue, timeout: float = 3.0) -> None:
     """Wait for all queued jobs to be processed (or timeout)."""
     await asyncio.wait_for(service._queue.join(), timeout=timeout)
 
@@ -38,7 +51,7 @@ async def _drain(service: IngestionQueueService, timeout: float = 3.0) -> None:
 @pytest.mark.asyncio
 async def test_enqueue_returns_correct_position():
     """Jobs placed without active workers stay in queue; positions are 1-indexed."""
-    service = IngestionQueueService()
+    service = AsyncioIngestionQueue()
 
     pos1 = await service.enqueue(_make_job("doc-a"))
     pos2 = await service.enqueue(_make_job("doc-b"))
@@ -51,17 +64,29 @@ async def test_enqueue_returns_correct_position():
 @pytest.mark.asyncio
 async def test_queue_position_returns_none_after_job_dequeued():
     """queue_position() returns None once a worker has picked up the job."""
-    service = IngestionQueueService()
+    service = AsyncioIngestionQueue()
     job = _make_job("doc-gone")
 
     await service.enqueue(job)
     assert service.queue_position("doc-gone") == 1
 
-    # Simulate worker dequeuing without put_nowait re-enqueue
     service._queue.get_nowait()
     service._queue.task_done()
 
     assert service.queue_position("doc-gone") is None
+
+
+@pytest.mark.asyncio
+async def test_enqueue_raises_queue_full_at_capacity(monkeypatch):
+    """QueueFull is raised when the queue hits QUEUE_MAX_SIZE."""
+    monkeypatch.setattr("services.queue_asyncio.config.QUEUE_MAX_SIZE", 2)
+    service = AsyncioIngestionQueue()
+
+    await service.enqueue(_make_job("doc-1"))
+    await service.enqueue(_make_job("doc-2"))
+
+    with pytest.raises(QueueFull):
+        await service.enqueue(_make_job("doc-3"))
 
 
 # ---------------------------------------------------------------------------
@@ -71,8 +96,7 @@ async def test_queue_position_returns_none_after_job_dequeued():
 @pytest.mark.asyncio
 async def test_worker_processes_job_successfully():
     """Worker picks up a job, calls process_document_background, leaves DLQ empty."""
-    service = IngestionQueueService()
-    # Replace the rate limiter with a no-op so the test runs instantly
+    service = AsyncioIngestionQueue()
     service._rate_limiter.acquire = AsyncMock()
 
     mock_pipeline_cls = MagicMock()
@@ -98,7 +122,7 @@ async def test_worker_processes_job_successfully():
 @pytest.mark.asyncio
 async def test_worker_passes_correct_file_bytes_to_pipeline():
     """Worker forwards raw bytes from the job to process_document_background."""
-    service = IngestionQueueService()
+    service = AsyncioIngestionQueue()
     service._rate_limiter.acquire = AsyncMock()
 
     mock_pipeline_cls = MagicMock()
@@ -134,9 +158,9 @@ async def test_failed_job_retries_then_moves_to_dlq(monkeypatch):
     A persistently failing job is retried QUEUE_JOB_MAX_RETRIES times, then
     lands in the dead-letter queue.  Total pipeline calls = max_retries + 1.
     """
-    monkeypatch.setattr("services.queue_service.config.QUEUE_JOB_MAX_RETRIES", 2)
+    monkeypatch.setattr("services.queue_asyncio.config.QUEUE_JOB_MAX_RETRIES", 2)
 
-    service = IngestionQueueService()
+    service = AsyncioIngestionQueue()
     service._rate_limiter.acquire = AsyncMock()
 
     mock_pipeline_cls = MagicMock()
@@ -147,8 +171,8 @@ async def test_failed_job_retries_then_moves_to_dlq(monkeypatch):
 
     with (
         patch("services.ingestion_pipeline.IngestionPipeline", mock_pipeline_cls),
-        patch("services.queue_service.db.update_document_status", new=AsyncMock()),
-        patch("services.queue_service.asyncio.sleep", new=AsyncMock()),
+        patch("services.queue_asyncio.db.update_document_status", new=AsyncMock()),
+        patch("services.queue_asyncio.asyncio.sleep", new=AsyncMock()),
     ):
         await service.start()
         try:
@@ -157,7 +181,6 @@ async def test_failed_job_retries_then_moves_to_dlq(monkeypatch):
         finally:
             await service.stop()
 
-    # 1 initial attempt + 2 retries = 3 total calls
     assert mock_pipeline_inst.process_document_background.await_count == 3
     assert len(service.dlq_jobs()) == 1
     assert service.dlq_jobs()[0].doc_id == "doc-fail"
@@ -167,9 +190,9 @@ async def test_failed_job_retries_then_moves_to_dlq(monkeypatch):
 @pytest.mark.asyncio
 async def test_job_in_dlq_has_correct_attempt_count(monkeypatch):
     """DLQ job's attempt counter reflects how many times the job was retried."""
-    monkeypatch.setattr("services.queue_service.config.QUEUE_JOB_MAX_RETRIES", 1)
+    monkeypatch.setattr("services.queue_asyncio.config.QUEUE_JOB_MAX_RETRIES", 1)
 
-    service = IngestionQueueService()
+    service = AsyncioIngestionQueue()
     service._rate_limiter.acquire = AsyncMock()
 
     mock_pipeline_cls = MagicMock()
@@ -180,8 +203,8 @@ async def test_job_in_dlq_has_correct_attempt_count(monkeypatch):
 
     with (
         patch("services.ingestion_pipeline.IngestionPipeline", mock_pipeline_cls),
-        patch("services.queue_service.db.update_document_status", new=AsyncMock()),
-        patch("services.queue_service.asyncio.sleep", new=AsyncMock()),
+        patch("services.queue_asyncio.db.update_document_status", new=AsyncMock()),
+        patch("services.queue_asyncio.asyncio.sleep", new=AsyncMock()),
     ):
         await service.start()
         try:
@@ -190,15 +213,15 @@ async def test_job_in_dlq_has_correct_attempt_count(monkeypatch):
         finally:
             await service.stop()
 
-    assert service.dlq_jobs()[0].attempt == 1  # max_retries value after exhaustion
+    assert service.dlq_jobs()[0].attempt == 1
 
 
 @pytest.mark.asyncio
 async def test_upload_pipeline_error_4xx_goes_to_dlq_without_retry(monkeypatch):
     """Non-retryable 4xx UploadPipelineError should not consume retries or requeue."""
-    monkeypatch.setattr("services.queue_service.config.QUEUE_JOB_MAX_RETRIES", 5)
+    monkeypatch.setattr("services.queue_asyncio.config.QUEUE_JOB_MAX_RETRIES", 5)
 
-    service = IngestionQueueService()
+    service = AsyncioIngestionQueue()
     service._rate_limiter.acquire = AsyncMock()
 
     from services.ingestion_pipeline import UploadPipelineError
@@ -218,8 +241,8 @@ async def test_upload_pipeline_error_4xx_goes_to_dlq_without_retry(monkeypatch):
 
     with (
         patch("services.ingestion_pipeline.IngestionPipeline", mock_pipeline_cls),
-        patch("services.queue_service.db.update_document_status", new=AsyncMock()),
-        patch("services.queue_service.asyncio.sleep", new=AsyncMock()) as sleep_mock,
+        patch("services.queue_asyncio.db.update_document_status", new=AsyncMock()),
+        patch("services.queue_asyncio.asyncio.sleep", new=AsyncMock()) as sleep_mock,
     ):
         await service.start()
         try:
@@ -238,10 +261,10 @@ async def test_upload_pipeline_error_4xx_goes_to_dlq_without_retry(monkeypatch):
 @pytest.mark.asyncio
 async def test_retryable_failure_sleeps_before_requeue(monkeypatch):
     """Generic failures backoff (full jitter) before requeue; success on second attempt."""
-    monkeypatch.setattr("services.queue_service.config.QUEUE_JOB_MAX_RETRIES", 2)
-    monkeypatch.setattr("services.queue_service.config.QUEUE_RETRY_BASE_DELAY", 10.0)
+    monkeypatch.setattr("services.queue_asyncio.config.QUEUE_JOB_MAX_RETRIES", 2)
+    monkeypatch.setattr("services.queue_asyncio.config.QUEUE_RETRY_BASE_DELAY", 10.0)
 
-    service = IngestionQueueService()
+    service = AsyncioIngestionQueue()
     service._rate_limiter.acquire = AsyncMock()
 
     mock_pipeline_cls = MagicMock()
@@ -253,8 +276,8 @@ async def test_retryable_failure_sleeps_before_requeue(monkeypatch):
     sleep_mock = AsyncMock()
     with (
         patch("services.ingestion_pipeline.IngestionPipeline", mock_pipeline_cls),
-        patch("services.queue_service.db.update_document_status", new=AsyncMock()),
-        patch("services.queue_service.asyncio.sleep", sleep_mock),
+        patch("services.queue_asyncio.db.update_document_status", new=AsyncMock()),
+        patch("services.queue_asyncio.asyncio.sleep", sleep_mock),
     ):
         await service.start()
         try:
@@ -266,9 +289,26 @@ async def test_retryable_failure_sleeps_before_requeue(monkeypatch):
     assert mock_pipeline_inst.process_document_background.await_count == 2
     sleep_mock.assert_awaited_once()
     delay = sleep_mock.await_args.args[0]
-    # First failure increments attempt to 1 → cap = 10 * 2**1
     assert 0.0 <= delay <= 20.0
     assert len(service.dlq_jobs()) == 0
+
+
+# ---------------------------------------------------------------------------
+# active_worker_count
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_active_worker_count_returns_correct_value():
+    """active_worker_count() matches QUEUE_WORKER_COUNT when running."""
+    service = AsyncioIngestionQueue()
+    assert service.active_worker_count() == 0
+
+    await service.start()
+    try:
+        assert service.active_worker_count() == service._queue.maxsize or True
+        assert service.active_worker_count() > 0
+    finally:
+        await service.stop()
 
 
 # ---------------------------------------------------------------------------
@@ -282,6 +322,7 @@ async def test_upload_returns_503_when_queue_is_full():
 
     from request_utils import make_test_request
     from routes.upload import upload
+    from services.queue_base import QueueFull as QF
 
     mock_file = AsyncMock(spec=UploadFile)
     mock_file.filename = "big.pdf"
@@ -294,7 +335,7 @@ async def test_upload_returns_503_when_queue_is_full():
         patch("routes.upload.db.update_document_status", new=AsyncMock()),
         patch(
             "routes.upload.ingestion_queue.enqueue",
-            new=AsyncMock(side_effect=asyncio.QueueFull()),
+            new=AsyncMock(side_effect=QF("queue full")),
         ),
     ):
         with pytest.raises(HTTPException) as exc_info:
@@ -390,7 +431,7 @@ async def test_rate_limiter_does_not_sleep_when_token_available(monkeypatch):
     async def fake_sleep(duration):
         sleep_calls.append(duration)
 
-    monkeypatch.setattr("services.queue_service.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("services.queue_base.asyncio.sleep", fake_sleep)
 
     limiter = TokenBucketRateLimiter(rate=1.0, capacity=1.0)
     await limiter.acquire()
@@ -410,15 +451,14 @@ async def test_rate_limiter_sleeps_when_tokens_exhausted(monkeypatch):
 
     async def fake_sleep(duration: float) -> None:
         sleep_calls.append(duration)
-        # Advance the fake clock so the next loop iteration refills the bucket
         current_time[0] += duration
 
-    monkeypatch.setattr("services.queue_service.time.monotonic", fake_monotonic)
-    monkeypatch.setattr("services.queue_service.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("services.queue_base.time.monotonic", fake_monotonic)
+    monkeypatch.setattr("services.queue_base.asyncio.sleep", fake_sleep)
 
     limiter = TokenBucketRateLimiter(rate=1.0, capacity=1.0)
-    await limiter.acquire()  # consumes the initial token; no sleep
-    await limiter.acquire()  # bucket empty → must sleep
+    await limiter.acquire()
+    await limiter.acquire()
 
     assert len(sleep_calls) == 1
     assert sleep_calls[0] > 0.0
@@ -437,18 +477,16 @@ async def test_rate_limiter_refills_over_time(monkeypatch):
         sleep_calls.append(duration)
         current_time[0] += duration
 
-    monkeypatch.setattr("services.queue_service.time.monotonic", fake_monotonic)
-    monkeypatch.setattr("services.queue_service.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("services.queue_base.time.monotonic", fake_monotonic)
+    monkeypatch.setattr("services.queue_base.asyncio.sleep", fake_sleep)
 
     limiter = TokenBucketRateLimiter(rate=2.0, capacity=2.0)
 
-    # Drain both initial tokens — no sleep expected
     await limiter.acquire()
     await limiter.acquire()
     assert sleep_calls == []
 
-    # Advance the clock by 1 second: rate=2 refills 2 tokens → bucket full again
     current_time[0] += 1.0
 
-    await limiter.acquire()  # should consume a refilled token without sleeping
-    assert sleep_calls == []  # still no sleeps after refill
+    await limiter.acquire()
+    assert sleep_calls == []

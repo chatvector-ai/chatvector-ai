@@ -42,7 +42,7 @@ def get_queue_stats(request: Request):
 
     return {
         "queue_size": ingestion_queue.queue_size(),
-        "worker_count": len(ingestion_queue._workers),
+        "worker_count": ingestion_queue.active_worker_count(),
         "dlq_size": len(dlq_entries),
         "dlq": dlq_entries,
     }

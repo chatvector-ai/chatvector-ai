@@ -35,12 +35,26 @@ async def lifespan(app: FastAPI):
     # Resolve documents that were in-flight during the previous server run before
     # any workers start, so clients polling for status get a definitive answer.
     try:
-        stale_count = await db.fail_stale_documents(STALE_INGESTION_STATUSES)
-        if stale_count:
+        stale_doc_ids = await db.fail_stale_documents(STALE_INGESTION_STATUSES)
+        if stale_doc_ids:
             logger.warning(
-                f"Marked {stale_count} stale document(s) as failed "
+                f"Marked {len(stale_doc_ids)} stale document(s) as failed "
                 f"(statuses: {STALE_INGESTION_STATUSES})"
             )
+
+            # When using the Redis backend, any jobs left in the RQ queue from a
+            # previous run correspond to documents that fail_stale_documents() just
+            # marked as failed (since "queued"/"retrying"/etc. are all stale).
+            # Clear them so workers don't pick up jobs for already-failed documents.
+            if config.QUEUE_BACKEND == "redis":
+                from services.queue_redis import RedisIngestionQueue
+                if isinstance(ingestion_queue, RedisIngestionQueue):
+                    removed = ingestion_queue.clear_stale_jobs(stale_doc_ids)
+                    logger.info(
+                        "Cleared %d stale RQ job(s) for %d failed document(s)",
+                        removed,
+                        len(stale_doc_ids),
+                    )
     except Exception:
         logger.exception("Failed to reset stale documents on startup — continuing anyway")
 

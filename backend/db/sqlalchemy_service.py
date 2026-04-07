@@ -202,21 +202,27 @@ class SQLAlchemyService(DatabaseService):
                 logger.error(f"[PostgreSQL] Failed to delete document {document_id}")
                 raise
 
-    async def fail_stale_documents(self, statuses: list[str]) -> int:
+    async def fail_stale_documents(self, statuses: list[str]) -> set[str]:
         async with self.async_session() as session:
-            result = await session.execute(
-                sql_update(Document)
-                .where(Document.status.in_(statuses))
-                .values(
-                    status="failed",
-                    error={"stage": "server_restart", "message": "Server restarted while document was being processed."},
-                    updated_at=datetime.utcnow(),
-                )
+            rows = await session.execute(
+                select(Document.id).where(Document.status.in_(statuses))
             )
-            await session.commit()
-            count = result.rowcount
-            logger.info(f"[PostgreSQL] Marked {count} stale document(s) as failed on startup")
-            return count
+            doc_ids = {str(row[0]) for row in rows}
+
+            if doc_ids:
+                await session.execute(
+                    sql_update(Document)
+                    .where(Document.id.in_(doc_ids))
+                    .values(
+                        status="failed",
+                        error={"stage": "server_restart", "message": "Server restarted while document was being processed."},
+                        updated_at=datetime.utcnow(),
+                    )
+                )
+                await session.commit()
+
+            logger.info(f"[PostgreSQL] Marked {len(doc_ids)} stale document(s) as failed on startup")
+            return doc_ids
 
     async def find_similar_chunks(
         self,

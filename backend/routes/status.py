@@ -5,7 +5,7 @@ import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import psutil
 from fastapi import APIRouter, Request
@@ -67,14 +67,7 @@ def _bar_percent(percent: int) -> str:
 
 
 def _workers_active_count() -> int:
-    iq = ingestion_queue
-    getter = getattr(iq, "active_worker_count", None)
-    if callable(getter):
-        try:
-            return int(cast(Any, getter()))
-        except (TypeError, ValueError):
-            pass
-    return len([w for w in iq._workers if not w.done()])
+    return ingestion_queue.active_worker_count()
 
 
 async def _database_connected_and_document_count() -> tuple[bool, int | None]:

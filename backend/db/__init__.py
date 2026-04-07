@@ -208,11 +208,11 @@ async def delete_document(doc_id: str) -> None:
     )
 
 
-async def fail_stale_documents(statuses: list[str]) -> int:
+async def fail_stale_documents(statuses: list[str]) -> set[str]:
     """
     Bulk-fail documents left in an in-progress state by a previous restart.
 
-    Returns the number of documents updated.
+    Returns the set of document IDs that were updated.
     """
     service = get_db_service()
 
