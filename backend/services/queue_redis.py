@@ -30,6 +30,7 @@ from typing import Optional
 
 import redis as redis_lib
 from rq import Queue as RQQueue
+from rq import SimpleWorker
 from rq import Worker as RQWorker
 from rq.job import Job as RQJob
 
@@ -224,6 +225,20 @@ def _push_dlq_entry(entry: DLQEntry) -> None:
         logger.exception("Failed to push DLQ entry for %s", entry.doc_id)
 
 
+class ThreadSafeWorker(SimpleWorker):
+    """
+    RQ worker safe for use in non-main threads.
+
+    Two changes from the default Worker:
+    - Inherits SimpleWorker to avoid os.fork() (runs jobs in-process)
+    - Overrides _install_signal_handlers() as a no-op because
+      signal.signal() raises ValueError in non-main threads
+    """
+
+    def _install_signal_handlers(self) -> None:
+        pass  # signal handlers cannot be set outside the main thread
+
+
 # ---------------------------------------------------------------------------
 # Queue backend class
 # ---------------------------------------------------------------------------
@@ -364,24 +379,32 @@ class RedisIngestionQueue(BaseIngestionQueue):
     # ------------------------------------------------------------------
 
     def _run_worker(self, worker_id: int) -> None:
-        """Run an RQ worker in a thread; exits when _stop_event is set."""
+        """Run a ThreadSafeWorker in a loop; restarts on unexpected exit."""
         logger.info("RQ worker thread-%d starting", worker_id)
-        worker_conn = redis_lib.Redis.from_url(config.REDIS_URL)
-        worker = RQWorker(
-            [RQ_QUEUE_NAME],
-            connection=worker_conn,
-            name=f"chatvector-worker-{worker_id}-{os.getpid()}",
-        )
-        # RQ Worker.work() blocks until the worker is told to stop.
-        # We pass burst=False so it keeps polling.  The daemon thread
-        # will be killed when the main process exits; _stop_event lets
-        # us request a graceful shutdown earlier.
-        try:
-            worker.work(
-                burst=False,
-                logging_level=logging.WARNING,
-            )
-        except Exception:
+        while not self._stop_event.is_set():
+            try:
+                worker_conn = redis_lib.Redis.from_url(config.REDIS_URL)
+                worker = ThreadSafeWorker(
+                    [RQ_QUEUE_NAME],
+                    connection=worker_conn,
+                    name=f"chatvector-worker-{worker_id}-{os.getpid()}",
+                )
+                worker.work(
+                    burst=False,
+                    logging_level=logging.WARNING,
+                )
+            except Exception:
+                if not self._stop_event.is_set():
+                    logger.exception(
+                        "RQ worker thread-%d crashed, restarting in 1s",
+                        worker_id,
+                    )
+                    time.sleep(1.0)
+                    continue
             if not self._stop_event.is_set():
-                logger.exception("RQ worker thread-%d crashed", worker_id)
+                logger.warning(
+                    "RQ worker thread-%d exited unexpectedly, restarting in 1s",
+                    worker_id,
+                )
+                time.sleep(1.0)
         logger.info("RQ worker thread-%d exiting", worker_id)

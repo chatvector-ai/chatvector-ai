@@ -49,11 +49,11 @@ services:
       APP_ENV: "development"
       PYTHONPATH: /app
       REDIS_URL: "redis://redis:6379/0"
-      QUEUE_BACKEND: "memory"  # default to memory; set to "redis" to enable
     working_dir: /app
     volumes:
       - ./backend:/app
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command:
+      ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/ || exit 1"]
       interval: 10s
@@ -76,7 +76,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: ["pytest", "-v", "--asyncio-mode=auto"]  # 👈 Added asyncio mode
+    command: ["pytest", "-v", "--asyncio-mode=auto"] # 👈 Added asyncio mode
 
 volumes:
   chatvector-db-data:

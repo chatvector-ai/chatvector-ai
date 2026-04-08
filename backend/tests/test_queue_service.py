@@ -23,7 +23,11 @@ from services.queue_base import QueueFull, QueueJob, TokenBucketRateLimiter
 @pytest.fixture(autouse=True)
 def _force_memory_backend(monkeypatch):
     """Ensure all tests in this module use the memory (asyncio) backend."""
+    from services.queue_service import _reset_queue_singleton
+    _reset_queue_singleton()
     monkeypatch.setenv("QUEUE_BACKEND", "memory")
+    yield
+    _reset_queue_singleton()
 
 
 # ---------------------------------------------------------------------------
