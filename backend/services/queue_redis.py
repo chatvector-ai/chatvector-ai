@@ -80,125 +80,126 @@ async def _async_execute_job(
 ) -> None:
     """Async bridge that replicates the retry / DLQ logic from AsyncioIngestionQueue."""
     import db as db_module
+    from db import worker_db_context
     from services.ingestion_pipeline import IngestionPipeline, UploadPipelineError
 
-    temp_path = Path(temp_file_path)
+    async with worker_db_context():
+        temp_path = Path(temp_file_path)
 
-    if not temp_path.exists():
-        error_msg = f"Temp file missing for doc {doc_id}: {temp_file_path}"
-        logger.error(error_msg)
-        try:
-            await db_module.update_document_status(
-                doc_id=doc_id,
-                status="failed",
-                error={"stage": "queued", "message": error_msg},
-            )
-        except Exception:
-            logger.exception("Failed to mark document %s as failed", doc_id)
-        _push_dlq_entry(DLQEntry(
-            doc_id=doc_id,
-            file_name=file_name,
-            content_type=content_type,
-            attempt=attempt,
-            error=error_msg,
-        ))
-        return
-
-    try:
-        file_bytes = temp_path.read_bytes()
-    except OSError as exc:
-        error_msg = f"Cannot read temp file for doc {doc_id}: {exc}"
-        logger.error(error_msg)
-        try:
-            await db_module.update_document_status(
-                doc_id=doc_id,
-                status="failed",
-                error={"stage": "queued", "message": error_msg},
-            )
-        except Exception:
-            logger.exception("Failed to mark document %s as failed", doc_id)
-        _push_dlq_entry(DLQEntry(
-            doc_id=doc_id,
-            file_name=file_name,
-            content_type=content_type,
-            attempt=attempt,
-            error=error_msg,
-        ))
-        return
-
-    # Per-worker rate limiter (not shared across workers — see module docstring)
-    rate_limiter = TokenBucketRateLimiter(
-        rate=config.QUEUE_EMBEDDING_RPS,
-        capacity=config.QUEUE_EMBEDDING_RPS,
-    )
-
-    pipeline = IngestionPipeline()
-    try:
-        await pipeline.process_document_background(
-            doc_id=doc_id,
-            file_name=file_name,
-            content_type=content_type,
-            file_bytes=file_bytes,
-            rate_limiter=rate_limiter,
-        )
-        _cleanup_temp_file(temp_path)
-    except Exception as exc:
-        if isinstance(exc, UploadPipelineError) and 400 <= exc.status_code < 500:
-            logger.error(
-                "Document %s (%r) non-retryable error (HTTP %d) — DLQ: %s",
-                doc_id, file_name, exc.status_code, exc,
-                exc_info=True,
-            )
-            _cleanup_temp_file(temp_path)
+        if not temp_path.exists():
+            error_msg = f"Temp file missing for doc {doc_id}: {temp_file_path}"
+            logger.error(error_msg)
+            try:
+                await db_module.update_document_status(
+                    doc_id=doc_id,
+                    status="failed",
+                    error={"stage": "queued", "message": error_msg},
+                )
+            except Exception:
+                logger.exception("Failed to mark document %s as failed", doc_id)
             _push_dlq_entry(DLQEntry(
                 doc_id=doc_id,
                 file_name=file_name,
                 content_type=content_type,
                 attempt=attempt,
-                error=str(exc),
+                error=error_msg,
             ))
             return
 
-        if attempt < config.QUEUE_JOB_MAX_RETRIES:
-            next_attempt = attempt + 1
-            cap = config.QUEUE_RETRY_BASE_DELAY * (2 ** next_attempt)
-            delay = random.uniform(0, cap)
-            logger.warning(
-                "Document %s failed attempt %d — re-enqueuing after %.2fs: %s",
-                doc_id, next_attempt, delay, exc,
-            )
+        try:
+            file_bytes = temp_path.read_bytes()
+        except OSError as exc:
+            error_msg = f"Cannot read temp file for doc {doc_id}: {exc}"
+            logger.error(error_msg)
             try:
                 await db_module.update_document_status(
-                    doc_id=doc_id, status="retrying"
+                    doc_id=doc_id,
+                    status="failed",
+                    error={"stage": "queued", "message": error_msg},
                 )
-            except Exception as status_err:
-                logger.error(
-                    "Failed to set retrying status for %s: %s",
-                    doc_id, status_err,
-                )
-            time.sleep(delay)
-            conn = redis_lib.Redis.from_url(config.REDIS_URL)
-            rq_queue = RQQueue(RQ_QUEUE_NAME, connection=conn)
-            rq_queue.enqueue(
-                _execute_job,
-                doc_id, file_name, content_type, temp_file_path, next_attempt,
-                job_id=f"chatvector:{doc_id}:{next_attempt}",
-                job_timeout=600,
-            )
-        else:
-            logger.error(
-                "Document %s (%r) exhausted %d retries — DLQ: %s",
-                doc_id, file_name, config.QUEUE_JOB_MAX_RETRIES, exc,
-                exc_info=True,
-            )
-            _cleanup_temp_file(temp_path)
+            except Exception:
+                logger.exception("Failed to mark document %s as failed", doc_id)
             _push_dlq_entry(DLQEntry(
                 doc_id=doc_id,
                 file_name=file_name,
                 content_type=content_type,
                 attempt=attempt,
-                error=str(exc),
+                error=error_msg,
             ))
+            return
+
+        rate_limiter = TokenBucketRateLimiter(
+            rate=config.QUEUE_EMBEDDING_RPS,
+            capacity=config.QUEUE_EMBEDDING_RPS,
+        )
+
+        pipeline = IngestionPipeline()
+        try:
+            await pipeline.process_document_background(
+                doc_id=doc_id,
+                file_name=file_name,
+                content_type=content_type,
+                file_bytes=file_bytes,
+                rate_limiter=rate_limiter,
+            )
+            _cleanup_temp_file(temp_path)
+        except Exception as exc:
+            if isinstance(exc, UploadPipelineError) and 400 <= exc.status_code < 500:
+                logger.error(
+                    "Document %s (%r) non-retryable error (HTTP %d) — DLQ: %s",
+                    doc_id, file_name, exc.status_code, exc,
+                    exc_info=True,
+                )
+                _cleanup_temp_file(temp_path)
+                _push_dlq_entry(DLQEntry(
+                    doc_id=doc_id,
+                    file_name=file_name,
+                    content_type=content_type,
+                    attempt=attempt,
+                    error=str(exc),
+                ))
+                return
+
+            if attempt < config.QUEUE_JOB_MAX_RETRIES:
+                next_attempt = attempt + 1
+                cap = config.QUEUE_RETRY_BASE_DELAY * (2 ** next_attempt)
+                delay = random.uniform(0, cap)
+                logger.warning(
+                    "Document %s failed attempt %d — re-enqueuing after %.2fs: %s",
+                    doc_id, next_attempt, delay, exc,
+                )
+                try:
+                    await db_module.update_document_status(
+                        doc_id=doc_id, status="retrying"
+                    )
+                except Exception as status_err:
+                    logger.error(
+                        "Failed to set retrying status for %s: %s",
+                        doc_id, status_err,
+                    )
+                time.sleep(delay)
+                conn = redis_lib.Redis.from_url(config.REDIS_URL)
+                rq_queue = RQQueue(RQ_QUEUE_NAME, connection=conn)
+                rq_queue.enqueue(
+                    _execute_job,
+                    doc_id, file_name, content_type, temp_file_path, next_attempt,
+                    job_id=f"chatvector:{doc_id}:{next_attempt}",
+                    job_timeout=600,
+                )
+            else:
+                logger.error(
+                    "Document %s (%r) exhausted %d retries — DLQ: %s",
+                    doc_id, file_name, config.QUEUE_JOB_MAX_RETRIES, exc,
+                    exc_info=True,
+                )
+                _cleanup_temp_file(temp_path)
+                _push_dlq_entry(DLQEntry(
+                    doc_id=doc_id,
+                    file_name=file_name,
+                    content_type=content_type,
+                    attempt=attempt,
+                    error=str(exc),
+                ))
 
 
 def _cleanup_temp_file(path: Path) -> None:
@@ -225,15 +226,44 @@ def _push_dlq_entry(entry: DLQEntry) -> None:
         logger.exception("Failed to push DLQ entry for %s", entry.doc_id)
 
 
+class _NoopDeathPenalty:
+    """
+    No-op job timeout context manager for non-main threads.
+
+    RQ's default death penalty uses SIGALRM which is only available
+    in the main thread.  Jobs still have the RQ job_timeout enforced
+    at the queue level; this only disables the in-process signal kill.
+    """
+
+    def __init__(self, timeout, exception, **kwargs):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return False
+
+    def cancel(self):
+        pass
+
+    def handle_death_penalty(self, *args, **kwargs):
+        pass
+
+
 class ThreadSafeWorker(SimpleWorker):
     """
     RQ worker safe for use in non-main threads.
 
-    Two changes from the default Worker:
+    Three changes from the default Worker:
     - Inherits SimpleWorker to avoid os.fork() (runs jobs in-process)
     - Overrides _install_signal_handlers() as a no-op because
       signal.signal() raises ValueError in non-main threads
+    - Uses _NoopDeathPenalty instead of UnixSignalDeathPenalty because
+      SIGALRM is unavailable outside the main thread
     """
+
+    death_penalty_class = _NoopDeathPenalty
 
     def _install_signal_handlers(self) -> None:
         pass  # signal handlers cannot be set outside the main thread
