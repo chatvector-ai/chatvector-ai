@@ -47,14 +47,12 @@ async def lifespan(app: FastAPI):
             # marked as failed (since "queued"/"retrying"/etc. are all stale).
             # Clear them so workers don't pick up jobs for already-failed documents.
             if config.QUEUE_BACKEND == "redis":
-                from services.queue_redis import RedisIngestionQueue
-                if isinstance(ingestion_queue, RedisIngestionQueue):
-                    removed = ingestion_queue.clear_stale_jobs(stale_doc_ids)
-                    logger.info(
-                        "Cleared %d stale RQ job(s) for %d failed document(s)",
-                        removed,
-                        len(stale_doc_ids),
-                    )
+                removed = ingestion_queue.clear_stale_jobs(stale_doc_ids)
+                logger.info(
+                    "Cleared %d stale RQ job(s) for %d failed document(s)",
+                    removed,
+                    len(stale_doc_ids),
+                )
     except Exception:
         logger.exception("Failed to reset stale documents on startup — continuing anyway")
 

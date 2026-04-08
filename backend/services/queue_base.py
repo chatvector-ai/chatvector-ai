@@ -111,3 +111,10 @@ class BaseIngestionQueue(ABC):
 
     @abstractmethod
     def active_worker_count(self) -> int: ...
+
+    def clear_stale_jobs(self, failed_doc_ids: set[str]) -> int:
+        """Remove stale jobs for already-failed documents.
+
+        No-op for backends that don't persist jobs across restarts.
+        """
+        return 0

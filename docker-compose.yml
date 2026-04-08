@@ -49,6 +49,8 @@ services:
       APP_ENV: "development"
       PYTHONPATH: /app
       REDIS_URL: "redis://redis:6379/0"
+      # QUEUE_BACKEND defaults to "memory" — set to "redis" in backend/.env
+      # to enable the Redis-backed durable queue
     working_dir: /app
     volumes:
       - ./backend:/app

@@ -53,15 +53,20 @@ def get_db_service():
 
 @asynccontextmanager
 async def worker_db_context():
-    """Install a fresh :class:`SQLAlchemyService` on the current thread.
+    """Install a fresh DB service on the current thread for RQ workers.
 
-    The service's async engine is created inside the caller's event loop
-    (the one spun up by ``asyncio.run()`` in the RQ worker thread), so
-    all DB operations that go through :func:`get_db_service` within
-    this context use connection pools bound to the correct loop.
+    In development (SQLAlchemy), a new :class:`SQLAlchemyService` is
+    created so its async engine is bound to the worker thread's event
+    loop rather than the main thread's.  The engine is disposed on exit.
 
-    The engine is disposed on exit to release pool resources.
+    In production (Supabase), the global singleton is returned as-is
+    because ``SupabaseService`` uses synchronous httpx under the hood
+    and does not have the event loop binding issue.
     """
+    if config.APP_ENV.lower() != "development":
+        yield get_db_service()
+        return
+
     from .sqlalchemy_service import SQLAlchemyService
 
     service = SQLAlchemyService()

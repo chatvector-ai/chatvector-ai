@@ -18,6 +18,7 @@ bucket is NOT shared across workers or processes.  For global rate limiting,
 move the bucket to Redis (e.g. redis-cell) — noted as future work.
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -31,7 +32,6 @@ from typing import Optional
 import redis as redis_lib
 from rq import Queue as RQQueue
 from rq import SimpleWorker
-from rq import Worker as RQWorker
 from rq.job import Job as RQJob
 
 from core.config import config
@@ -84,6 +84,7 @@ async def _async_execute_job(
     from services.ingestion_pipeline import IngestionPipeline, UploadPipelineError
 
     async with worker_db_context():
+        _redis_conn = redis_lib.Redis.from_url(config.REDIS_URL)
         temp_path = Path(temp_file_path)
 
         if not temp_path.exists():
@@ -103,7 +104,7 @@ async def _async_execute_job(
                 content_type=content_type,
                 attempt=attempt,
                 error=error_msg,
-            ))
+            ), conn=_redis_conn)
             return
 
         try:
@@ -125,7 +126,7 @@ async def _async_execute_job(
                 content_type=content_type,
                 attempt=attempt,
                 error=error_msg,
-            ))
+            ), conn=_redis_conn)
             return
 
         rate_limiter = TokenBucketRateLimiter(
@@ -157,7 +158,7 @@ async def _async_execute_job(
                     content_type=content_type,
                     attempt=attempt,
                     error=str(exc),
-                ))
+                ), conn=_redis_conn)
                 return
 
             if attempt < config.QUEUE_JOB_MAX_RETRIES:
@@ -177,9 +178,8 @@ async def _async_execute_job(
                         "Failed to set retrying status for %s: %s",
                         doc_id, status_err,
                     )
-                time.sleep(delay)
-                conn = redis_lib.Redis.from_url(config.REDIS_URL)
-                rq_queue = RQQueue(RQ_QUEUE_NAME, connection=conn)
+                await asyncio.sleep(delay)
+                rq_queue = RQQueue(RQ_QUEUE_NAME, connection=_redis_conn)
                 rq_queue.enqueue(
                     _execute_job,
                     doc_id, file_name, content_type, temp_file_path, next_attempt,
@@ -199,7 +199,7 @@ async def _async_execute_job(
                     content_type=content_type,
                     attempt=attempt,
                     error=str(exc),
-                ))
+                ), conn=_redis_conn)
 
 
 def _cleanup_temp_file(path: Path) -> None:
@@ -209,10 +209,13 @@ def _cleanup_temp_file(path: Path) -> None:
         logger.warning("Could not remove temp file %s", path)
 
 
-def _push_dlq_entry(entry: DLQEntry) -> None:
+def _push_dlq_entry(
+    entry: DLQEntry,
+    conn: redis_lib.Redis | None = None,
+) -> None:
     """Persist a DLQ entry as JSON in a Redis list."""
     try:
-        conn = redis_lib.Redis.from_url(config.REDIS_URL)
+        _conn = conn or redis_lib.Redis.from_url(config.REDIS_URL)
         payload = json.dumps({
             "doc_id": entry.doc_id,
             "file_name": entry.file_name,
@@ -221,18 +224,26 @@ def _push_dlq_entry(entry: DLQEntry) -> None:
             "error": entry.error,
             "failed_at": entry.failed_at.isoformat(),
         })
-        conn.rpush(DLQ_REDIS_KEY, payload)
+        _conn.rpush(DLQ_REDIS_KEY, payload)
     except Exception:
         logger.exception("Failed to push DLQ entry for %s", entry.doc_id)
 
 
 class _NoopDeathPenalty:
     """
-    No-op job timeout context manager for non-main threads.
+    No-op job timeout for non-main threads.
 
     RQ's default death penalty uses SIGALRM which is only available
     in the main thread.  Jobs still have the RQ job_timeout enforced
     at the queue level; this only disables the in-process signal kill.
+
+    Known limitation: the job_timeout=600 passed during enqueue is
+    not enforced in-process. If a job hangs indefinitely, the worker
+    thread will block until the FastAPI process exits. The daemon=True
+    flag ensures threads don't prevent process shutdown, but a hung
+    job will occupy a worker slot until then. A custom timeout
+    mechanism (e.g. asyncio.wait_for in _async_execute_job) would
+    address this if needed.
     """
 
     def __init__(self, timeout, exception, **kwargs):
