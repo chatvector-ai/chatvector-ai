@@ -1,9 +1,8 @@
-import Link from "next/link";
-
 const kickerClass =
   "font-mono text-[0.78rem] uppercase tracking-[2px] text-accent";
 const bodyClass = "text-muted text-[1rem] leading-[1.8]";
-const cardClass = "rounded-xl border border-border bg-surface p-6";
+const cardClass =
+  "rounded-xl border border-border bg-surface p-6 transition-colors hover:border-accent/40";
 const codeClass =
   "rounded-xl border border-border bg-surface px-5 py-4 font-mono text-[0.82rem] leading-[1.75] text-foreground";
 
@@ -12,8 +11,10 @@ export default function GettingStartedPage() {
     <div className="min-h-screen bg-background text-foreground">
       <main className="mx-auto flex w-full max-w-[720px] flex-col gap-16 px-6 pb-24 pt-16">
         <section className="space-y-6">
-          <p className={kickerClass}>{"// getting started"}</p>
-          <h1 className="text-[clamp(2rem,4vw,3rem)] font-semibold leading-[1.1] tracking-[-1px]">
+          <p className={`${kickerClass} block mb-4`}>
+            {"// getting started"}
+          </p>
+          <h1 className="text-3xl font-bold leading-[1.1] tracking-[-1px]">
             Run ChatVector locally in minutes.
           </h1>
           <p className={bodyClass}>
@@ -34,7 +35,7 @@ export default function GettingStartedPage() {
         </section>
 
         <section className="space-y-6">
-          <p className={kickerClass}>{"// prerequisites"}</p>
+          <p className={`${kickerClass} block mb-4`}>{"// prerequisites"}</p>
           <div className={cardClass}>
             <ul className="space-y-3 text-muted text-[0.98rem] leading-[1.7]">
               <li>Docker + Docker Compose installed.</li>
@@ -45,7 +46,7 @@ export default function GettingStartedPage() {
         </section>
 
         <section className="space-y-6">
-          <p className={kickerClass}>{"// quick setup"}</p>
+          <p className={`${kickerClass} block mb-4`}>{"// quick setup"}</p>
           <div className={cardClass}>
             <ol className="space-y-6 text-muted text-[0.98rem] leading-[1.7]">
               <li>
@@ -110,7 +111,7 @@ export default function GettingStartedPage() {
         </section>
 
         <section className="space-y-6">
-          <p className={kickerClass}>{"// test the api"}</p>
+          <p className={`${kickerClass} block mb-4`}>{"// test the api"}</p>
           <p className={bodyClass}>
             Once the containers are up, hit the root endpoint and open Swagger
             UI. Then try the three core endpoints to upload a document, check
@@ -135,7 +136,7 @@ export default function GettingStartedPage() {
         </section>
 
         <section className="space-y-6">
-          <p className={kickerClass}>{"// docker commands"}</p>
+          <p className={`${kickerClass} block mb-4`}>{"// docker commands"}</p>
           <div className={cardClass}>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-left text-[0.95rem] text-muted">
@@ -183,16 +184,18 @@ export default function GettingStartedPage() {
         </section>
 
         <section className="space-y-6">
-          <p className={kickerClass}>{"// next steps"}</p>
+          <p className={`${kickerClass} block mb-4`}>{"// next steps"}</p>
           <div className={cardClass}>
             <p className={bodyClass}>
               For full setup details, see the{" "}
-              <Link
+              <a
                 href="https://github.com/chatvector-ai/chatvector-ai/blob/main/README.md"
                 className="text-accent underline decoration-transparent hover:decoration-accent"
+                target="_blank"
+                rel="noreferrer"
               >
                 README on GitHub
-              </Link>
+              </a>
               .
             </p>
           </div>
