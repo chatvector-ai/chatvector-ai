@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 const kickerClass =
   "font-mono text-[0.78rem] uppercase tracking-[2px] text-accent";
 const bodyClass = "text-muted text-[1rem] leading-[1.8]";
@@ -10,6 +12,15 @@ export default function GettingStartedPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <main className="mx-auto flex w-full max-w-[720px] flex-col gap-16 px-6 pb-24 pt-16">
+        <div className="flex justify-center">
+          <Image
+            src="/redirect-logo.svg"
+            alt="ChatVector logo"
+            width={80}
+            height={80}
+            priority
+          />
+        </div>
         <section className="space-y-6">
           <p className={`${kickerClass} block mb-4`}>
             {"// getting started"}
@@ -59,7 +70,7 @@ export default function GettingStartedPage() {
                 >
                   ChatVector on GitHub
                 </a>{" "}
-                ?
+                ⭐
               </li>
               <li>
                 <span className="text-foreground font-medium">
@@ -146,32 +157,32 @@ export default function GettingStartedPage() {
                     <th className="py-3 font-medium text-foreground">Purpose</th>
                   </tr>
                 </thead>
-                <tbody>
-                  <tr className="border-b border-border">
+                <tbody className="divide-y divide-border">
+                  <tr className="transition-colors hover:bg-accent/5">
                     <td className="py-3 pr-4 font-mono text-foreground">
                       docker compose up --build
                     </td>
                     <td className="py-3">Start API + database</td>
                   </tr>
-                  <tr className="border-b border-border">
+                  <tr className="transition-colors hover:bg-accent/5">
                     <td className="py-3 pr-4 font-mono text-foreground">
                       docker compose down
                     </td>
                     <td className="py-3">Stop containers</td>
                   </tr>
-                  <tr className="border-b border-border">
+                  <tr className="transition-colors hover:bg-accent/5">
                     <td className="py-3 pr-4 font-mono text-foreground">
                       docker compose logs -f api
                     </td>
                     <td className="py-3">Tail API logs</td>
                   </tr>
-                  <tr className="border-b border-border">
+                  <tr className="transition-colors hover:bg-accent/5">
                     <td className="py-3 pr-4 font-mono text-foreground">
                       docker compose up db
                     </td>
                     <td className="py-3">Run database only</td>
                   </tr>
-                  <tr>
+                  <tr className="transition-colors hover:bg-accent/5">
                     <td className="py-3 pr-4 font-mono text-foreground">
                       docker compose down -v
                     </td>
@@ -185,7 +196,7 @@ export default function GettingStartedPage() {
 
         <section className="space-y-6">
           <p className={`${kickerClass} block mb-4`}>{"// next steps"}</p>
-          <div className={cardClass}>
+          <div className={`${cardClass} mt-2`}>
             <p className={bodyClass}>
               For full setup details, see the{" "}
               <a
