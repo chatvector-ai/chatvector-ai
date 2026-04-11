@@ -20,7 +20,7 @@ export default function ContributorsPage() {
     setLoading(true);
     setError("");
     fetch(
-      "https://api.github.com/repos/chatvector-ai/chatvector-ai/contributors"
+      "https://api.github.com/repos/chatvector-ai/chatvector-ai/contributors",
     )
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch");
@@ -29,7 +29,7 @@ export default function ContributorsPage() {
       .then((data) => {
         // sort explicitly (even though API already does)
         const sorted = data.sort(
-          (a: Contributor, b: Contributor) => b.contributions - a.contributions
+          (a: Contributor, b: Contributor) => b.contributions - a.contributions,
         );
         setContributors(sorted);
         setLoading(false);
@@ -47,7 +47,12 @@ export default function ContributorsPage() {
   return (
     <div className="max-w-[720px] mx-auto px-4 py-10">
       <p className="font-mono text-[0.78rem] uppercase tracking-[2px] text-accent mb-2">
-        {"// contributors"}
+        {"// thanks"}
+      </p>
+      <h1 className="text-3xl font-bold mb-4 text-foreground">Contributors</h1>
+      <p className="text-foreground text-[1rem] leading-[1.8] mb-8">
+        A special thanks to everyone who has contributed code, documentation,
+        ideas, or feedback. This project is shaped by the community.
       </p>
 
       {loading && (
@@ -58,8 +63,8 @@ export default function ContributorsPage() {
               className="animate-pulse bg-surface border border-border rounded-lg p-4 flex flex-col items-center gap-3"
             >
               <div className="w-16 h-16 rounded-full bg-border" />
-              <div className="h-3 w-48 rounded bg-border" />
-              <div className="h-3 w-28 rounded bg-border" />
+              <div className="h-3 w-36 md:w-48 rounded bg-border" />
+              <div className="h-3 w-24 md:w-28 rounded bg-border" />
             </div>
           ))}
         </div>
