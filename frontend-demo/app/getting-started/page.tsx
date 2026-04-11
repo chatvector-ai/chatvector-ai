@@ -186,14 +186,15 @@ export default function GettingStartedPage() {
           <p className={kickerClass}>{"// next steps"}</p>
           <div className={cardClass}>
             <p className={bodyClass}>
-              For full setup details, see the README on GitHub.
+              For full setup details, see the{" "}
+              <Link
+                href="https://github.com/chatvector-ai/chatvector-ai/blob/main/README.md"
+                className="text-accent underline decoration-transparent hover:decoration-accent"
+              >
+                README on GitHub
+              </Link>
+              .
             </p>
-            <Link
-              href="https://github.com/chatvector-ai/chatvector-ai/blob/main/README.md"
-              className="mt-4 inline-flex items-center text-accent underline decoration-transparent hover:decoration-accent"
-            >
-              Open README
-            </Link>
           </div>
         </section>
       </main>
