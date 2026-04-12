@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import httpx
 
@@ -66,18 +67,20 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
     ) -> None:
         self._model = model or config.EMBEDDING_MODEL or _DEFAULT_EMBEDDING_MODEL
         self._base_url = (base_url or config.OLLAMA_BASE_URL).rstrip("/")
+        self._client = httpx.AsyncClient(
+            base_url=self._base_url,
+            timeout=60.0,
+        )
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """POST to ``/api/embed`` for batch embedding."""
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self._base_url}/api/embed",
-                    json={"model": self._model, "input": texts},
-                    timeout=60.0,
-                )
-                response.raise_for_status()
-                return response.json()["embeddings"]
+            response = await self._client.post(
+                "/api/embed",
+                json={"model": self._model, "input": texts},
+            )
+            response.raise_for_status()
+            return response.json()["embeddings"]
 
         except httpx.HTTPStatusError as exc:
             raise _classify_http_error(exc) from exc
@@ -100,6 +103,10 @@ class OllamaLLMProvider(LLMProvider):
     ) -> None:
         self._model = model or config.LLM_MODEL or _DEFAULT_LLM_MODEL
         self._base_url = (base_url or config.OLLAMA_BASE_URL).rstrip("/")
+        self._client = httpx.AsyncClient(
+            base_url=self._base_url,
+            timeout=120.0,
+        )
 
     async def generate(
         self,
@@ -108,26 +115,30 @@ class OllamaLLMProvider(LLMProvider):
         system_instruction: str,
         temperature: float,
         max_output_tokens: int,
+        extra_params: dict[str, Any] | None = None,
     ) -> str:
         """POST to ``/api/generate`` for non-streaming text generation."""
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self._base_url}/api/generate",
-                    json={
-                        "model": self._model,
-                        "prompt": prompt,
-                        "system": system_instruction,
-                        "stream": False,
-                        "options": {
-                            "temperature": temperature,
-                            "num_predict": max_output_tokens,
-                        },
-                    },
-                    timeout=120.0,
-                )
-                response.raise_for_status()
-                return response.json().get("response", "No response.")
+            options: dict[str, Any] = {
+                "temperature": temperature,
+                "num_predict": max_output_tokens,
+            }
+            if extra_params:
+                for key in ("top_p", "top_k", "stop", "repeat_penalty", "seed"):
+                    if key in extra_params:
+                        options[key] = extra_params[key]
+            response = await self._client.post(
+                "/api/generate",
+                json={
+                    "model": self._model,
+                    "prompt": prompt,
+                    "system": system_instruction,
+                    "stream": False,
+                    "options": options,
+                },
+            )
+            response.raise_for_status()
+            return response.json().get("response", "No response.")
 
         except httpx.HTTPStatusError as exc:
             raise _classify_http_error(exc) from exc

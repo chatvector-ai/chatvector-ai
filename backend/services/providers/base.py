@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +81,25 @@ class EmbeddingProvider(ABC):
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """Return one embedding vector per input text."""
 
+    @property
+    def embedding_dim(self) -> int:
+        """Return the output vector dimension for the configured model.
+
+        Uses ``KNOWN_EMBEDDING_DIMS`` lookup by model name.  Subclasses may
+        override to provide custom logic (e.g., querying the model server).
+        """
+        model: str | None = getattr(self, "_model", None)
+        if model:
+            dim = KNOWN_EMBEDDING_DIMS.get(model)
+            if dim:
+                return dim
+            # Handle provider-prefixed names like "openai/text-embedding-3-small".
+            if "/" in model:
+                dim = KNOWN_EMBEDDING_DIMS.get(model.rsplit("/", 1)[1])
+                if dim:
+                    return dim
+        return 3072  # backward-compatible Gemini default
+
 
 class LLMProvider(ABC):
     """Common interface for LLM text-generation implementations."""
@@ -92,5 +112,14 @@ class LLMProvider(ABC):
         system_instruction: str,
         temperature: float,
         max_output_tokens: int,
+        extra_params: dict[str, Any] | None = None,
     ) -> str:
-        """Generate a text response for the given prompt."""
+        """Generate a text response for the given prompt.
+
+        Parameters
+        ----------
+        extra_params
+            Optional provider-specific parameters (e.g. top_p, stop
+            sequences).  Each provider maps relevant keys to its SDK
+            format and ignores unrecognised keys.
+        """

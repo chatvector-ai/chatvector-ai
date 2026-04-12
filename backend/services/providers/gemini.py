@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 import httpx
 from google import genai
@@ -151,13 +152,19 @@ class GeminiLLMProvider(LLMProvider):
         system_instruction: str,
         temperature: float,
         max_output_tokens: int,
+        extra_params: dict[str, Any] | None = None,
     ) -> str:
         """Call Gemini's ``generateContent`` endpoint."""
-        gen_config = genai_types.GenerateContentConfig(
-            system_instruction=system_instruction,
-            temperature=temperature,
-            max_output_tokens=max_output_tokens,
-        )
+        config_kwargs: dict[str, Any] = {
+            "system_instruction": system_instruction,
+            "temperature": temperature,
+            "max_output_tokens": max_output_tokens,
+        }
+        if extra_params:
+            for key in ("top_p", "top_k", "stop_sequences", "candidate_count"):
+                if key in extra_params:
+                    config_kwargs[key] = extra_params[key]
+        gen_config = genai_types.GenerateContentConfig(**config_kwargs)
 
         try:
             response = await asyncio.to_thread(

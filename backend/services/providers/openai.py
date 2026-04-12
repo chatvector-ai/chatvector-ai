@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import openai
 
@@ -115,18 +116,24 @@ class OpenAILLMProvider(LLMProvider):
         system_instruction: str,
         temperature: float,
         max_output_tokens: int,
+        extra_params: dict[str, Any] | None = None,
     ) -> str:
         """Call OpenAI's chat completions endpoint."""
         try:
-            response = await self._client.chat.completions.create(
-                model=self._model,
-                messages=[
+            create_kwargs: dict[str, Any] = {
+                "model": self._model,
+                "messages": [
                     {"role": "system", "content": system_instruction},
                     {"role": "user", "content": prompt},
                 ],
-                temperature=temperature,
-                max_tokens=max_output_tokens,
-            )
+                "temperature": temperature,
+                "max_tokens": max_output_tokens,
+            }
+            if extra_params:
+                for key in ("top_p", "frequency_penalty", "presence_penalty", "stop", "seed"):
+                    if key in extra_params:
+                        create_kwargs[key] = extra_params[key]
+            response = await self._client.chat.completions.create(**create_kwargs)
             return response.choices[0].message.content or "No response."
 
         except openai.APIError as exc:

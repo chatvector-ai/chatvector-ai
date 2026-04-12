@@ -59,8 +59,3 @@ logs/
 *.tmp
 *.temp
 venv/
-
-# AI Generated files
-.claude/
-CLAUDE.md
-*.local.json
