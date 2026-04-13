@@ -15,18 +15,14 @@ export default function ErrorState({
 }: Props) {
   return (
     <div className="flex flex-col items-center text-center gap-3">
-      <div
-        className="flex items-center justify-center rounded-2xl p-3"
-        style={{ background: "#0a0c10" }}
-      >
-        <Image
-          src="/redirect-logo.svg"
-          alt="Error logo"
-          width={80}
-          height={80}
-          priority
-        />
-      </div>
+      <Image
+        src="/redirect-logo.svg"
+        alt="Error logo"
+        width={160}
+        height={160}
+        priority
+        className="[[data-theme=light]_&]:invert"
+      />
       <p className="font-mono text-[0.78rem] uppercase tracking-[2px] text-accent">
         {kicker}
       </p>
