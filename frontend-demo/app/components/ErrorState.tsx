@@ -1,4 +1,7 @@
+"use client";
+
 import Image from "next/image";
+import { useEffect, useState } from "react";
 
 type Props = {
   kicker?: string; // defaults to "// error"
@@ -13,10 +16,23 @@ export default function ErrorState({
   message,
   onRetry,
 }: Props) {
+  const [logo, setLogo] = useState("/redirect-logo-dark.svg");
+
+  useEffect(() => {
+    const update = () => {
+      const theme = document.documentElement.getAttribute("data-theme");
+      setLogo(theme === "light" ? "/redirect-logo-light.svg" : "/redirect-logo-dark.svg");
+    };
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="flex flex-col items-center text-center gap-3">
       <Image
-        src="/redirect-logo-dark.svg"
+        src={logo}
         alt="Error logo"
         width={80}
         height={80}
