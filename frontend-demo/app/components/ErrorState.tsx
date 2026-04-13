@@ -16,7 +16,7 @@ export default function ErrorState({
   return (
     <div className="flex flex-col items-center text-center gap-3">
       <Image
-        src="/redirect-logo.svg"
+        src="/redirect-logo-dark.svg"
         alt="Error logo"
         width={80}
         height={80}
