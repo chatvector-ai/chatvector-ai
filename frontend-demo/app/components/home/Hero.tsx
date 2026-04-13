@@ -45,7 +45,7 @@ function HeroCodeBlock() {
   ];
 
   return (
-    <div className="mt-12 w-full max-w-[700px]">
+    <div className="relative z-[1] mt-12 w-full max-w-[700px]">
       <div className="overflow-hidden rounded-xl border border-border bg-code-bg">
         <div className="flex items-center gap-2 border-b border-border bg-[rgb(24,28,34)] px-4 py-3">
           {/* macOS traffic-light dots — intentional non-token colors */}
