@@ -213,7 +213,14 @@ def get_embedding_dim() -> int:
     """
     raw = os.getenv("EMBEDDING_DIM")
     if raw:
-        return int(raw)
+        try:
+            return int(raw)
+        except ValueError:
+            raise ValueError(
+                f"EMBEDDING_DIM={raw!r} is not a valid integer. "
+                f"Set it to the embedding dimension of your model "
+                f"(e.g. 3072 for Gemini, 1536 for OpenAI text-embedding-3-small)."
+            )
 
     # Deferred import: avoids a circular import at module load time and
     # keeps the provider factory lazy for everything except this single call.

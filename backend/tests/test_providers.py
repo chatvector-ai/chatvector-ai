@@ -319,6 +319,42 @@ class TestOllamaEmbedParsing:
 
         assert result == [[0.1, 0.2], [0.3, 0.4]]
 
+    async def test_fallback_to_singular_embedding_key(self):
+        """Older Ollama versions (pre-0.1.34) use 'embedding' (singular)."""
+        from unittest.mock import AsyncMock, MagicMock
+        from services.providers.ollama import OllamaEmbeddingProvider
+
+        provider = OllamaEmbeddingProvider()
+
+        fake_response = MagicMock()
+        fake_response.raise_for_status = MagicMock()
+        fake_response.json = MagicMock(
+            return_value={"embedding": [[0.1, 0.2], [0.3, 0.4]]}
+        )
+        provider._client.post = AsyncMock(return_value=fake_response)
+
+        result = await provider.embed(["a", "b"])
+
+        assert result == [[0.1, 0.2], [0.3, 0.4]]
+
+    async def test_missing_both_keys_raises_provider_error(self):
+        from unittest.mock import AsyncMock, MagicMock
+        from services.providers.ollama import OllamaEmbeddingProvider, ProviderError
+
+        provider = OllamaEmbeddingProvider()
+
+        fake_response = MagicMock()
+        fake_response.raise_for_status = MagicMock()
+        # Response with neither 'embeddings' nor 'embedding'
+        fake_response.json = MagicMock(return_value={"something_else": "here"})
+        provider._client.post = AsyncMock(return_value=fake_response)
+
+        with pytest.raises(ProviderError) as exc:
+            await provider.embed(["a", "b"])
+
+        assert "Unexpected Ollama embed response shape" in str(exc.value)
+        assert "something_else" in str(exc.value)
+
 
 class TestOllamaGenerateParsing:
     """Verify OllamaLLMProvider.generate() parses response['response'] with fallback."""
