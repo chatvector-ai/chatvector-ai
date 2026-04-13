@@ -199,7 +199,7 @@ export default function Navigation() {
                           setMobileOpen(false);
                           setDocsOpen(false);
                         }}
-                        className="block px-4 py-2 text-[0.9rem] text-muted no-underline transition-colors hover:text-foreground"
+                        className="block px-4 py-2 text-[0.9rem] text-white no-underline transition-opacity hover:opacity-60"
                       >
                         {label}
                       </Link>
