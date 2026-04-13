@@ -23,6 +23,8 @@
   --subtle: #3d4555;
   --accent: #00e5a0;
   --blue: #0080ff;
+  /* Theme-invariant token — code blocks always render on a dark surface */
+  --code-bg: #111418;
 }
 
 [data-theme="light"] {
@@ -46,6 +48,7 @@
   --color-subtle: var(--subtle);
   --color-accent: var(--accent);
   --color-blue: var(--blue);
+  --color-code-bg: var(--code-bg);
 
   /* Fonts */
   --font-sans: 'DM Sans', sans-serif;
