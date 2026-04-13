@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
+import ThemeToggle from "./ThemeToggle";
 
 const GITHUB_REPO = "https://github.com/chatvector-ai/chatvector-ai";
 
@@ -148,6 +149,7 @@ export default function Navigation() {
 
         <div className="flex shrink-0 items-center gap-3">
           <GitHubButton className="hidden md:inline-flex" />
+          <ThemeToggle />
           <button
             type="button"
             aria-expanded={mobileOpen}

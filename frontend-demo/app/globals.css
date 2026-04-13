@@ -25,6 +25,17 @@
   --blue: #0080ff;
 }
 
+[data-theme="light"] {
+  --background: #ffffff;
+  --foreground: #0a0c10;
+  --surface: #f4f5f7;
+  --border: #e2e5ea;
+  --muted: #5a6270;
+  --subtle: #9ba3af;
+  --accent: #00c48a;
+  --blue: #0070e0;
+}
+
 @theme inline {
   /* Colors — semantic tokens */
   --color-background: var(--background);

@@ -15,6 +15,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {/* Runs synchronously before paint to prevent flash of wrong theme */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);})();`,
+          }}
+        />
+      </head>
       <body className="flex min-h-screen flex-col antialiased">
         <Navigation />
         <main className="flex min-h-0 flex-1 flex-col">{children}</main>
