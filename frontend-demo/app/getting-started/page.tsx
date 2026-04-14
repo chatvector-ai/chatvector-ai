@@ -1,5 +1,3 @@
-import Image from "next/image";
-
 const kickerClass =
   "font-mono text-[0.78rem] uppercase tracking-[2px] text-accent";
 const bodyClass = "text-muted text-[1rem] leading-[1.8]";
@@ -12,15 +10,6 @@ export default function GettingStartedPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <main className="mx-auto flex w-full max-w-[720px] flex-col gap-16 px-6 pb-24 pt-16">
-        <div className="flex justify-center">
-          <Image
-            src="/redirect-logo.svg"
-            alt="ChatVector logo"
-            width={80}
-            height={80}
-            priority
-          />
-        </div>
         <section className="space-y-6">
           <p className={`${kickerClass} block mb-4`}>
             {"// getting started"}
