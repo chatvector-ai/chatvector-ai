@@ -329,13 +329,13 @@ class TestOllamaEmbedParsing:
         fake_response = MagicMock()
         fake_response.raise_for_status = MagicMock()
         fake_response.json = MagicMock(
-            return_value={"embedding": [[0.1, 0.2], [0.3, 0.4]]}
+            return_value={"embedding": [0.1, 0.2, 0.3]}
         )
         provider._client.post = AsyncMock(return_value=fake_response)
 
-        result = await provider.embed(["a", "b"])
+        result = await provider.embed(["test"])
 
-        assert result == [[0.1, 0.2], [0.3, 0.4]]
+        assert result == [[0.1, 0.2, 0.3]]
 
     async def test_missing_both_keys_raises_provider_error(self):
         from unittest.mock import AsyncMock, MagicMock
