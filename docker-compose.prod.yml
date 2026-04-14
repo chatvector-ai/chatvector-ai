@@ -21,6 +21,18 @@ services:
       retries: 10
       start_period: 5s
 
+  redis:
+    image: redis:7-alpine
+    container_name: chatvector-redis
+    restart: always
+    volumes:
+      - chatvector-redis-data-prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
   api:
     build:
       context: ./backend
@@ -28,6 +40,8 @@ services:
     restart: always
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "8000:8000"
@@ -38,6 +52,7 @@ services:
       LOG_FORMAT: JSON
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       CORS_ORIGINS: ${CORS_ORIGINS}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       PYTHONPATH: /app
     working_dir: /app
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
@@ -54,3 +69,4 @@ services:
 
 volumes:
   chatvector-db-data-prod:
+  chatvector-redis-data-prod:
