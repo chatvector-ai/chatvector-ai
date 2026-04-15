@@ -50,7 +50,7 @@ export default function ThemeToggle() {
       type="button"
       onClick={toggle}
       aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
-      className="cursor-pointer rounded-md border border-white/25 bg-transparent p-2 text-white transition-colors duration-200 hover:border-accent hover:bg-accent/10 hover:text-accent"
+      className="cursor-pointer rounded-md border border-border bg-transparent p-2 text-foreground transition-colors duration-200 hover:border-accent hover:bg-accent/10 hover:text-accent"
     >
       {isLight ? (
         <Sun className="size-[1.1rem]" aria-hidden />

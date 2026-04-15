@@ -25,6 +25,8 @@
   --blue: #0080ff;
   /* Theme-invariant token — code blocks always render on a dark surface */
   --code-bg: #111418;
+  /* Nav scrim — 88% opacity background that tracks the active theme */
+  --nav-bg: rgba(10, 12, 16, 0.88);
 }
 
 [data-theme="light"] {
@@ -36,6 +38,7 @@
   --subtle: #9ba3af;
   --accent: #00c48a;
   --blue: #0070e0;
+  --nav-bg: rgba(255, 255, 255, 0.88);
 }
 
 @theme inline {

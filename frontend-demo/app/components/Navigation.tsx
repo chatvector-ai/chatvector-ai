@@ -53,7 +53,7 @@ function NavLinks({
               className={`text-[1.05rem] no-underline transition-colors duration-200 ${
                 isActive
                   ? "text-accent"
-                  : "text-white hover:text-accent"
+                  : "text-foreground hover:text-accent"
               }`}
             >
               {label}
@@ -71,7 +71,7 @@ function GitHubButton({ className }: { className?: string }) {
       href={GITHUB_REPO}
       target="_blank"
       rel="noopener noreferrer"
-      className={`inline-flex cursor-pointer items-center justify-center rounded-md border border-white/25 bg-transparent px-[18px] py-[7px] text-[1.05rem] text-white no-underline transition-all duration-200 hover:border-accent hover:bg-accent/10 hover:text-accent ${className ?? ""}`}
+      className={`inline-flex cursor-pointer items-center justify-center rounded-md border border-border bg-transparent px-[18px] py-[7px] text-[1.05rem] text-foreground no-underline transition-all duration-200 hover:border-accent hover:bg-accent/10 hover:text-accent ${className ?? ""}`}
     >
       GitHub
     </a>
@@ -88,9 +88,9 @@ export default function Navigation() {
   return (
     <header
       className="sticky top-0 z-[100] border-b border-border backdrop-blur-[14px]"
-      style={{ background: "rgba(10,12,16,0.88)" }}
+      style={{ background: "var(--nav-bg)" }}
     >
-      {/* Header scrim: 88% of page background rgba — inline for exact match with backdrop-blur */}
+      {/* Header scrim: 88% of active theme background — see --nav-bg token in globals.css */}
       <nav className="mx-auto flex min-h-[60px] max-w-[1100px] items-center justify-between gap-4 px-4">
         <Link
           href="/"
@@ -118,7 +118,7 @@ export default function Navigation() {
               className={`flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[1.05rem] no-underline transition-colors duration-200 ${
                 docsActive
                   ? "text-accent"
-                  : "text-white hover:text-accent"
+                  : "text-foreground hover:text-accent"
               }`}
             >
               Docs
@@ -155,7 +155,7 @@ export default function Navigation() {
             aria-expanded={mobileOpen}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             onClick={() => setMobileOpen((o) => !o)}
-            className="cursor-pointer rounded-md border border-border bg-transparent px-3 py-2 text-lg leading-none text-white hover:text-blue md:hidden"
+            className="cursor-pointer rounded-md border border-border bg-transparent px-3 py-2 text-lg leading-none text-foreground hover:text-blue md:hidden"
           >
             {mobileOpen ? "✕" : "☰"}
           </button>
@@ -178,7 +178,7 @@ export default function Navigation() {
                 className={`inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[1.05rem] no-underline transition-colors duration-200 ${
                   docsActive
                     ? "text-accent"
-                    : "text-white hover:text-accent"
+                    : "text-foreground hover:text-accent"
                 }`}
               >
                 Docs
@@ -199,7 +199,7 @@ export default function Navigation() {
                           setMobileOpen(false);
                           setDocsOpen(false);
                         }}
-                        className="block px-4 py-2 text-[0.9rem] text-white no-underline transition-opacity hover:opacity-60"
+                        className="block px-4 py-2 text-[0.9rem] text-foreground no-underline transition-colors hover:text-accent"
                       >
                         {label}
                       </Link>
