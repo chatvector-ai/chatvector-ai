@@ -19,8 +19,10 @@ def clear_health_check_cache():
     status_module._HEALTH_CHECK_CACHE.clear()
     status_module._HEALTH_CHECK_CACHE_LOCKS.clear()
     # Mock redis_client to avoid actual Redis calls
+    # Use AsyncMock for get and setex because they are now awaited
     with patch("routes.status.redis_client") as mock_redis:
-        mock_redis.get.return_value = None
+        mock_redis.get = AsyncMock(return_value=None)
+        mock_redis.setex = AsyncMock(return_value=True)
         yield mock_redis
     status_module._HEALTH_CHECK_CACHE.clear()
     status_module._HEALTH_CHECK_CACHE_LOCKS.clear()
@@ -235,6 +237,7 @@ async def test_run_health_check_with_cache_uses_redis_if_available(monkeypatch, 
     monkeypatch.setattr(status_module.time, "monotonic", clock.monotonic)
     monkeypatch.setattr(status_module.time, "time", clock.time)
     monkeypatch.setattr(status_module.config, "HEALTH_CHECK_CACHE_TTL_SECONDS", 60)
+    monkeypatch.setattr(status_module.config, "QUEUE_BACKEND", "redis")
 
     cached_at = status_module._health_check_checked_at(clock.time())
     mock_redis.get.return_value = json.dumps({
@@ -249,6 +252,7 @@ async def test_run_health_check_with_cache_uses_redis_if_available(monkeypatch, 
     assert result["cached"] is True
     assert result["latency_ms"] == 5
     assert result["checked_at"] == cached_at
+    mock_redis.get.assert_awaited()
     health_check.assert_not_called()
 
 
@@ -262,6 +266,7 @@ async def test_run_health_check_with_cache_falls_back_to_memory_if_redis_fails(m
     monkeypatch.setattr(status_module.time, "monotonic", clock.monotonic)
     monkeypatch.setattr(status_module.time, "time", clock.time)
     monkeypatch.setattr(status_module.config, "HEALTH_CHECK_CACHE_TTL_SECONDS", 60)
+    monkeypatch.setattr(status_module.config, "QUEUE_BACKEND", "redis")
 
     health_check = AsyncMock(side_effect=[
         {"status": "ok", "latency_ms": 10},
@@ -279,3 +284,16 @@ async def test_run_health_check_with_cache_falls_back_to_memory_if_redis_fails(m
     assert second["cached"] is True
     assert second["latency_ms"] == 10
     health_check.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_run_health_check_with_cache_skips_redis_if_backend_is_memory(monkeypatch, clear_health_check_cache):
+    mock_redis = clear_health_check_cache
+    monkeypatch.setattr(status_module.config, "QUEUE_BACKEND", "memory")
+
+    health_check = AsyncMock(return_value={"status": "ok", "latency_ms": 10})
+
+    await _run_health_check_with_cache("embedding", health_check)
+
+    mock_redis.get.assert_not_called()
+    mock_redis.setex.assert_not_called()

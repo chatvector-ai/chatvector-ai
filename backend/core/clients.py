@@ -1,5 +1,5 @@
 from supabase import ClientOptions, create_client
-from redis import Redis
+from redis.asyncio import Redis
 from core.config import config
 import logging
 
