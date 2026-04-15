@@ -1,5 +1,6 @@
 """Tests for /status health checks and payload helpers."""
 
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -17,7 +18,12 @@ from routes.status import (
 def clear_health_check_cache():
     status_module._HEALTH_CHECK_CACHE.clear()
     status_module._HEALTH_CHECK_CACHE_LOCKS.clear()
-    yield
+    # Mock redis_client to avoid actual Redis calls
+    # Use AsyncMock for get and setex because they are now awaited
+    with patch("routes.status.redis_client") as mock_redis:
+        mock_redis.get = AsyncMock(return_value=None)
+        mock_redis.setex = AsyncMock(return_value=True)
+        yield mock_redis
     status_module._HEALTH_CHECK_CACHE.clear()
     status_module._HEALTH_CHECK_CACHE_LOCKS.clear()
 
@@ -89,7 +95,7 @@ async def test_llm_health_check_error_when_generate_answer_raises():
 
 
 @pytest.mark.asyncio
-async def test_run_health_check_with_cache_reuses_result_within_ttl(monkeypatch):
+async def test_run_health_check_with_cache_reuses_result_within_ttl(monkeypatch, clear_health_check_cache):
     clock = _FakeClock()
     monkeypatch.setattr(status_module.time, "monotonic", clock.monotonic)
     monkeypatch.setattr(status_module.time, "time", clock.time)
@@ -114,7 +120,7 @@ async def test_run_health_check_with_cache_reuses_result_within_ttl(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_run_health_check_with_cache_refreshes_after_ttl(monkeypatch):
+async def test_run_health_check_with_cache_refreshes_after_ttl(monkeypatch, clear_health_check_cache):
     clock = _FakeClock()
     monkeypatch.setattr(status_module.time, "monotonic", clock.monotonic)
     monkeypatch.setattr(status_module.time, "time", clock.time)
@@ -138,7 +144,7 @@ async def test_run_health_check_with_cache_refreshes_after_ttl(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_run_health_check_with_cache_tracks_embedding_and_llm_independently(monkeypatch):
+async def test_run_health_check_with_cache_tracks_embedding_and_llm_independently(monkeypatch, clear_health_check_cache):
     clock = _FakeClock()
     monkeypatch.setattr(status_module.time, "monotonic", clock.monotonic)
     monkeypatch.setattr(status_module.time, "time", clock.time)
@@ -186,7 +192,7 @@ def test_overall_status_combinations(db_ok, embedding_ok, llm_ok, expected):
 
 # NEW TEST: failing result cached, then refreshed after TTL
 @pytest.mark.asyncio
-async def test_run_health_check_with_cache_failing_result_cached_then_refreshed_after_ttl(monkeypatch):
+async def test_run_health_check_with_cache_failing_result_cached_then_refreshed_after_ttl(monkeypatch, clear_health_check_cache):
     clock = _FakeClock()
     monkeypatch.setattr(status_module.time, "monotonic", clock.monotonic)
     monkeypatch.setattr(status_module.time, "time", clock.time)
@@ -222,3 +228,72 @@ async def test_run_health_check_with_cache_failing_result_cached_then_refreshed_
     assert third["checked_at"] != first["checked_at"]
 
     assert health_check.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_run_health_check_with_cache_uses_redis_if_available(monkeypatch, clear_health_check_cache):
+    mock_redis = clear_health_check_cache
+    clock = _FakeClock()
+    monkeypatch.setattr(status_module.time, "monotonic", clock.monotonic)
+    monkeypatch.setattr(status_module.time, "time", clock.time)
+    monkeypatch.setattr(status_module.config, "HEALTH_CHECK_CACHE_TTL_SECONDS", 60)
+    monkeypatch.setattr(status_module.config, "QUEUE_BACKEND", "redis")
+
+    cached_at = status_module._health_check_checked_at(clock.time())
+    mock_redis.get.return_value = json.dumps({
+        "result": {"status": "ok", "latency_ms": 5},
+        "checked_at": cached_at
+    })
+
+    health_check = AsyncMock(return_value={"status": "ok", "latency_ms": 99})
+
+    result = await _run_health_check_with_cache("embedding", health_check)
+
+    assert result["cached"] is True
+    assert result["latency_ms"] == 5
+    assert result["checked_at"] == cached_at
+    mock_redis.get.assert_awaited()
+    health_check.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_health_check_with_cache_falls_back_to_memory_if_redis_fails(monkeypatch, clear_health_check_cache):
+    mock_redis = clear_health_check_cache
+    mock_redis.get.side_effect = Exception("Redis down")
+    mock_redis.setex.side_effect = Exception("Redis down")
+
+    clock = _FakeClock()
+    monkeypatch.setattr(status_module.time, "monotonic", clock.monotonic)
+    monkeypatch.setattr(status_module.time, "time", clock.time)
+    monkeypatch.setattr(status_module.config, "HEALTH_CHECK_CACHE_TTL_SECONDS", 60)
+    monkeypatch.setattr(status_module.config, "QUEUE_BACKEND", "redis")
+
+    health_check = AsyncMock(side_effect=[
+        {"status": "ok", "latency_ms": 10},
+        {"status": "ok", "latency_ms": 20},
+    ])
+
+    # First call: Redis fails, but in-memory is updated
+    first = await _run_health_check_with_cache("embedding", health_check)
+    assert first["cached"] is False
+    assert first["latency_ms"] == 10
+
+    # Second call: Redis fails, but in-memory hit
+    clock.advance(30)
+    second = await _run_health_check_with_cache("embedding", health_check)
+    assert second["cached"] is True
+    assert second["latency_ms"] == 10
+    health_check.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_run_health_check_with_cache_skips_redis_if_backend_is_memory(monkeypatch, clear_health_check_cache):
+    mock_redis = clear_health_check_cache
+    monkeypatch.setattr(status_module.config, "QUEUE_BACKEND", "memory")
+
+    health_check = AsyncMock(return_value={"status": "ok", "latency_ms": 10})
+
+    await _run_health_check_with_cache("embedding", health_check)
+
+    mock_redis.get.assert_not_called()
+    mock_redis.setex.assert_not_called()

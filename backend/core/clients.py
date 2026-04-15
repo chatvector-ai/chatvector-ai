@@ -1,8 +1,11 @@
 from supabase import ClientOptions, create_client
+from redis.asyncio import Redis
 from core.config import config
 import logging
 
 logger = logging.getLogger(__name__)
+
+
 class _LazySupabaseClient:
     """Lazy-initializing supabase client proxy.
 
@@ -33,5 +36,22 @@ class _LazySupabaseClient:
         self._ensure_client()
         return getattr(self._client, name)
 
-# Export an object with the same name as before for backwards compatibility
+
+class _LazyRedisClient:
+    """Lazy-initializing Redis client proxy."""
+    def __init__(self):
+        self._client = None
+
+    def _ensure_client(self):
+        if self._client is None:
+            self._client = Redis.from_url(config.REDIS_URL, decode_responses=True)
+            logger.info("Redis client initialized at %s", config.REDIS_URL)
+
+    def __getattr__(self, name):
+        self._ensure_client()
+        return getattr(self._client, name)
+
+
+# Export objects for backwards compatibility and easy access
 supabase_client = _LazySupabaseClient()
+redis_client = _LazyRedisClient()

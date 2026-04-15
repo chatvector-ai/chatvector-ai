@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import time
@@ -14,6 +15,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 
 import db
+from core.clients import redis_client
 from core.config import config
 from middleware.rate_limit import limiter
 from routes.root import _is_browser
@@ -27,6 +29,7 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 _BAR_WIDTH = 10
 _HEALTH_CHECK_CACHE: dict[str, dict[str, Any]] = {}
 _HEALTH_CHECK_CACHE_LOCKS: dict[str, asyncio.Lock] = {}
+REDIS_HEALTH_CACHE_PREFIX = "chatvector:health_cache"
 
 
 def _read_version() -> str:
@@ -150,7 +153,22 @@ def _health_check_cache_is_fresh(entry: dict[str, Any], now_monotonic: float) ->
     return now_monotonic - float(checked_monotonic) < config.HEALTH_CHECK_CACHE_TTL_SECONDS
 
 
-def _health_check_cache_hit(check_name: str, now_monotonic: float) -> dict[str, Any] | None:
+async def _health_check_cache_hit(check_name: str, now_monotonic: float) -> dict[str, Any] | None:
+    # 1. Try Redis first (only if Redis queue is enabled)
+    if config.QUEUE_BACKEND == "redis":
+        try:
+            redis_key = f"{REDIS_HEALTH_CACHE_PREFIX}:{check_name}"
+            cached_data = await redis_client.get(redis_key)
+            if cached_data:
+                entry = json.loads(cached_data)
+                cached_result = entry.get("result")
+                checked_at = entry.get("checked_at")
+                if isinstance(cached_result, dict) and isinstance(checked_at, str):
+                    return _health_check_response(cached_result, cached=True, checked_at=checked_at)
+        except Exception:
+            logger.debug("Redis health cache hit failed, falling back to memory", exc_info=True)
+
+    # 2. Fallback to in-memory cache
     entry = _HEALTH_CHECK_CACHE.get(check_name)
     if not entry or not _health_check_cache_is_fresh(entry, now_monotonic):
         return None
@@ -182,23 +200,38 @@ async def _run_health_check_with_cache(
         return _health_check_response(result, cached=False, checked_at=checked_at)
 
     now_monotonic = time.monotonic()
-    cached_result = _health_check_cache_hit(check_name, now_monotonic)
+    cached_result = await _health_check_cache_hit(check_name, now_monotonic)
     if cached_result is not None:
         return cached_result
 
     async with _health_check_lock(check_name):
         now_monotonic = time.monotonic()
-        cached_result = _health_check_cache_hit(check_name, now_monotonic)
+        cached_result = await _health_check_cache_hit(check_name, now_monotonic)
         if cached_result is not None:
             return cached_result
 
         result = await health_check()
         checked_at = _health_check_checked_at(time.time())
+
+        # 1. Update in-memory cache
         _HEALTH_CHECK_CACHE[check_name] = {
             "result": dict(result),
             "checked_at": checked_at,
             "checked_monotonic": now_monotonic,
         }
+
+        # 2. Update Redis cache (only if Redis queue is enabled)
+        if config.QUEUE_BACKEND == "redis":
+            try:
+                redis_key = f"{REDIS_HEALTH_CACHE_PREFIX}:{check_name}"
+                payload = json.dumps({
+                    "result": dict(result),
+                    "checked_at": checked_at,
+                })
+                await redis_client.setex(redis_key, config.HEALTH_CHECK_CACHE_TTL_SECONDS, payload)
+            except Exception:
+                logger.warning("Failed to update Redis health cache for %s", check_name)
+
         return _health_check_response(result, cached=False, checked_at=checked_at)
 
 
