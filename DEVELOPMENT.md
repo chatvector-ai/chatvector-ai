@@ -288,6 +288,33 @@ Docker Compose expands `${VAR}` from your process environment or a
 
 See `backend/.env.example` for the full list of tunables.
 
+### Upgrading from a pre-#167 Deployment
+
+Versions before PR #167 created `document_chunks.embedding` as `vector(3072)`.
+The current schema uses a dimensionless `vector` column to support multiple
+embedding providers.
+
+**Option A — Run the migration (keeps existing data):**
+
+```bash
+docker compose exec db psql -U postgres -d postgres \
+    -f /docker-entrypoint-initdb.d/002_dimensionless_vector.sql
+```
+
+Or connect directly and paste the contents of
+`backend/db/init/002_dimensionless_vector.sql`.
+
+> **Note:** existing embeddings are preserved but become incompatible if you
+> switch to a provider with a different embedding dimension. A full re-ingest
+> is required after a provider change.
+
+**Option B — Full wipe and re-ingest (simplest for dev environments):**
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
 ### Ports
 
 - **8000** — HTTP API. Expose behind a reverse proxy or load balancer.
