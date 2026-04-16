@@ -10,7 +10,7 @@ export default function SdkPage() {
         <h1 className="text-foreground text-3xl font-semibold mb-4">
           ChatVector Python Client
         </h1>
-        <p className="text-muted text-[1rem] leading-[1.8]">
+        <p className="text-foreground text-[1rem] leading-[1.8]">
           A lightweight Python client for uploading documents, polling ingestion status,
           and querying the ChatVector RAG backend over HTTP.
         </p>
@@ -87,7 +87,7 @@ with ChatVectorClient("http://localhost:8000") as client:
     api_key="your-bearer-token"
 )`}</code>
         </pre>
-        <p className="mt-3 text-muted">
+        <p className="mt-3 text-foreground">
           The token is optional. Omit it if your backend does not require authentication.
         </p>
       </section>
@@ -193,7 +193,7 @@ except ChatVectorAPIError as e:
       </section>
 
       {/* Footer link */}
-      <p className="mt-16 text-sm text-muted border-t border-border pt-6">
+      <p className="mt-16 text-sm text-foreground border-t border-border pt-6">
         For full SDK details, see the{" "}
         <a
           href="https://github.com/chatvector-ai/chatvector-ai/blob/main/sdk/python/README.md"
