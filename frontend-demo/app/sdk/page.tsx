@@ -1,6 +1,6 @@
 export default function SdkPage() {
   return (
-    <main className="max-w-[720px] mx-auto px-6 py-16 text-muted text-[1rem] leading-[1.8]">
+    <div className="max-w-[720px] mx-auto px-4 py-10 text-foreground text-[1rem] leading-[1.8]">
 
       {/* Header */}
       <div className="mb-12">
@@ -84,7 +84,7 @@ with ChatVectorClient("http://localhost:8000") as client:
         <pre className="bg-surface border border-border rounded-xl font-mono text-[0.82rem] p-4 overflow-x-auto">
           <code>{`client = ChatVectorClient(
     base_url="http://localhost:8000",
-    token="your-bearer-token"
+    api_key="your-bearer-token"
 )`}</code>
         </pre>
         <p className="mt-3 text-muted">
@@ -103,20 +103,20 @@ with ChatVectorClient("http://localhost:8000") as client:
         <div className="space-y-3">
           {[
             {
-              name: "UploadError",
-              desc: "Raised when document upload fails — e.g. file not found, server rejected the request.",
-            },
-            {
-              name: "IngestionTimeoutError",
-              desc: "Raised by wait_for_ready when the document does not reach a ready state within the timeout window.",
-            },
-            {
-              name: "ChatError",
-              desc: "Raised when the chat request fails — e.g. invalid document ID or backend error.",
-            },
-            {
               name: "ChatVectorAPIError",
               desc: "Base exception for all SDK errors. Catch this to handle any client error in one place.",
+            },
+            {
+              name: "ChatVectorAuthError",
+              desc: "Raised when the request is rejected due to missing or invalid authentication credentials.",
+            },
+            {
+              name: "ChatVectorRateLimitError",
+              desc: "Raised when the backend returns a rate limit response. Back off and retry after a delay.",
+            },
+            {
+              name: "ChatVectorTimeoutError",
+              desc: "Raised by wait_for_ready when the document does not reach a ready state within the timeout window.",
             },
           ].map(({ name, desc }) => (
             <div key={name} className="flex gap-3">
@@ -129,18 +129,25 @@ with ChatVectorClient("http://localhost:8000") as client:
         </div>
 
         <pre className="mt-5 bg-surface border border-border rounded-xl font-mono text-[0.82rem] p-4 overflow-x-auto">
-          <code>{`from chatvector.exceptions import UploadError, IngestionTimeoutError, ChatError
+          <code>{`from chatvector.exceptions import (
+    ChatVectorAPIError,
+    ChatVectorAuthError,
+    ChatVectorRateLimitError,
+    ChatVectorTimeoutError,
+)
 
 try:
     doc = client.upload_document("report.pdf")
     client.wait_for_ready(doc.document_id, timeout=60)
     answer = client.chat("Summarise the document.", doc.document_id)
-except UploadError as e:
-    print("Upload failed:", e)
-except IngestionTimeoutError:
+except ChatVectorAuthError:
+    print("Authentication failed. Check your api_key.")
+except ChatVectorRateLimitError:
+    print("Rate limit hit. Wait and retry.")
+except ChatVectorTimeoutError:
     print("Document took too long to process.")
-except ChatError as e:
-    print("Chat request failed:", e)`}</code>
+except ChatVectorAPIError as e:
+    print("SDK error:", e)`}</code>
         </pre>
       </section>
 
@@ -156,21 +163,29 @@ except ChatError as e:
           {[
             {
               file: "upload_wait_chat.py",
+              href: "https://github.com/chatvector-ai/chatvector-ai/blob/main/sdk/python/examples/upload_wait_chat.py",
               desc: "Full end-to-end flow: upload, wait, chat, print sources.",
             },
             {
               file: "check_status.py",
+              href: "https://github.com/chatvector-ai/chatvector-ai/blob/main/sdk/python/examples/check_status.py",
               desc: "Poll document status and inspect each ingestion stage.",
             },
             {
               file: "batch_chat.py",
+              href: "https://github.com/chatvector-ai/chatvector-ai/blob/main/sdk/python/examples/batch_chat.py",
               desc: "Send multiple questions against the same document in sequence.",
             },
-          ].map(({ file, desc }) => (
+          ].map(({ file, href, desc }) => (
             <li key={file} className="flex gap-3">
-              <code className="bg-surface border border-border rounded-xl font-mono text-[0.82rem] px-2 py-0.5 shrink-0 self-start">
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-surface border border-border rounded-xl font-mono text-[0.82rem] px-2 py-0.5 shrink-0 self-start text-accent underline underline-offset-4 hover:opacity-80 transition-opacity"
+              >
                 {file}
-              </code>
+              </a>
               <span>{desc}</span>
             </li>
           ))}
@@ -190,6 +205,6 @@ except ChatError as e:
         </a>
         .
       </p>
-    </main>
+    </div>
   );
 }
