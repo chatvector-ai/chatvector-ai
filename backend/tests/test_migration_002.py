@@ -7,10 +7,12 @@ No live database required — these are static content tests.
 What we verify:
 - File exists at the expected path
 - Targets correct table (document_chunks) and column (embedding)
-- Alters to dimensionless vector (no fixed dimension like vector(3072))
-- Has an idempotent guard via information_schema.columns
-- Includes USING clause for safe pgvector cast
-- Documents the re-ingest warning for operators
+- Alters to dimensionless vector (no fixed dimension in ALTER statement)
+- Guard uses pg_attribute.atttypmod — not just column existence
+- atttypmod <> -1 check present — skips ALTER on fresh/dimensionless installs
+- Schema filter 'public' present — avoids matching other schemas
+- USING clause present for safe pgvector cast
+- Re-ingest warning documented for operators
 """
 import re
 from pathlib import Path
@@ -30,46 +32,67 @@ def migration_sql() -> str:
     return SQL_PATH.read_text(encoding="utf-8")
 
 
+@pytest.fixture(scope="module")
+def sql_code(migration_sql) -> str:
+    """SQL with comment lines stripped — used for structural assertions."""
+    return "\n".join(
+        line for line in migration_sql.splitlines()
+        if not line.strip().startswith("--")
+    )
+
+
 def test_file_exists():
     """Migration file must exist at backend/db/init/002_dimensionless_vector.sql."""
     assert SQL_PATH.exists()
 
 
-def test_targets_correct_table(migration_sql):
-    """Must reference the document_chunks table."""
-    assert "document_chunks" in migration_sql
+def test_targets_correct_table(sql_code):
+    """Must reference document_chunks in executable SQL, not just comments."""
+    assert "document_chunks" in sql_code
 
 
-def test_targets_embedding_column(migration_sql):
-    """Must reference the embedding column."""
-    assert "embedding" in migration_sql
+def test_targets_embedding_column(sql_code):
+    """Must reference the embedding column in executable SQL."""
+    assert "embedding" in sql_code
 
 
-def test_alters_to_dimensionless_vector(migration_sql):
-    """Must alter column to plain vector with no dimension argument."""
-    # Matches: TYPE vector followed by whitespace or end-of-token (not a parenthesis)
-    assert re.search(r"TYPE\s+vector\b", migration_sql, re.IGNORECASE)
+def test_alters_to_dimensionless_vector(sql_code):
+    """ALTER statement must target plain vector with no dimension argument."""
+    assert re.search(r"TYPE\s+vector\b", sql_code, re.IGNORECASE)
 
 
-def test_no_fixed_dimension(migration_sql):
-    """Must NOT hard-code vector(N) in SQL statements — comments are excluded."""
-    # Strip comment lines so vector(3072) in comments doesn't trigger false failure
-    sql_code = "\n".join(
-        line for line in migration_sql.splitlines()
-        if not line.strip().startswith("--")
-    )
+def test_no_fixed_dimension_in_alter(sql_code):
+    """ALTER statement must NOT hard-code vector(N) — dimensionless only."""
     assert not re.search(r"vector\s*\(\s*\d+\s*\)", sql_code, re.IGNORECASE)
 
 
-def test_has_idempotent_guard(migration_sql):
-    """Must check column existence before altering — safe to re-run."""
-    assert "information_schema.columns" in migration_sql
-    assert "IF EXISTS" in migration_sql.upper()
+def test_guard_uses_pg_attribute(sql_code):
+    """Guard must use pg_attribute, not information_schema — catches fixed-dimension columns."""
+    assert "pg_attribute" in sql_code
+    # information_schema only checks existence, not dimension — must not be used as guard
+    assert "information_schema" not in sql_code
 
 
-def test_has_using_clause(migration_sql):
+def test_guard_checks_atttypmod(sql_code):
+    """Guard must check atttypmod <> -1 to skip ALTER on already-dimensionless columns."""
+    assert "atttypmod" in sql_code
+    # Verify the inequality check is present (not just the column name)
+    assert re.search(r"atttypmod\s*<>\s*-1", sql_code, re.IGNORECASE)
+
+
+def test_guard_has_schema_filter(sql_code):
+    """Guard must filter to public schema to avoid matching other schemas."""
+    assert re.search(r"nspname\s*=\s*'public'", sql_code, re.IGNORECASE)
+
+
+def test_has_if_exists_block(sql_code):
+    """Must use IF EXISTS block so migration is safe to re-run."""
+    assert "IF EXISTS" in sql_code.upper()
+
+
+def test_has_using_clause(sql_code):
     """Must include USING embedding::vector for safe pgvector type cast."""
-    assert re.search(r"USING\s+embedding::vector", migration_sql, re.IGNORECASE)
+    assert re.search(r"USING\s+embedding::vector", sql_code, re.IGNORECASE)
 
 
 def test_has_warning_comment(migration_sql):
