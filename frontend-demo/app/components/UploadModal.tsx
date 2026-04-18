@@ -118,12 +118,12 @@ export default function UploadModal({
   const dropZoneClassName = [
     "relative min-h-[200px] rounded-2xl border-2 border-dashed p-10 flex flex-col items-center justify-center transition-all duration-300 ease-out",
     showSuccess
-      ? "border-emerald-500/40 bg-emerald-500/[0.07] shadow-[inset_0_1px_0_0_rgba(52,211,153,0.12)]"
+      ? "border-emerald-500/40 bg-emerald-500/[0.07]"
       : showFailed
         ? "border-red-500/25 bg-red-500/[0.04]"
         : dropZoneInteractive
-          ? "border-white/[0.12] bg-gradient-to-b from-white/[0.06] to-transparent hover:border-white/22 hover:from-white/[0.11] hover:to-white/[0.04] hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.08)] cursor-pointer active:scale-[0.99]"
-          : "border-white/[0.08] bg-white/[0.02]",
+          ? "border-border bg-surface hover:border-accent hover:bg-accent/5 cursor-pointer active:scale-[0.99]"
+          : "border-border bg-background",
   ].join(" ");
 
   return (
@@ -135,24 +135,24 @@ export default function UploadModal({
       }}
     >
       <div
-        className="w-full max-w-[460px] rounded-3xl border border-white/[0.08] bg-zinc-950/90 p-6 shadow-2xl shadow-black/50 ring-1 ring-white/[0.04]"
+        className="w-full max-w-[460px] rounded-3xl border border-border bg-surface p-6 shadow-2xl shadow-black/50"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <h2 className="text-xl font-semibold tracking-tight text-white">
+            <h2 className="text-xl font-semibold tracking-tight text-foreground">
               Upload document
             </h2>
-            <p className="mt-1 text-base text-zinc-500">PDF, TXT, or DOCX</p>
+            <p className="mt-1 text-base text-muted">PDF, TXT, or DOCX</p>
             <div className="mt-1 flex min-h-[2.5rem] items-center">
               <button
                 type="button"
                 onClick={onClose}
                 tabIndex={showDismissWait ? 0 : -1}
                 aria-hidden={!showDismissWait}
-                className={`inline-flex items-center justify-center rounded-lg px-3.5 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 ${
+                className={`inline-flex items-center justify-center rounded-lg px-3.5 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue/50 ${
                   showDismissWait
-                    ? "cursor-pointer text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-300"
+                    ? "cursor-pointer text-muted hover:bg-background hover:text-foreground"
                     : "pointer-events-none invisible"
                 }`}
               >
@@ -163,7 +163,7 @@ export default function UploadModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl p-2 text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white-500/60"
+            className="rounded-xl p-2 text-muted transition-colors hover:bg-background hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-border"
             aria-label="Close"
           >
             <X size={20} strokeWidth={1.75} />
@@ -185,18 +185,18 @@ export default function UploadModal({
           />
           {showUploading && (
             <div className="flex flex-col items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/15 ring-1 ring-indigo-400/20">
-                <Loader2 className="h-7 w-7 animate-spin text-indigo-400" strokeWidth={2} />
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue/10 ring-1 ring-blue/20">
+                <Loader2 className="h-7 w-7 animate-spin text-blue" strokeWidth={2} />
               </div>
-              <p className="text-base font-medium text-indigo-200/90">Uploading…</p>
+              <p className="text-base font-medium text-foreground">Uploading…</p>
             </div>
           )}
           {showProcessing && (
             <div className="flex flex-col items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/15 ring-1 ring-indigo-400/20">
-                <Loader2 className="h-7 w-7 animate-spin text-indigo-400" strokeWidth={2} />
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue/10 ring-1 ring-blue/20">
+                <Loader2 className="h-7 w-7 animate-spin text-blue" strokeWidth={2} />
               </div>
-              <p className="max-w-[280px] text-center text-base font-medium leading-snug text-indigo-200/90">
+              <p className="max-w-[280px] text-center text-base font-medium leading-snug text-foreground">
                 {attachment?.stage
                   ? STAGE_LABELS[attachment.stage] ?? attachment.stage
                   : "Processing your document…"}
@@ -211,7 +211,7 @@ export default function UploadModal({
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10 ring-1 ring-red-500/20">
                 <AlertCircle className="h-7 w-7 text-red-400" strokeWidth={1.75} aria-hidden />
               </div>
-              <p className="max-w-[280px] text-base font-medium text-red-300/90">
+              <p className="max-w-[280px] text-base font-medium text-red-400">
                 Upload failed. Please try again.
               </p>
               <button
@@ -220,7 +220,7 @@ export default function UploadModal({
                   e.stopPropagation();
                   handleRetry();
                 }}
-                className="rounded-full bg-white/[0.08] px-4 py-2 text-base font-medium text-white ring-1 ring-white/[0.1] transition hover:bg-white/[0.12] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+                className="rounded-full border border-border bg-background px-4 py-2 text-base font-medium text-foreground transition hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-blue/50"
               >
                 Retry
               </button>
@@ -239,19 +239,19 @@ export default function UploadModal({
                   />
                 </svg>
               </div>
-              <p className="text-base font-semibold text-emerald-300/95">Document ready!</p>
+              <p className="text-base font-semibold text-emerald-400">Document ready!</p>
             </div>
           )}
           {showPicker && (
             <>
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.06] ring-1 ring-white/[0.08]">
-                <Upload className="h-7 w-7 text-zinc-400" strokeWidth={1.5} />
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-background ring-1 ring-border">
+                <Upload className="h-7 w-7 text-muted" strokeWidth={1.5} />
               </div>
-              <p className="max-w-[280px] text-center text-base text-zinc-400">
+              <p className="max-w-[280px] text-center text-base text-muted">
                 Drop a file here or{" "}
-                <span className="font-medium text-indigo-400">browse</span>
+                <span className="font-medium text-accent">browse</span>
               </p>
-              <p className="mt-2 text-sm text-zinc-600">PDF · TXT · DOCX</p>
+              <p className="mt-2 text-sm text-subtle">PDF · TXT · DOCX</p>
             </>
           )}
         </div>
