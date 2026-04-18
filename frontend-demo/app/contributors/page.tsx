@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import ErrorState from "../components/ErrorState";
+import { DocLayout } from "@/app/components/DocLayout";
+import { DocPageHeader } from "@/app/components/DocPageHeader";
 
 type Contributor = {
   login: string;
@@ -27,7 +29,6 @@ export default function ContributorsPage() {
         return res.json();
       })
       .then((data) => {
-        // sort explicitly (even though API already does)
         const sorted = data.sort(
           (a: Contributor, b: Contributor) => b.contributions - a.contributions,
         );
@@ -45,26 +46,23 @@ export default function ContributorsPage() {
   }, [fetchContributors]);
 
   return (
-    <div className="max-w-[720px] mx-auto px-4 py-10">
-      <p className="font-mono text-[0.78rem] uppercase tracking-[2px] text-accent mb-2">
-        {"// thanks"}
-      </p>
-      <h1 className="text-3xl font-bold mb-4 text-foreground">Contributors</h1>
-      <p className="text-foreground text-[1rem] leading-[1.8] mb-8">
-        A special thanks to everyone who has contributed code, documentation,
-        ideas, or feedback. This project is shaped by the community.
-      </p>
+    <DocLayout>
+      <DocPageHeader
+        kicker="thanks"
+        title="Contributors"
+        description="A special thanks to everyone who has contributed code, documentation, ideas, or feedback. This project is shaped by the community."
+      />
 
       {loading && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3">
           {Array.from({ length: 9 }).map((_, i) => (
             <div
               key={i}
-              className="animate-pulse bg-surface border border-border rounded-lg p-4 flex flex-col items-center gap-3"
+              className="flex animate-pulse flex-col items-center gap-3 rounded-lg border border-border bg-surface p-4"
             >
-              <div className="w-16 h-16 rounded-full bg-border" />
-              <div className="h-3 w-36 md:w-48 rounded bg-border" />
-              <div className="h-3 w-24 md:w-28 rounded bg-border" />
+              <div className="h-16 w-16 rounded-full bg-border" />
+              <div className="h-3 w-36 rounded bg-border md:w-48" />
+              <div className="h-3 w-24 rounded bg-border md:w-28" />
             </div>
           ))}
         </div>
@@ -81,32 +79,32 @@ export default function ContributorsPage() {
       )}
 
       {!loading && !error && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3">
           {contributors.map((c) => (
             <a
               key={c.login}
               href={c.html_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="bg-surface border border-border p-4 rounded-lg flex flex-col items-center hover:border-accent hover:scale-[1.02] transition"
+              className="flex flex-col items-center rounded-lg border border-border bg-surface p-4 transition hover:scale-[1.02] hover:border-accent"
             >
               <Image
                 src={c.avatar_url}
                 alt={c.login}
                 width={64}
                 height={64}
-                className="rounded-full mb-3"
+                className="mb-3 rounded-full"
               />
 
               <p className="font-mono text-accent">@{c.login}</p>
 
-              <p className="text-muted text-sm">
+              <p className="text-sm text-foreground/80">
                 {c.contributions} contributions
               </p>
             </a>
           ))}
         </div>
       )}
-    </div>
+    </DocLayout>
   );
 }
