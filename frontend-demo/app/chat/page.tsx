@@ -33,6 +33,7 @@ export default function ChatPage() {
         maxHeight: "calc(100dvh - 60px)",
       }}
     >
+      <h1 className="sr-only">Chat with your documents</h1>
       {showModal && (
         <UploadModal
           onClose={() => setShowModal(false)}

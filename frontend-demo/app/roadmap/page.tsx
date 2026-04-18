@@ -38,6 +38,7 @@ export default function RoadmapPage() {
 
         <h1 className="text-4xl font-bold mb-12 tracking-tight">Project Roadmap</h1>
 
+        <h2 className="sr-only">Development phases</h2>
         <div className="grid gap-6">
           {phases.map((phase, i) => (
             <section 

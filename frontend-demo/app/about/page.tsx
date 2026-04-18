@@ -20,10 +20,10 @@ export default function AboutPage() {
 
         {/* Section 2: Who is this for */}
         <section className="mb-20">
-          <span className="font-mono text-[0.78rem] uppercase tracking-[2px] text-accent block mb-4">
+          <h2 className="text-2xl font-semibold mb-6 text-foreground">
             Who is this for
-          </span>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
               {
                 title: "Developers",
