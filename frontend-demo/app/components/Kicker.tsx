@@ -24,7 +24,7 @@ export function Kicker({
   return (
     <p
       className={cn(
-        "font-mono text-xs uppercase tracking-[2px] text-accent",
+        "font-mono text-sm uppercase tracking-[2px] text-accent",
         spacingClasses[spacing],
         className,
       )}

@@ -29,7 +29,9 @@ export default function SdkPage() {
 
           <section>
             <Kicker spacing="lg">installation</Kicker>
-            <p className="mb-3 text-foreground/90">Install directly from the repo:</p>
+            <p className="mb-3 text-foreground/90">
+              Install directly from the repo:
+            </p>
             <pre className="overflow-x-auto rounded-xl border border-border bg-surface p-4 font-mono text-[0.82rem]">
               <code>pip install ./sdk/python</code>
             </pre>
@@ -38,7 +40,8 @@ export default function SdkPage() {
           <section>
             <Kicker spacing="lg">quickstart</Kicker>
             <p className="mb-3 text-foreground/90">
-              Upload a document, wait for ingestion to complete, then ask a question:
+              Upload a document, wait for ingestion to complete, then ask a
+              question:
             </p>
             <pre className="overflow-x-auto rounded-xl border border-border bg-surface p-4 font-mono text-[0.82rem]">
               <code>{`from chatvector import ChatVectorClient
@@ -64,7 +67,8 @@ with ChatVectorClient("http://localhost:8000") as client:
           <section>
             <Kicker spacing="lg">authentication</Kicker>
             <p className="mb-3 text-foreground/90">
-              If your backend is configured with a bearer token, pass it at client initialization:
+              If your backend is configured with a bearer token, pass it at
+              client initialization:
             </p>
             <pre className="overflow-x-auto rounded-xl border border-border bg-surface p-4 font-mono text-[0.82rem]">
               <code>{`client = ChatVectorClient(
@@ -73,14 +77,16 @@ with ChatVectorClient("http://localhost:8000") as client:
 )`}</code>
             </pre>
             <p className="mt-3 text-foreground/90">
-              The token is optional. Omit it if your backend does not require authentication.
+              The token is optional. Omit it if your backend does not require
+              authentication.
             </p>
           </section>
 
           <section>
             <Kicker spacing="lg">error handling</Kicker>
             <p className="mb-4 text-foreground/90">
-              The client raises typed exceptions so you can handle failures cleanly:
+              The client raises typed exceptions so you can handle failures
+              cleanly:
             </p>
             <div className="space-y-3 text-foreground/90">
               {[

@@ -60,7 +60,7 @@ export default function AboutPage() {
 
         {/* Section 3: ChatVector vs frameworks */}
         <section className="mb-20">
-          <Kicker spacing="lg">open source</Kicker>
+          <Kicker spacing="lg">chatvector vs frameworks</Kicker>
           <div className="mt-6 overflow-x-auto rounded-xl border border-border bg-surface">
             <table className="w-full border-collapse text-left text-[0.93rem] leading-normal">
               <thead>
