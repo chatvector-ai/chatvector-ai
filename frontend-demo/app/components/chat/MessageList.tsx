@@ -113,7 +113,7 @@ export default function MessageList({ messages, inflight, bottomRef }: Props) {
               {msg.sender === "ai" ? <Bot size={16} /> : <User size={16} />}
             </div>
             <div
-              className={`max-w-[75%] md:max-w-[60%] whitespace-pre-wrap break-words px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+              className={`max-w-[75%] md:max-w-[60%] whitespace-pre-wrap break-words px-4 py-3 rounded-2xl text-base leading-relaxed ${
                 msg.sender === "ai"
                   ? "bg-surface text-foreground rounded-bl-none"
                   : "bg-accent text-background rounded-br-none"
@@ -123,7 +123,7 @@ export default function MessageList({ messages, inflight, bottomRef }: Props) {
               {msg.sender === "ai" && msg.sources && msg.sources.length > 0 && sourcesVisible && (
                 <div className="mt-2 flex flex-col gap-1">
                   {deduplicatedSources(msg.sources).map((s, i) => (
-                    <span key={i} className="text-xs text-muted">
+                    <span key={i} className="text-sm text-muted">
                       {s.file_name}
                       {s.page_number != null ? ` · p.${s.page_number}` : ""}
                     </span>
@@ -131,7 +131,7 @@ export default function MessageList({ messages, inflight, bottomRef }: Props) {
                 </div>
               )}
               {msg.sender === "ai" && msg.chunks === 0 && sourcesVisible && (
-                <p className="mt-1 text-xs text-muted italic">
+                <p className="mt-1 text-sm text-muted italic">
                   No relevant content found in this document.
                 </p>
               )}
@@ -144,7 +144,7 @@ export default function MessageList({ messages, inflight, bottomRef }: Props) {
           <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center bg-accent text-background">
             <Bot size={16} />
           </div>
-          <div className="px-4 py-3 rounded-2xl rounded-bl-none bg-surface text-muted text-sm animate-pulse">
+          <div className="px-4 py-3 rounded-2xl rounded-bl-none bg-surface text-muted text-base animate-pulse">
             Thinking...
           </div>
         </div>

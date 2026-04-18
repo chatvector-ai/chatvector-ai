@@ -13,7 +13,7 @@ export default function AboutPage() {
           <h1 className="text-3xl font-bold mb-6 text-foreground">
             A developer-focused RAG engine you can deploy as a service.
           </h1>
-          <p className="text-muted text-[1rem] leading-[1.8] mb-6">
+          <p className="text-muted text-lg leading-relaxed mb-6">
             Most RAG implementations today are fragile, vendor-locked, or require significant plumbing to productionize. ChatVector solves this by providing a clean, extensible backend foundation for document intelligence. It handles the full document Q&A lifecycle—from ingestion and semantic chunking to vector storage and cited response generation—all through a clean HTTP API.
           </p>
         </section>
@@ -53,7 +53,7 @@ export default function AboutPage() {
                 <h3 className="font-bold text-foreground mb-1">
                   {persona.title}
                 </h3>
-                <p className="text-muted text-sm leading-[1.6]">
+                <p className="text-muted text-base leading-relaxed">
                   {persona.description}
                 </p>
               </div>
@@ -67,7 +67,7 @@ export default function AboutPage() {
             ChatVector vs frameworks
           </span>
           <div className="mt-6 overflow-x-auto rounded-xl border border-border bg-surface">
-            <table className="w-full border-collapse text-left text-[0.93rem] leading-normal">
+            <table className="w-full border-collapse text-left text-base leading-relaxed">
               <thead>
                 <tr className="border-b border-border bg-background/30 text-foreground">
                   <th className="px-5 py-4 font-bold">Aspect</th>
@@ -125,12 +125,12 @@ export default function AboutPage() {
 
         {/* Section 4: Footer CTA */}
         <div className="pt-12 border-t border-border text-center">
-          <p className="text-muted mb-8 text-[1rem]">
+          <p className="text-muted mb-8 text-lg leading-relaxed">
             Ready to get started? Set up ChatVector in under 5 minutes.
           </p>
           <Link
             href="/getting-started"
-            className="inline-flex items-center justify-center rounded-md border border-accent bg-accent/10 px-8 py-3 text-[1rem] font-bold text-accent no-underline transition-all hover:bg-accent/20 hover:scale-[1.02]"
+            className="inline-flex items-center justify-center rounded-md border border-accent bg-accent/10 px-8 py-3 text-base font-bold text-accent no-underline transition-all hover:bg-accent/20 hover:scale-[1.02]"
           >
             Getting Started
           </Link>

@@ -50,10 +50,8 @@ function NavLinks({
             <Link
               href={href}
               onClick={onNavigate}
-              className={`text-[1.05rem] no-underline transition-colors duration-200 ${
-                isActive
-                  ? "text-accent"
-                  : "text-foreground hover:text-accent"
+              className={`text-base text-bold no-underline text-[1.15rem] transition-colors duration-200 ${
+                isActive ? "text-accent" : "text-foreground hover:text-accent"
               }`}
             >
               {label}
@@ -71,7 +69,7 @@ function GitHubButton({ className }: { className?: string }) {
       href={GITHUB_REPO}
       target="_blank"
       rel="noopener noreferrer"
-      className={`inline-flex cursor-pointer items-center justify-center rounded-md border border-border bg-transparent px-[18px] py-[7px] text-[1.05rem] text-foreground no-underline transition-all duration-200 hover:border-accent hover:bg-accent/10 hover:text-accent ${className ?? ""}`}
+      className={`inline-flex text-[1rem] cursor-pointer items-center justify-center rounded-md border border-border bg-transparent px-[18px] py-[7px] text-base text-foreground no-underline transition-all duration-200 hover:border-accent hover:bg-accent/10 hover:text-accent ${className ?? ""}`}
     >
       GitHub
     </a>
@@ -93,34 +91,34 @@ export default function Navigation() {
       style={{ background: "var(--nav-bg)" }}
     >
       {/* Header scrim: 88% of active theme background — see --nav-bg token in globals.css */}
-      <nav className="mx-auto flex min-h-[60px] max-w-[1100px] items-center justify-between gap-4 px-4">
+      <nav className="mx-auto flex min-h-[60px] max-w-[1100px] items-center justify-between gap-4 px-3 py-2">
         <Link
           href="/"
-          className="flex shrink-0 items-center font-mono text-[1.25rem] font-bold no-underline"
+          className="flex shrink-0 items-center font-mono text-[1.15rem] font-bold no-underline"
         >
           {/* Both images rendered; CSS shows/hides based on data-theme on <html> */}
           <Image
             src="/chatvector-logo-dark.svg"
             alt=""
-            width={40}
-            height={40}
+            width={70}
+            height={70}
             unoptimized
-            className="size-10 shrink-0 [[data-theme=light]_&]:hidden"
+            className="size-12 shrink-0 [[data-theme=light]_&]:hidden"
           />
           <Image
             src="/chatvector-logo-light.svg"
             alt=""
-            width={40}
-            height={40}
+            width={70}
+            height={70}
             unoptimized
-            className="size-10 shrink-0 hidden [[data-theme=light]_&]:block"
+            className="size-12 shrink-0 hidden [[data-theme=light]_&]:block"
           />
-          <span className="text-[1.5rem] bg-gradient-to-r from-accent to-blue bg-clip-text text-transparent">
+          <span className="text-[1.7rem] bg-gradient-to-r from-accent to-blue bg-clip-text text-transparent">
             ChatVector
           </span>
         </Link>
 
-        <ul className="m-0 hidden list-none flex-1 flex-row flex-wrap items-center justify-center gap-8 p-0 md:flex">
+        <ul className="m-0 hidden list-none flex-1 flex-row flex-wrap items-center justify-center gap-6 p-0 md:flex lg:gap-8">
           <NavLinks pathname={pathname} />
           <li
             className="group relative"
@@ -129,7 +127,8 @@ export default function Navigation() {
             onFocusCapture={() => setDocsFlyoutOpen(true)}
             onBlurCapture={(e) => {
               const next = e.relatedTarget;
-              if (next instanceof Node && e.currentTarget.contains(next)) return;
+              if (next instanceof Node && e.currentTarget.contains(next))
+                return;
               setDocsFlyoutOpen(false);
             }}
           >
@@ -138,10 +137,8 @@ export default function Navigation() {
               aria-haspopup="menu"
               aria-expanded={docsFlyoutOpen}
               aria-controls="docs-menu"
-              className={`flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[1.05rem] no-underline transition-colors duration-200 ${
-                docsActive
-                  ? "text-accent"
-                  : "text-foreground hover:text-accent"
+              className={`flex cursor-pointer text-[1.15rem] items-center gap-1 border-0 bg-transparent p-0 text-base no-underline transition-colors duration-200 ${
+                docsActive ? "text-accent" : "text-foreground hover:text-accent"
               }`}
             >
               Docs
@@ -161,7 +158,7 @@ export default function Navigation() {
                     key={href}
                     href={href}
                     role="menuitem"
-                    className="block px-4 py-2 text-[0.9rem] text-muted no-underline transition-colors hover:text-foreground"
+                    className="block px-4 py-2 text-base text-muted no-underline transition-colors hover:text-foreground"
                   >
                     {label}
                   </Link>
@@ -201,7 +198,7 @@ export default function Navigation() {
                 aria-expanded={docsOpen}
                 aria-controls="docs-menu-mobile"
                 onClick={() => setDocsOpen((o) => !o)}
-                className={`inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[1.05rem] no-underline transition-colors duration-200 ${
+                className={`inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-base no-underline transition-colors duration-200 ${
                   docsActive
                     ? "text-accent"
                     : "text-foreground hover:text-accent"
@@ -228,7 +225,7 @@ export default function Navigation() {
                           setMobileOpen(false);
                           setDocsOpen(false);
                         }}
-                        className="block px-4 py-2 text-[0.9rem] text-foreground no-underline transition-colors hover:text-accent"
+                        className="block px-4 py-2 text-base text-foreground no-underline transition-colors hover:text-accent"
                       >
                         {label}
                       </Link>
