@@ -62,11 +62,11 @@ export default function ContributingPage() {
 
         <section>
           <Kicker spacing="sm">helpful links</Kicker>
-          <ul className="mb-6 space-y-2 text-foreground">
+          <ul className="mb-6 space-y-2">
             <li>
               <a
                 href="https://www.loom.com/share/c41bdbff541f47d49efcb48920cba382"
-                className="text-accent hover:text-accent/80"
+                className="text-muted transition-colors hover:text-foreground"
               >
                 Loom Contributor Video
               </a>
@@ -74,7 +74,7 @@ export default function ContributingPage() {
             <li>
               <a
                 href="https://github.com/chatvector-ai/chatvector-ai/discussions"
-                className="text-accent hover:text-accent/80"
+                className="text-muted transition-colors hover:text-foreground"
               >
                 GitHub Discussions
               </a>
@@ -82,7 +82,7 @@ export default function ContributingPage() {
             <li>
               <a
                 href="https://github.com/chatvector-ai/chatvector-ai/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"
-                className="text-accent hover:text-accent/80"
+                className="text-muted transition-colors hover:text-foreground"
               >
                 Good First Issues
               </a>
@@ -90,7 +90,7 @@ export default function ContributingPage() {
             <li>
               <a
                 href="https://github.com/chatvector-ai/chatvector-ai/projects"
-                className="text-accent hover:text-accent/80"
+                className="text-muted transition-colors hover:text-foreground"
               >
                 Project Board
               </a>
@@ -98,7 +98,7 @@ export default function ContributingPage() {
             <li>
               <a
                 href="https://github.com/chatvector-ai/chatvector-ai/blob/main/README.md"
-                className="text-accent hover:text-accent/80"
+                className="text-muted transition-colors hover:text-foreground"
               >
                 Project README
               </a>
