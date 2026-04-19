@@ -9,7 +9,11 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 # Ensure imports relying on backend/.env do not crash test collection.
-os.environ.setdefault("APP_ENV", "production")
+# Default to "test" so log routing in logging_config.setup_logging() sends
+# output to logs/test.log when pytest is invoked directly. `make tests`
+# (Docker) already injects APP_ENV=test via docker-compose.yml, so this
+# only changes the local-pytest path.
+os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
 os.environ.setdefault("SUPABASE_KEY", "test-key-123")
 os.environ.setdefault("GEN_AI_KEY", "test-genai-key")
@@ -24,7 +28,7 @@ if not env_file.exists():
     env_file.write_text(
         "\n".join(
             [
-                "APP_ENV=production",
+                "APP_ENV=test",
                 "SUPABASE_URL=https://test.supabase.co",
                 "SUPABASE_KEY=test-key-123",
                 "GEN_AI_KEY=test-genai-key",
