@@ -108,17 +108,15 @@ export default function Developers() {
             ))}
           </div>
           <CodeBlock language="python" filename="upload_and_chat.py">
-            <pre className="m-0 overflow-x-auto px-6 py-5 font-mono text-[0.82rem] leading-[1.75]">
-              {codeLines.map((line, i) => (
-                <div key={i}>
-                  {line.parts.map((p, j) => (
-                    <span key={j} style={{ color: p.c }}>
-                      {p.t}
-                    </span>
-                  ))}
-                </div>
-              ))}
-            </pre>
+            {codeLines.map((line, i) => (
+              <div key={i}>
+                {line.parts.map((p, j) => (
+                  <span key={j} style={{ color: p.c }}>
+                    {p.t}
+                  </span>
+                ))}
+              </div>
+            ))}
           </CodeBlock>
         </div>
       </div>

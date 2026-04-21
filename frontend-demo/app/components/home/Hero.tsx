@@ -48,25 +48,23 @@ function HeroCodeBlock() {
   return (
     <div className="relative z-[1] mt-12 w-full max-w-[700px]">
       <CodeBlock language="python" filename="quickstart.py">
-        <pre className="m-0 overflow-x-auto px-6 py-5 font-mono text-[0.82rem] leading-[1.75]">
-          {lines.map((t, i) =>
-            t.type === "br" ? (
-              <br key={i} />
-            ) : (
-              <span
-                key={i}
-                style={{
-                  color:
-                    t.type === "val"
-                      ? "var(--accent)"
-                      : (SYNTAX[t.type as keyof typeof SYNTAX] ?? SYNTAX.plain),
-                }}
-              >
-                {t.text}
-              </span>
-            ),
-          )}
-        </pre>
+        {lines.map((t, i) =>
+          t.type === "br" ? (
+            <br key={i} />
+          ) : (
+            <span
+              key={i}
+              style={{
+                color:
+                  t.type === "val"
+                    ? "var(--accent)"
+                    : (SYNTAX[t.type as keyof typeof SYNTAX] ?? SYNTAX.plain),
+              }}
+            >
+              {t.text}
+            </span>
+          ),
+        )}
       </CodeBlock>
     </div>
   );
