@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { GITHUB_REPO, SYNTAX } from "../../lib/constants";
+import CodeBlock from "../CodeBlock";
 
 function HeroCodeBlock() {
   const lines = [
@@ -46,16 +47,7 @@ function HeroCodeBlock() {
 
   return (
     <div className="relative z-[1] mt-12 w-full max-w-[700px]">
-      <div className="overflow-hidden rounded-xl border border-border bg-code-bg">
-        <div className="flex items-center gap-2 border-b border-border bg-[rgb(24,28,34)] px-4 py-3">
-          {/* macOS traffic-light dots — intentional non-token colors */}
-          <div className="size-2.5 rounded-full bg-[rgb(255,95,87)]" />
-          <div className="size-2.5 rounded-full bg-[rgb(254,188,46)]" />
-          <div className="size-2.5 rounded-full bg-[rgb(40,200,64)]" />
-          <span className="ml-auto font-mono text-xs text-muted">
-            quickstart.py
-          </span>
-        </div>
+      <CodeBlock language="python" filename="quickstart.py">
         <pre className="m-0 overflow-x-auto px-6 py-5 font-mono text-[0.82rem] leading-[1.75]">
           {lines.map((t, i) =>
             t.type === "br" ? (
@@ -67,15 +59,15 @@ function HeroCodeBlock() {
                   color:
                     t.type === "val"
                       ? "var(--accent)"
-                      : SYNTAX[t.type as keyof typeof SYNTAX] ?? SYNTAX.plain,
+                      : (SYNTAX[t.type as keyof typeof SYNTAX] ?? SYNTAX.plain),
                 }}
               >
                 {t.text}
               </span>
-            )
+            ),
           )}
         </pre>
-      </div>
+      </CodeBlock>
     </div>
   );
 }

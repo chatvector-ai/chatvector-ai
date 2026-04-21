@@ -1,19 +1,17 @@
+import CodeBlock from "../components/CodeBlock";
+
 const kickerClass =
   "font-mono text-[0.78rem] uppercase tracking-[2px] text-accent";
 const bodyClass = "text-muted text-[1rem] leading-[1.8]";
 const cardClass =
   "rounded-xl border border-border bg-surface p-6 transition-colors hover:border-accent/40";
-const codeClass =
-  "rounded-xl border border-border bg-surface px-5 py-4 font-mono text-[0.82rem] leading-[1.75] text-foreground";
 
 export default function GettingStartedPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <main className="mx-auto flex w-full max-w-[720px] flex-col gap-16 px-6 pb-24 pt-16">
         <section className="space-y-6">
-          <p className={`${kickerClass} block mb-4`}>
-            {"// getting started"}
-          </p>
+          <p className={`${kickerClass} block mb-4`}>{"// getting started"}</p>
           <h1 className="text-3xl font-bold leading-[1.1] tracking-[-1px]">
             Run ChatVector locally in minutes.
           </h1>
@@ -50,7 +48,9 @@ export default function GettingStartedPage() {
           <div className={cardClass}>
             <ol className="space-y-6 text-muted text-[0.98rem] leading-[1.7]">
               <li>
-                <span className="text-foreground font-medium">Star the repo.</span>{" "}
+                <span className="text-foreground font-medium">
+                  Star the repo.
+                </span>{" "}
                 <a
                   className="text-accent underline decoration-transparent hover:decoration-accent"
                   href="https://github.com/chatvector-ai/chatvector-ai"
@@ -66,10 +66,11 @@ export default function GettingStartedPage() {
                   Create the backend environment file.
                 </span>
                 <div className="mt-3">
-                  <pre className={codeClass}>cp backend/.env.example backend/.env</pre>
+                  <CodeBlock code="cp backend/.env.example backend/.env"></CodeBlock>
                 </div>
                 <p className="mt-3 text-muted text-[0.98rem] leading-[1.7]">
-                  Edit the file and set <span className="text-foreground">GEN_AI_KEY</span>.
+                  Edit the file and set{" "}
+                  <span className="text-foreground">GEN_AI_KEY</span>.
                 </p>
               </li>
               <li>
@@ -77,12 +78,14 @@ export default function GettingStartedPage() {
                   Create the frontend environment file.
                 </span>
                 <div className="mt-3">
-                  <pre className={codeClass}>
-                    {`NEXT_PUBLIC_API_URL=http://localhost:8000`}
-                  </pre>
+                  <CodeBlock code="{`NEXT_PUBLIC_API_URL=http://localhost:8000`}"></CodeBlock>
                 </div>
                 <p className="mt-3 text-muted text-[0.98rem] leading-[1.7]">
-                  Save this as <span className="text-foreground">frontend-demo/.env.local</span>.
+                  Save this as{" "}
+                  <span className="text-foreground">
+                    frontend-demo/.env.local
+                  </span>
+                  .
                 </p>
               </li>
               <li>
@@ -90,7 +93,7 @@ export default function GettingStartedPage() {
                   Launch the backend stack.
                 </span>
                 <div className="mt-3">
-                  <pre className={codeClass}>docker compose up --build</pre>
+                  <CodeBlock code="docker compose up --build"></CodeBlock>
                 </div>
               </li>
               <li>
@@ -98,12 +101,14 @@ export default function GettingStartedPage() {
                   Start the frontend demo.
                 </span>
                 <div className="mt-3 space-y-2">
-                  <pre className={codeClass}>cd frontend-demo</pre>
-                  <pre className={codeClass}>npm install</pre>
-                  <pre className={codeClass}>npm run dev</pre>
+                  <CodeBlock code="cd frontend-demo"></CodeBlock>
+                  <CodeBlock code="npm install"></CodeBlock>
+                  <CodeBlock code="npm run dev"></CodeBlock>
                 </div>
                 <p className="mt-3 text-muted text-[0.98rem] leading-[1.7]">
-                  Frontend runs at <span className="text-foreground">http://localhost:3000</span>.
+                  Frontend runs at{" "}
+                  <span className="text-foreground">http://localhost:3000</span>
+                  .
                 </p>
               </li>
             </ol>
@@ -120,17 +125,20 @@ export default function GettingStartedPage() {
           <div className={cardClass}>
             <div className="space-y-3 text-muted text-[0.98rem] leading-[1.7]">
               <p>
-                Root: <span className="text-foreground">http://localhost:8000</span>
+                Root:
+                <span className="text-foreground">http://localhost:8000</span>
               </p>
               <p>
-                Swagger UI:{" "}
-                <span className="text-foreground">http://localhost:8000/docs</span>
+                Swagger UI:
+                <span className="text-foreground">
+                  http://localhost:8000/docs
+                </span>
               </p>
             </div>
             <div className="mt-6 space-y-4">
-              <pre className={codeClass}>
-                {`POST /upload    -> upload a PDF, returns document_id\nGET  /documents/{document_id}/status\nPOST /chat      -> ask questions with citations`}
-              </pre>
+              <CodeBlock
+                code={`POST /upload    -> upload a PDF, returns document_id\nGET  /documents/{document_id}/status\nPOST /chat      -> ask questions with citations`}
+              ></CodeBlock>
             </div>
           </div>
         </section>
@@ -142,8 +150,12 @@ export default function GettingStartedPage() {
               <table className="w-full border-collapse text-left text-[0.95rem] text-muted">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="py-3 pr-4 font-medium text-foreground">Command</th>
-                    <th className="py-3 font-medium text-foreground">Purpose</th>
+                    <th className="py-3 pr-4 font-medium text-foreground">
+                      Command
+                    </th>
+                    <th className="py-3 font-medium text-foreground">
+                      Purpose
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">

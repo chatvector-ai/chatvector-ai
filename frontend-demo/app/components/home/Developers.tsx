@@ -1,4 +1,5 @@
 import { SYNTAX } from "../../lib/constants";
+import CodeBlock from "../CodeBlock";
 
 const DEV_POINTS = [
   {
@@ -106,17 +107,7 @@ export default function Developers() {
               </div>
             ))}
           </div>
-
-          <div className="overflow-hidden rounded-xl border border-border bg-code-bg">
-            <div className="flex items-center gap-2 border-b border-border bg-[rgb(24,28,34)] px-4 py-3">
-              {/* macOS traffic-light dots — intentional non-token colors */}
-              <div className="size-2.5 rounded-full bg-[rgb(255,95,87)]" />
-              <div className="size-2.5 rounded-full bg-[rgb(254,188,46)]" />
-              <div className="size-2.5 rounded-full bg-[rgb(40,200,64)]" />
-              <span className="ml-auto font-mono text-xs text-muted">
-                upload_and_chat.py
-              </span>
-            </div>
+          <CodeBlock language="python" filename="upload_and_chat.py">
             <pre className="m-0 overflow-x-auto px-6 py-5 font-mono text-[0.82rem] leading-[1.75]">
               {codeLines.map((line, i) => (
                 <div key={i}>
@@ -128,7 +119,7 @@ export default function Developers() {
                 </div>
               ))}
             </pre>
-          </div>
+          </CodeBlock>
         </div>
       </div>
     </section>

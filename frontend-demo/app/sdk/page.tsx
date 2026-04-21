@@ -1,7 +1,8 @@
+import CodeBlock from "../components/CodeBlock";
+
 export default function SdkPage() {
   return (
     <div className="max-w-[720px] mx-auto px-4 py-10 text-foreground text-[1rem] leading-[1.8]">
-
       {/* Header */}
       <div className="mb-12">
         <p className="font-mono text-[0.78rem] uppercase tracking-[2px] text-accent mb-3">
@@ -11,8 +12,8 @@ export default function SdkPage() {
           ChatVector Python Client
         </h1>
         <p className="text-foreground text-[1rem] leading-[1.8]">
-          A lightweight Python client for uploading documents, polling ingestion status,
-          and querying the ChatVector RAG backend over HTTP.
+          A lightweight Python client for uploading documents, polling ingestion
+          status, and querying the ChatVector RAG backend over HTTP.
         </p>
       </div>
 
@@ -26,7 +27,7 @@ export default function SdkPage() {
           <li>
             <code className="bg-surface border border-border rounded-xl font-mono text-[0.82rem] px-2 py-0.5">
               httpx
-            </code>{" "}
+            </code>
             (installed automatically as a dependency)
           </li>
           <li>A running ChatVector backend at a reachable URL</li>
@@ -39,9 +40,7 @@ export default function SdkPage() {
           Installation
         </p>
         <p className="mb-3">Install directly from the repo:</p>
-        <pre className="bg-surface border border-border rounded-xl font-mono text-[0.82rem] p-4 overflow-x-auto">
-          <code>pip install ./sdk/python</code>
-        </pre>
+        <CodeBlock code="pip install ./sdk/python"></CodeBlock>
       </section>
 
       {/* Quickstart */}
@@ -50,10 +49,12 @@ export default function SdkPage() {
           Quickstart
         </p>
         <p className="mb-3">
-          Upload a document, wait for ingestion to complete, then ask a question:
+          Upload a document, wait for ingestion to complete, then ask a
+          question:
         </p>
-        <pre className="bg-surface border border-border rounded-xl font-mono text-[0.82rem] p-4 overflow-x-auto">
-          <code>{`from chatvector import ChatVectorClient
+        <CodeBlock language="python" filename="upload_and_chat.py">
+          <pre className="text-white mt-5 font-mono text-[0.82rem] p-4 overflow-x-auto">
+            <code>{`from chatvector import ChatVectorClient
 
 with ChatVectorClient("http://localhost:8000") as client:
     # Upload a document
@@ -70,7 +71,8 @@ with ChatVectorClient("http://localhost:8000") as client:
     # Print cited sources
     for source in answer.sources:
         print(source.file_name, source.page_number)`}</code>
-        </pre>
+          </pre>
+        </CodeBlock>
       </section>
 
       {/* Authentication */}
@@ -79,16 +81,18 @@ with ChatVectorClient("http://localhost:8000") as client:
           Authentication
         </p>
         <p className="mb-3">
-          If your backend is configured with a bearer token, pass it at client initialization:
+          If your backend is configured with a bearer token, pass it at client
+          initialization:
         </p>
-        <pre className="bg-surface border border-border rounded-xl font-mono text-[0.82rem] p-4 overflow-x-auto">
-          <code>{`client = ChatVectorClient(
+        <CodeBlock
+          code={`client = ChatVectorClient(
     base_url="http://localhost:8000",
     api_key="your-bearer-token"
-)`}</code>
-        </pre>
+)`}
+        ></CodeBlock>
         <p className="mt-3 text-foreground">
-          The token is optional. Omit it if your backend does not require authentication.
+          The token is optional. Omit it if your backend does not require
+          authentication.
         </p>
       </section>
 
@@ -127,9 +131,9 @@ with ChatVectorClient("http://localhost:8000") as client:
             </div>
           ))}
         </div>
-
-        <pre className="mt-5 bg-surface border border-border rounded-xl font-mono text-[0.82rem] p-4 overflow-x-auto">
-          <code>{`from chatvector.exceptions import (
+        <CodeBlock language="python" filename="error_handling.py">
+          <pre className="text-white mt-5  font-mono text-[0.82rem] p-4 overflow-x-auto">
+            <code>{`from chatvector.exceptions import (
     ChatVectorAPIError,
     ChatVectorAuthError,
     ChatVectorRateLimitError,
@@ -148,7 +152,8 @@ except ChatVectorTimeoutError:
     print("Document took too long to process.")
 except ChatVectorAPIError as e:
     print("SDK error:", e)`}</code>
-        </pre>
+          </pre>
+        </CodeBlock>
       </section>
 
       {/* Examples */}
