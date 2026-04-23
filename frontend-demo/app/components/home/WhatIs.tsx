@@ -1,3 +1,5 @@
+import { Kicker } from "@/app/components/Kicker";
+
 function PipelineStep({
   num,
   title,
@@ -55,9 +57,7 @@ export default function WhatIs() {
   return (
     <section id="about" className="bg-background px-8 py-24">
       <div className="mx-auto max-w-[1100px]">
-        <p className="mb-4 font-mono text-[0.78rem] uppercase tracking-[2px] text-accent">
-          {"// what is chatvector"}
-        </p>
+        <Kicker spacing="lg">what is chatvector</Kicker>
         <h2 className="mb-5 text-[clamp(1.8rem,3.5vw,2.8rem)] font-semibold leading-tight tracking-[-0.8px] text-foreground">
           RAG that&apos;s sharp, fast,
           <br />

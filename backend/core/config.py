@@ -2,7 +2,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 import logging
 import os
-import sys
 
 logger = logging.getLogger(__name__)
 
@@ -10,13 +9,16 @@ logger = logging.getLogger(__name__)
 ROOT_DIR = Path(__file__).resolve().parent.parent  # core/ -> backend/
 dotenv_path = ROOT_DIR / ".env"
 
-if not dotenv_path.exists():
-    logger.error(f".env file not found at expected location: {dotenv_path}")
-    sys.exit(1)  # fail fast, so contributors know immediately
-
-# Load environment variables from backend root/.env
-load_dotenv(dotenv_path)
-logger.debug(f"Loaded environment variables from {dotenv_path}")
+if dotenv_path.exists():
+    load_dotenv(dotenv_path)
+    logger.debug("Loaded environment variables from %s", dotenv_path)
+else:
+    # CI and some containers inject all settings via the process environment.
+    # Local developers should still add backend/.env; we only warn here.
+    logger.warning(
+        ".env not found at %s — using process environment only",
+        dotenv_path,
+    )
 
 # Statuses that indicate a document was mid-flight when the server last stopped.
 STALE_INGESTION_STATUSES = ["queued", "retrying", "extracting", "chunking", "embedding", "storing"]

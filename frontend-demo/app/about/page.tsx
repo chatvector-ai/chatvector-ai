@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Kicker } from "@/app/components/Kicker";
 import Footer from "../components/home/Footer";
 
 export default function AboutPage() {
@@ -7,9 +8,7 @@ export default function AboutPage() {
       <div className="max-w-[720px] mx-auto px-4 py-16 flex-1">
         {/* Section 1: What is ChatVector */}
         <section className="mb-20">
-          <span className="font-mono text-[0.78rem] uppercase tracking-[2px] text-accent block mb-4">
-            What is ChatVector
-          </span>
+          <Kicker spacing="lg">what is chatvector</Kicker>
           <h1 className="text-3xl font-bold mb-6 text-foreground">
             A developer-focused RAG engine you can deploy as a service.
           </h1>
@@ -20,9 +19,7 @@ export default function AboutPage() {
 
         {/* Section 2: Who is this for */}
         <section className="mb-20">
-          <span className="font-mono text-[0.78rem] uppercase tracking-[2px] text-accent block mb-4">
-            Who is this for
-          </span>
+          <Kicker spacing="lg">who this is for</Kicker>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
             {[
               {
@@ -63,9 +60,7 @@ export default function AboutPage() {
 
         {/* Section 3: ChatVector vs frameworks */}
         <section className="mb-20">
-          <span className="font-mono text-[0.78rem] uppercase tracking-[2px] text-accent block mb-4">
-            ChatVector vs frameworks
-          </span>
+          <Kicker spacing="lg">chatvector vs frameworks</Kicker>
           <div className="mt-6 overflow-x-auto rounded-xl border border-border bg-surface">
             <table className="w-full border-collapse text-left text-[0.93rem] leading-normal">
               <thead>

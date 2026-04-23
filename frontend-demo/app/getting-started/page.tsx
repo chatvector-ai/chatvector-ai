@@ -1,41 +1,39 @@
+import { DocLayout } from "@/app/components/DocLayout";
+import { DocPageHeader } from "@/app/components/DocPageHeader";
+import { Kicker } from "@/app/components/Kicker";
+
 import CodeBlock from "../components/CodeBlock";
 
-const kickerClass =
-  "font-mono text-[0.78rem] uppercase tracking-[2px] text-accent";
-const bodyClass = "text-muted text-[1rem] leading-[1.8]";
+const bodyClass = "text-foreground/90 text-[1rem] leading-[1.8]";
 const cardClass =
   "rounded-xl border border-border bg-surface p-6 transition-colors hover:border-accent/40";
 
 export default function GettingStartedPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <main className="mx-auto flex w-full max-w-[720px] flex-col gap-16 px-6 pb-24 pt-16">
-        <section className="space-y-6">
-          <p className={`${kickerClass} block mb-4`}>{"// getting started"}</p>
-          <h1 className="text-3xl font-bold leading-[1.1] tracking-[-1px]">
-            Run ChatVector locally in minutes.
-          </h1>
-          <p className={bodyClass}>
-            ChatVector is a backend-first RAG engine for document intelligence.
-            This page summarizes the fastest path to run the API and the demo UI
-            on your machine.
-          </p>
+    <DocLayout>
+      <div className="flex flex-col gap-16">
+        <div className="space-y-6">
+          <DocPageHeader
+            kicker="getting started"
+            title="Run ChatVector locally in minutes."
+            description="ChatVector is a backend-first RAG engine for document intelligence. This page summarizes the fastest path to run the API and the demo UI on your machine."
+          />
           <div className={cardClass}>
-            <p className="text-foreground text-[1rem] font-medium">
+            <p className="text-[1rem] font-medium text-foreground">
               What you will get
             </p>
-            <ul className="mt-4 space-y-3 text-muted text-[0.98rem] leading-[1.7]">
+            <ul className="mt-4 space-y-3 text-[0.98rem] leading-[1.7] text-foreground/90">
               <li>FastAPI backend with RAG ingestion and retrieval.</li>
               <li>PostgreSQL + pgvector for semantic search.</li>
               <li>Next.js demo UI for uploads, chat, and citations.</li>
             </ul>
           </div>
-        </section>
+        </div>
 
         <section className="space-y-6">
-          <p className={`${kickerClass} block mb-4`}>{"// prerequisites"}</p>
+          <Kicker spacing="lg">prerequisites</Kicker>
           <div className={cardClass}>
-            <ul className="space-y-3 text-muted text-[0.98rem] leading-[1.7]">
+            <ul className="space-y-3 text-[0.98rem] leading-[1.7] text-foreground/90">
               <li>Docker + Docker Compose installed.</li>
               <li>Google AI Studio API key for embeddings + LLM.</li>
               <li>Node.js 18+ (for the demo UI).</li>
@@ -44,13 +42,11 @@ export default function GettingStartedPage() {
         </section>
 
         <section className="space-y-6">
-          <p className={`${kickerClass} block mb-4`}>{"// quick setup"}</p>
+          <Kicker spacing="lg">quick setup</Kicker>
           <div className={cardClass}>
-            <ol className="space-y-6 text-muted text-[0.98rem] leading-[1.7]">
+            <ol className="space-y-6 text-[0.98rem] leading-[1.7] text-foreground/90">
               <li>
-                <span className="text-foreground font-medium">
-                  Star the repo.
-                </span>{" "}
+                <span className="font-medium text-foreground">Star the repo.</span>{" "}
                 <a
                   className="text-accent underline decoration-transparent hover:decoration-accent"
                   href="https://github.com/chatvector-ai/chatvector-ai"
@@ -62,53 +58,53 @@ export default function GettingStartedPage() {
                 ⭐
               </li>
               <li>
-                <span className="text-foreground font-medium">
+                <span className="font-medium text-foreground">
                   Create the backend environment file.
                 </span>
                 <div className="mt-3">
-                  <CodeBlock code="cp backend/.env.example backend/.env"></CodeBlock>
+                  <CodeBlock code="cp backend/.env.example backend/.env" language="bash" />
                 </div>
-                <p className="mt-3 text-muted text-[0.98rem] leading-[1.7]">
+                <p className="mt-3 text-[0.98rem] leading-[1.7] text-foreground/80">
                   Edit the file and set{" "}
                   <span className="text-foreground">GEN_AI_KEY</span>.
                 </p>
               </li>
               <li>
-                <span className="text-foreground font-medium">
+                <span className="font-medium text-foreground">
                   Create the frontend environment file.
                 </span>
                 <div className="mt-3">
-                  <CodeBlock code="{`NEXT_PUBLIC_API_URL=http://localhost:8000`}"></CodeBlock>
+                  <CodeBlock
+                    code="NEXT_PUBLIC_API_URL=http://localhost:8000"
+                    language="text"
+                  />
                 </div>
-                <p className="mt-3 text-muted text-[0.98rem] leading-[1.7]">
+                <p className="mt-3 text-[0.98rem] leading-[1.7] text-foreground/80">
                   Save this as{" "}
-                  <span className="text-foreground">
-                    frontend-demo/.env.local
-                  </span>
+                  <span className="text-foreground">frontend-demo/.env.local</span>
                   .
                 </p>
               </li>
               <li>
-                <span className="text-foreground font-medium">
+                <span className="font-medium text-foreground">
                   Launch the backend stack.
                 </span>
                 <div className="mt-3">
-                  <CodeBlock code="docker compose up --build"></CodeBlock>
+                  <CodeBlock code="docker compose up --build" language="bash" />
                 </div>
               </li>
               <li>
-                <span className="text-foreground font-medium">
+                <span className="font-medium text-foreground">
                   Start the frontend demo.
                 </span>
                 <div className="mt-3 space-y-2">
-                  <CodeBlock code="cd frontend-demo"></CodeBlock>
-                  <CodeBlock code="npm install"></CodeBlock>
-                  <CodeBlock code="npm run dev"></CodeBlock>
+                  <CodeBlock code="cd frontend-demo" language="bash" />
+                  <CodeBlock code="npm install" language="bash" />
+                  <CodeBlock code="npm run dev" language="bash" />
                 </div>
-                <p className="mt-3 text-muted text-[0.98rem] leading-[1.7]">
+                <p className="mt-3 text-[0.98rem] leading-[1.7] text-foreground/80">
                   Frontend runs at{" "}
-                  <span className="text-foreground">http://localhost:3000</span>
-                  .
+                  <span className="text-foreground">http://localhost:3000</span>.
                 </p>
               </li>
             </ol>
@@ -116,46 +112,45 @@ export default function GettingStartedPage() {
         </section>
 
         <section className="space-y-6">
-          <p className={`${kickerClass} block mb-4`}>{"// test the api"}</p>
+          <Kicker spacing="lg">test the api</Kicker>
           <p className={bodyClass}>
             Once the containers are up, hit the root endpoint and open Swagger
             UI. Then try the three core endpoints to upload a document, check
             status, and ask questions.
           </p>
           <div className={cardClass}>
-            <div className="space-y-3 text-muted text-[0.98rem] leading-[1.7]">
+            <div className="space-y-3 text-[0.98rem] leading-[1.7] text-foreground/90">
               <p>
-                Root:
+                Root:{" "}
                 <span className="text-foreground">http://localhost:8000</span>
               </p>
               <p>
-                Swagger UI:
-                <span className="text-foreground">
-                  http://localhost:8000/docs
-                </span>
+                Swagger UI:{" "}
+                <span className="text-foreground">http://localhost:8000/docs</span>
               </p>
             </div>
             <div className="mt-6 space-y-4">
               <CodeBlock
-                code={`POST /upload    -> upload a PDF, returns document_id\nGET  /documents/{document_id}/status\nPOST /chat      -> ask questions with citations`}
-              ></CodeBlock>
+                code={`POST /upload    -> upload a PDF, returns document_id
+GET  /documents/{document_id}/status
+POST /chat      -> ask questions with citations`}
+                language="text"
+              />
             </div>
           </div>
         </section>
 
         <section className="space-y-6">
-          <p className={`${kickerClass} block mb-4`}>{"// docker commands"}</p>
+          <Kicker spacing="lg">docker commands</Kicker>
           <div className={cardClass}>
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left text-[0.95rem] text-muted">
+              <table className="w-full border-collapse text-left text-[0.95rem] text-foreground/90">
                 <thead>
                   <tr className="border-b border-border">
                     <th className="py-3 pr-4 font-medium text-foreground">
                       Command
                     </th>
-                    <th className="py-3 font-medium text-foreground">
-                      Purpose
-                    </th>
+                    <th className="py-3 font-medium text-foreground">Purpose</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -163,31 +158,33 @@ export default function GettingStartedPage() {
                     <td className="py-3 pr-4 font-mono text-foreground">
                       docker compose up --build
                     </td>
-                    <td className="py-3">Start API + database</td>
+                    <td className="py-3 text-foreground/80">Start API + database</td>
                   </tr>
                   <tr className="transition-colors hover:bg-accent/5">
                     <td className="py-3 pr-4 font-mono text-foreground">
                       docker compose down
                     </td>
-                    <td className="py-3">Stop containers</td>
+                    <td className="py-3 text-foreground/80">Stop containers</td>
                   </tr>
                   <tr className="transition-colors hover:bg-accent/5">
                     <td className="py-3 pr-4 font-mono text-foreground">
                       docker compose logs -f api
                     </td>
-                    <td className="py-3">Tail API logs</td>
+                    <td className="py-3 text-foreground/80">Tail API logs</td>
                   </tr>
                   <tr className="transition-colors hover:bg-accent/5">
                     <td className="py-3 pr-4 font-mono text-foreground">
                       docker compose up db
                     </td>
-                    <td className="py-3">Run database only</td>
+                    <td className="py-3 text-foreground/80">Run database only</td>
                   </tr>
                   <tr className="transition-colors hover:bg-accent/5">
                     <td className="py-3 pr-4 font-mono text-foreground">
                       docker compose down -v
                     </td>
-                    <td className="py-3">Stop and remove data volumes</td>
+                    <td className="py-3 text-foreground/80">
+                      Stop and remove data volumes
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -196,7 +193,7 @@ export default function GettingStartedPage() {
         </section>
 
         <section className="space-y-6">
-          <p className={`${kickerClass} block mb-4`}>{"// next steps"}</p>
+          <Kicker spacing="lg">next steps</Kicker>
           <div className={`${cardClass} mt-2`}>
             <p className={bodyClass}>
               For full setup details, see the{" "}
@@ -212,7 +209,7 @@ export default function GettingStartedPage() {
             </p>
           </div>
         </section>
-      </main>
-    </div>
+      </div>
+    </DocLayout>
   );
 }

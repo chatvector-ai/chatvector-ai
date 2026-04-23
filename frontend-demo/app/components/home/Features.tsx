@@ -1,3 +1,5 @@
+import { Kicker } from "@/app/components/Kicker";
+
 const FEATURES = [
   {
     icon: "⬆",
@@ -94,9 +96,7 @@ export default function Features() {
   return (
     <section id="features" className="bg-surface px-8 py-24">
       <div className="mx-auto max-w-[1100px]">
-        <p className="mb-4 font-mono text-[0.78rem] uppercase tracking-[2px] text-accent">
-          {"// capabilities"}
-        </p>
+        <Kicker spacing="lg">features</Kicker>
         <h2 className="mb-12 text-[clamp(1.8rem,3.5vw,2.8rem)] font-semibold leading-tight tracking-[-0.8px] text-foreground">
           Everything you need.
           <br />

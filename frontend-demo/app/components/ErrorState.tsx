@@ -1,16 +1,17 @@
 "use client";
 
 import Image from "next/image";
+import { Kicker } from "@/app/components/Kicker";
 
 type Props = {
-  kicker?: string; // defaults to "// error"
+  kicker?: string; // label after // (defaults to "error")
   heading: string;
   message: string;
   onRetry?: () => void; // renders a retry button when provided
 };
 
 export default function ErrorState({
-  kicker = "// error",
+  kicker = "error",
   heading,
   message,
   onRetry,
@@ -34,9 +35,9 @@ export default function ErrorState({
         priority
         className="hidden [[data-theme=light]_&]:block"
       />
-      <p className="font-mono text-[0.78rem] uppercase tracking-[2px] text-accent">
+      <Kicker spacing="sm" className="!mb-0">
         {kicker}
-      </p>
+      </Kicker>
       <h2 className="text-foreground font-semibold text-xl">{heading}</h2>
       <p className="text-muted text-[1rem]">{message}</p>
       {onRetry && (

@@ -6,7 +6,7 @@ export default function NotFound() {
     <main className="flex flex-col items-center justify-center min-h-screen bg-background text-center px-4">
       <div className="mb-8">
         <ErrorState
-          kicker="// 404"
+          kicker="404"
           heading="Page not found"
           message="This page doesn't exist or has been moved."
         />

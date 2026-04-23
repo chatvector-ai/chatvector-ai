@@ -1,5 +1,7 @@
 """Tests for provider factory functions — correct selection, caching, errors."""
 
+import os
+
 import pytest
 
 import services.providers as providers_mod
@@ -12,6 +14,12 @@ except ImportError:
     _has_openai = False
 
 _skip_openai = pytest.mark.skipif(not _has_openai, reason="openai package not installed")
+
+# Skip OpenAI tests if API key is not configured
+skip_if_no_openai = pytest.mark.skipif(
+    not os.environ.get("OPENAI_API_KEY"),
+    reason="OPENAI_API_KEY not set — skipping OpenAI provider tests",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -37,6 +45,7 @@ class TestGetEmbeddingProvider:
         assert type(provider).__name__ == "GeminiEmbeddingProvider"
 
     @_skip_openai
+    @skip_if_no_openai
     def test_openai_selection(self, monkeypatch):
         monkeypatch.setattr(providers_mod.config, "EMBEDDING_PROVIDER", "openai")
         provider = providers_mod.get_embedding_provider()
@@ -74,6 +83,7 @@ class TestGetLLMProvider:
         assert type(provider).__name__ == "GeminiLLMProvider"
 
     @_skip_openai
+    @skip_if_no_openai
     def test_openai_selection(self, monkeypatch):
         monkeypatch.setattr(providers_mod.config, "LLM_PROVIDER", "openai")
         provider = providers_mod.get_llm_provider()

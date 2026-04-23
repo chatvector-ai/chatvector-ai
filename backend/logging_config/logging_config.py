@@ -1,5 +1,6 @@
 import logging
 import json
+import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from datetime import datetime
@@ -36,8 +37,8 @@ class JSONFormatter(logging.Formatter):
 
 
 def setup_logging(
-    log_file: str = "logs/app.log",
-    access_log_file: str = "logs/access.log",
+    log_file: str | None = None,
+    access_log_file: str | None = None,
 ) -> None:
     """
     Logging strategy:
@@ -45,7 +46,18 @@ def setup_logging(
     - Uvicorn access logs -> logs/access.log AND console
     - No duplicate logs
     - Supports JSON format when LOG_FORMAT=JSON is set
+
+    When APP_ENV=test, writes to logs/test.log and logs/test_access.log
+    instead of the production log files to keep test output separate from
+    live server activity.
     """
+    app_env = os.environ.get("APP_ENV", "production").lower()
+    is_test = app_env == "test"
+
+    if log_file is None:
+        log_file = "logs/test.log" if is_test else "logs/app.log"
+    if access_log_file is None:
+        access_log_file = "logs/test_access.log" if is_test else "logs/access.log"
 
     logging.captureWarnings(True)
 

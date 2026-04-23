@@ -1,3 +1,6 @@
+import { Kicker } from "@/app/components/Kicker";
+
+import { SYNTAX } from "../../lib/constants";
 import CodeBlock from "../CodeBlock";
 
 const DEV_POINTS = [
@@ -21,60 +24,53 @@ const DEV_POINTS = [
 
 export default function Developers() {
   const codeLines = [
-    { parts: [{ type: "comment", text: "# Upload and wait for processing" }] },
+    { parts: [{ c: SYNTAX.cm, t: "# Upload and wait for processing" }] },
     {
       parts: [
-        { type: "default", text: "doc = cv." },
-        { type: "function", text: "upload_document" },
-        { type: "default", text: "(" },
-        { type: "string", text: '"report.pdf"' },
-        { type: "default", text: ")" },
+        { c: SYNTAX.plain, t: "doc = cv." },
+        { c: SYNTAX.fn, t: "upload_document" },
+        { c: SYNTAX.plain, t: "(" },
+        { c: SYNTAX.str, t: '"report.pdf"' },
+        { c: SYNTAX.plain, t: ")" },
       ],
     },
     {
       parts: [
-        { type: "default", text: "cv." },
-        { type: "function", text: "wait_for_ready" },
-        { type: "default", text: "(doc.document_id)" },
+        { c: SYNTAX.plain, t: "cv." },
+        { c: SYNTAX.fn, t: "wait_for_ready" },
+        { c: SYNTAX.plain, t: "(doc.document_id)" },
       ],
     },
     { parts: [] },
+    { parts: [{ c: SYNTAX.cm, t: "# Ask questions against the document" }] },
     {
       parts: [
-        { type: "comment", text: "# Ask questions against the document" },
+        { c: SYNTAX.plain, t: "answer = cv." },
+        { c: SYNTAX.fn, t: "chat" },
+        { c: SYNTAX.plain, t: "(" },
       ],
     },
     {
       parts: [
-        { type: "default", text: "answer = cv." },
-        { type: "function", text: "chat" },
-        { type: "default", text: "(" },
+        { c: SYNTAX.plain, t: "  " },
+        { c: SYNTAX.str, t: '"Summarise the key findings."' },
+        { c: SYNTAX.plain, t: "," },
       ],
     },
-    {
-      parts: [
-        { type: "default", text: "  " },
-        { type: "string", text: '"Summarise the key findings."' },
-        { type: "default", text: "," },
-      ],
-    },
-    { parts: [{ type: "default", text: "  doc.document_id" }] },
-    { parts: [{ type: "default", text: ")" }] },
+    { parts: [{ c: SYNTAX.plain, t: "  doc.document_id" }] },
+    { parts: [{ c: SYNTAX.plain, t: ")" }] },
     { parts: [] },
     {
-      parts: [
-        { type: "comment", text: "# Full response with source citations" },
-      ],
+      parts: [{ c: SYNTAX.cm, t: "# Full response with source citations" }],
     },
-    { parts: [{ type: "default", text: "print(answer.answer)" }] },
-    { parts: [{ type: "default", text: "print(answer.sources)" }] },
+    { parts: [{ c: SYNTAX.plain, t: "print(answer.answer)" }] },
+    { parts: [{ c: SYNTAX.plain, t: "print(answer.sources)" }] },
   ];
+
   return (
     <section id="developers" className="bg-background px-8 py-24">
       <div className="mx-auto max-w-[1100px]">
-        <p className="mb-4 font-mono text-[0.78rem] uppercase tracking-[2px] text-accent">
-          {"// built for developers"}
-        </p>
+        <Kicker spacing="lg">for developers</Kicker>
         <h2 className="mb-4 text-[clamp(1.8rem,3.5vw,2.8rem)] font-semibold leading-tight tracking-[-0.8px] text-foreground">
           Designed for people who
           <br />
@@ -117,13 +113,8 @@ export default function Developers() {
             {codeLines.map((line, i) => (
               <div key={i}>
                 {line.parts.map((p, j) => (
-                  <span
-                    key={j}
-                    style={{
-                      color: `var(--syntax-${p.type}, var(--syntax-default))`,
-                    }}
-                  >
-                    {p.text}
+                  <span key={j} style={{ color: p.c }}>
+                    {p.t}
                   </span>
                 ))}
               </div>

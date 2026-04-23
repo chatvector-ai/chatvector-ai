@@ -75,8 +75,12 @@ services:
       DATABASE_URL: "postgresql+asyncpg://postgres:postgres@db:5432/postgres"
       APP_ENV: "test"
       PYTHONPATH: /app
+      # Logical DB 15 is isolated from the API (redis://…/0); tests flush this DB between cases
+      REDIS_URL: "redis://redis:6379/15"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     command: ["pytest", "-v", "--asyncio-mode=auto"] # 👈 Added asyncio mode
 
