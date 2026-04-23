@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from core.config import config
 from middleware.rate_limit import limiter
@@ -10,14 +10,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # =============================================================================
-# SECURITY / OPS WARNING — READ BEFORE DEPLOYMENT
+# SECURITY / OPS — READ BEFORE DEPLOYMENT
 # -----------------------------------------------------------------------------
-# GET /queue/stats is UNAUTHENTICATED and returns internal operational metrics
-# (queue depth, worker task count, dead-letter metadata). This is intended for
-# trusted local or private-network debugging only. Before any public, shared, or
-# multi-tenant deployment, this route MUST be gated (e.g. auth, admin-only
-# network policy, reverse-proxy allowlist, or feature flag). Do not expose it to
-# the open internet without explicit review.
+# GET /queue/stats returns internal operational metrics (queue depth, worker
+# count, DLQ metadata). It is disabled when APP_ENV=production (404). In
+# non-production environments it remains available for local debugging; gate
+# further (auth, allowlist) if you run a shared staging environment.
 # =============================================================================
 
 
@@ -29,6 +27,8 @@ def get_queue_stats(request: Request):
 
     DLQ entries include only lightweight metadata; file bytes are never exposed.
     """
+    if config.APP_ENV.lower() == "production":
+        raise HTTPException(status_code=404, detail="Not found")
     dlq_entries = [
         {
             "doc_id": entry.doc_id,

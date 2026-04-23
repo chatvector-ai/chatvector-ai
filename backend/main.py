@@ -2,7 +2,8 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI,Request
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
@@ -73,6 +74,27 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+
+async def request_validation_exception_handler(
+    _request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": {
+                "code": "validation_error",
+                "message": "Request validation failed",
+                "fields": [
+                    {"loc": list(err.get("loc", ())), "msg": err.get("msg", "")}
+                    for err in exc.errors()
+                ],
+            }
+        },
+    )
+
+
+app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
 
 
 @app.exception_handler(Exception)

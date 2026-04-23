@@ -4,11 +4,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
+from main import request_validation_exception_handler
 from middleware.rate_limit import limiter
 from routes.chat import router as chat_router
 
@@ -31,6 +33,7 @@ async def _rate_limit_exceeded_handler(
 def _chat_validation_app() -> FastAPI:
     app = FastAPI()
     app.state.limiter = limiter
+    app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)
     app.include_router(chat_router)
@@ -102,3 +105,19 @@ def test_chat_doc_id_over_max_length_returns_422(client):
     ):
         resp = client.post("/chat", json=payload)
     assert resp.status_code == 422
+
+
+def test_chat_validation_error_envelope(client):
+    """Missing / invalid body fields use the standard detail.code / detail.fields shape."""
+    with patch(
+        "routes.chat.answer_question_for_document",
+        new=AsyncMock(return_value={"answer": "ok", "chunks": 0}),
+    ):
+        resp = client.post("/chat", json={"doc_ids": ["only-wrong-field"]})
+    assert resp.status_code == 422
+    data = resp.json()
+    assert data["detail"]["code"] == "validation_error"
+    assert data["detail"]["message"] == "Request validation failed"
+    assert "fields" in data["detail"]
+    assert isinstance(data["detail"]["fields"], list)
+    assert all("loc" in f and "msg" in f for f in data["detail"]["fields"])

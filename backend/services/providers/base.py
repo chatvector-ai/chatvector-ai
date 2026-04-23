@@ -103,7 +103,15 @@ class EmbeddingProvider(ABC):
                 dim = KNOWN_EMBEDDING_DIMS.get(model.rsplit("/", 1)[1])
                 if dim:
                     return dim
-        return 3072  # backward-compatible Gemini default
+            raise ValueError(
+                f"Unknown embedding model {model!r}. "
+                f"Set EMBEDDING_DIM in the environment or add the model to "
+                f"KNOWN_EMBEDDING_DIMS in services/providers/base.py."
+            )
+        raise ValueError(
+            "Cannot resolve embedding dimension: provider has no _model set. "
+            "Set EMBEDDING_DIM in the environment or ensure the provider sets _model."
+        )
 
 
 class LLMProvider(ABC):

@@ -401,3 +401,23 @@ class TestOllamaGenerateParsing:
         )
 
         assert result == "No response."
+
+
+class TestEmbeddingDimResolution:
+    """embedding_dim must not silently default for unknown models."""
+
+    def test_unknown_model_raises(self):
+        from services.providers.gemini import GeminiEmbeddingProvider
+
+        provider = GeminiEmbeddingProvider(
+            api_key="test-key", model="totally-unknown-model-xyz"
+        )
+        with pytest.raises(ValueError, match="Unknown embedding model"):
+            _ = provider.embedding_dim
+
+    def test_provider_prefixed_name_resolves(self):
+        """Slash-suffix lookup must work without importing optional OpenAI deps."""
+        from services.providers.ollama import OllamaEmbeddingProvider
+
+        provider = OllamaEmbeddingProvider(model="registry/nomic-embed-text")
+        assert provider.embedding_dim == 768
