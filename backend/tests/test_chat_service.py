@@ -68,6 +68,8 @@ def test_answer_question_for_document_orchestrates_flow():
         )
 
     assert result["question"] == "What is this about?"
+    assert result["status"] == "ok"
+    assert result["doc_id"] == "doc-123"
     assert result["chunks"] == 2
     assert result["answer"] == "final answer"
     assert result["sources"] == [
@@ -82,6 +84,27 @@ def test_answer_question_for_document_orchestrates_flow():
     )
     mock_context.assert_called_once_with(chunks)
     mock_answer.assert_awaited_once_with("What is this about?", "combined context")
+
+
+def test_answer_question_soft_llm_error_matches_batch_error_shape():
+    """When the LLM returns a soft-failure string, /chat should mirror batch: status + error."""
+    from services.answer_service import LLM_MSG_RATE_LIMIT
+
+    with patch(
+        "services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1, 0.2]])
+    ), patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])), patch(
+        "services.chat_service.build_context_from_chunks", return_value="ctx"
+    ), patch(
+        "services.chat_service.generate_answer", new=AsyncMock(return_value=LLM_MSG_RATE_LIMIT)
+    ):
+        result = asyncio.run(
+            answer_question_for_document(question="Q?", doc_id="doc-1", match_count=3)
+        )
+
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "llm_rate_limited"
+    assert result["error"]["message"] == LLM_MSG_RATE_LIMIT
+    assert result["doc_id"] == "doc-1"
 
 
 def test_answer_questions_for_documents_batch_processes_queries():
@@ -262,6 +285,8 @@ def test_answer_question_for_document_includes_sources_with_correct_shape():
         result = asyncio.run(answer_question_for_document(question="Q?", doc_id="doc-1"))
 
     assert "sources" in result
+    assert result["status"] == "ok"
+    assert result["doc_id"] == "doc-1"
     assert result["sources"] == [
         {"file_name": "report.pdf", "page_number": 3, "chunk_index": 0},
         {"file_name": "report.pdf", "page_number": 5, "chunk_index": 1},
@@ -291,6 +316,8 @@ def test_answer_question_for_document_sources_none_fields_for_txt():
     ):
         result = asyncio.run(answer_question_for_document(question="Q?", doc_id="doc-txt"))
 
+    assert result["status"] == "ok"
+    assert result["doc_id"] == "doc-txt"
     assert result["sources"] == [
         {"file_name": "notes.txt", "page_number": None, "chunk_index": 0},
     ]
@@ -325,3 +352,22 @@ def test_batch_answer_includes_sources_in_ok_responses():
     assert result[0]["sources"] == [
         {"file_name": "slides.pdf", "page_number": 2, "chunk_index": 0},
     ]
+
+
+def test_batch_soft_llm_error_uses_same_error_codes_as_single_chat():
+    from services.answer_service import LLM_MSG_MISSING_API_KEY
+
+    queries = [{"question": "Q1", "doc_ids": ["doc-a"]}]
+
+    with patch(
+        "services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])
+    ), patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])), patch(
+        "services.chat_service.build_context_from_chunks", return_value="ctx"
+    ), patch(
+        "services.chat_service.generate_answer", new=AsyncMock(return_value=LLM_MSG_MISSING_API_KEY)
+    ):
+        result = asyncio.run(answer_questions_for_documents_batch(queries))
+
+    assert result[0]["status"] == "error"
+    assert result[0]["error"]["code"] == "llm_missing_api_key"
+    assert "sources" in result[0]

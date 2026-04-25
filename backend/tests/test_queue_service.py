@@ -75,6 +75,7 @@ async def test_queue_position_returns_none_after_job_dequeued():
     assert service.queue_position("doc-gone") == 1
 
     service._queue.get_nowait()
+    service._pending_doc_ids.popleft()
     service._queue.task_done()
 
     assert service.queue_position("doc-gone") is None

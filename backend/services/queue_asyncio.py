@@ -15,6 +15,7 @@ Status flow
 import asyncio
 import logging
 import random
+import collections
 from typing import Optional
 
 import db
@@ -44,6 +45,8 @@ class AsyncioIngestionQueue(BaseIngestionQueue):
         self._queue: asyncio.Queue[QueueJob] = asyncio.Queue(
             maxsize=config.QUEUE_MAX_SIZE
         )
+        # Mirror asyncio.Queue FIFO order without touching asyncio.Queue private internals.
+        self._pending_doc_ids: collections.deque[str] = collections.deque()
         self._dlq: list[DLQEntry] = []
         self._workers: list[asyncio.Task] = []
         self._rate_limiter = TokenBucketRateLimiter(
@@ -127,6 +130,7 @@ class AsyncioIngestionQueue(BaseIngestionQueue):
             raise QueueFull(
                 f"Ingestion queue is at capacity ({config.QUEUE_MAX_SIZE})"
             )
+        self._pending_doc_ids.append(job.doc_id)
         position = self._queue.qsize()
         logger.info(
             f"Enqueued document {job.doc_id} "
@@ -139,8 +143,8 @@ class AsyncioIngestionQueue(BaseIngestionQueue):
         Return the 1-indexed queue position for *doc_id*, or None if the job
         is not currently waiting in the queue (already processing or done).
         """
-        for i, job in enumerate(self._queue._queue):  # type: ignore[attr-defined]
-            if job.doc_id == doc_id:
+        for i, pending_id in enumerate(self._pending_doc_ids):
+            if pending_id == doc_id:
                 return i + 1
         return None
 
@@ -168,6 +172,24 @@ class AsyncioIngestionQueue(BaseIngestionQueue):
                 continue
             except asyncio.CancelledError:
                 break
+
+            if self._pending_doc_ids:
+                head = self._pending_doc_ids.popleft()
+                if head != job.doc_id:
+                    logger.error(
+                        "Ingestion queue order mismatch (worker %s): "
+                        "job doc_id=%s deque_head=%s",
+                        worker_id,
+                        job.doc_id,
+                        head,
+                    )
+            else:
+                logger.error(
+                    "Ingestion queue: received job %s but pending_doc_ids empty "
+                    "(worker %s)",
+                    job.doc_id,
+                    worker_id,
+                )
 
             try:
                 await self._process_job(job, worker_id)
@@ -233,6 +255,7 @@ class AsyncioIngestionQueue(BaseIngestionQueue):
                         f"Failed to set retrying status for {job.doc_id}: {status_err}"
                     )
                 await asyncio.sleep(delay)
+                self._pending_doc_ids.append(job.doc_id)
                 await self._queue.put(job)
             else:
                 logger.error(

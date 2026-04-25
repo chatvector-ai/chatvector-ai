@@ -187,9 +187,13 @@ class SupabaseService(DatabaseService):
 
     async def delete_document(self, document_id: str) -> None:
         try:
-            # Delete chunks first to respect foreign key constraints
-            # Note: The two Supabase client calls (deleting chunks, then the document) 
-            # do not strictly satisfy the 'atomic' docstring contract. We rely on the 
+            # Delete chunks first to respect foreign key constraints. These are two
+            # separate PostgREST calls, not a single DB transaction: if the second
+            # call fails after the first succeeds, orphaned chunks are possible; operators
+            # may re-run delete or run a one-off cleanup. Full transactional delete belongs
+            # in a later migration/RPC, not a light hardening pass.
+            # Note: The two Supabase client calls (deleting chunks, then the document)
+            # do not strictly satisfy the 'atomic' docstring contract. We rely on the
             # project's compensating-cleanup pattern instead.
             await self._run_io(
                 lambda: supabase_client.table("document_chunks")

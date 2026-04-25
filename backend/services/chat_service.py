@@ -8,6 +8,33 @@ from services.query_service import transform_query
 
 logger = logging.getLogger(__name__)
 
+
+def _structured_error_from_llm_answer(answer: str) -> dict | None:
+    """Map soft LLM failure strings from answer_service to {code, message}."""
+    from services.answer_service import (
+        LLM_MSG_INVALID_API_KEY,
+        LLM_MSG_MISSING_API_KEY,
+        LLM_MSG_RATE_LIMIT,
+        LLM_MSG_TIMEOUT,
+        LLM_MSG_UNEXPECTED,
+    )
+
+    exact_codes: list[tuple[str, str]] = [
+        (LLM_MSG_MISSING_API_KEY, "llm_missing_api_key"),
+        (LLM_MSG_INVALID_API_KEY, "llm_invalid_api_key"),
+        (LLM_MSG_RATE_LIMIT, "llm_rate_limited"),
+        (LLM_MSG_TIMEOUT, "llm_timeout_or_connection"),
+        (LLM_MSG_UNEXPECTED, "llm_unexpected"),
+    ]
+    for msg, code in exact_codes:
+        if answer == msg:
+            return {"code": code, "message": msg}
+    if answer.startswith("LLM service is not available") or answer.startswith(
+        "LLM request failed"
+    ):
+        return {"code": "llm_error", "message": answer}
+    return None
+
 _retrieval_limit = max(1, int(config.RETRIEVAL_MAX_CONCURRENCY))
 _retrieval_semaphore = asyncio.Semaphore(_retrieval_limit)
 
@@ -149,12 +176,26 @@ async def answer_question_for_document(
     context = build_context_from_chunks(matching_chunks)
     answer = await generate_answer(question, context)
 
-    logger.info(f"Answer generated successfully for document {doc_id}")
-    return {
+    base: dict = {
         "question": question,
+        "doc_id": doc_id,
         "chunks": len(matching_chunks),
         "answer": answer,
         "sources": _build_sources(matching_chunks),
+    }
+    llm_err = _structured_error_from_llm_answer(answer)
+    if llm_err is not None:
+        logger.warning("Chat LLM returned soft failure for document %s", doc_id)
+        return {
+            **base,
+            "status": "error",
+            "error": llm_err,
+        }
+
+    logger.info(f"Answer generated successfully for document {doc_id}")
+    return {
+        **base,
+        "status": "ok",
     }
 
 
@@ -251,19 +292,32 @@ async def answer_questions_for_documents_batch(
             context = build_context_from_chunks(matching_chunks)
             answer = await generate_answer(query["question"], context)
 
+            sources = _build_sources(matching_chunks)
+            llm_err = _structured_error_from_llm_answer(answer)
+            if llm_err is not None:
+                return {
+                    "status": "error",
+                    "question": query["question"],
+                    "doc_ids": query["doc_ids"],
+                    "chunks": len(matching_chunks),
+                    "answer": answer,
+                    "sources": sources,
+                    "error": llm_err,
+                }
+
             return {
                 "status": "ok",
                 "question": query["question"],
                 "doc_ids": query["doc_ids"],
                 "chunks": len(matching_chunks),
                 "answer": answer,
-                "sources": _build_sources(matching_chunks),
+                "sources": sources,
             }
-        except Exception as e:
+        except Exception:
             logger.exception(
-                "Batch query failed for question='%s' doc_ids=%s",
-                query["question"],
+                "Batch query failed (doc_ids=%s, question_len=%d)",
                 query["doc_ids"],
+                len(query["question"]),
             )
             return {
                 "status": "error",

@@ -5,10 +5,10 @@ from db.base import ChunkRecord
 
 logger = logging.getLogger(__name__)
 
-# TODO: ingest_document_atomic is only referenced from tests (test_upload_atomic.py).
-# Production ingestion uses IngestionPipeline + queue workers + db.create_document_with_chunks_atomic
-# directly; this helper is not wired to any route. Keep for tests and as a thin facade for
-# atomic ingest; wire up from a route or service if a non-queued, synchronous-style API is needed.
+# Note: ingest_document_atomic is only referenced from tests (test_upload_atomic.py).
+# Production ingestion uses IngestionPipeline + queue workers +
+# db.create_document_with_chunks_atomic directly; this helper is not wired to any route.
+# Keep for tests; wire from a service if a non-queued synchronous API is ever needed.
 
 async def ingest_document_atomic(
     file_name: str,
