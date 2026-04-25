@@ -1,67 +1,83 @@
 import Link from "next/link";
 
-import { GITHUB_REPO } from "../../lib/constants";
+import { GITHUB_REPO, SYNTAX } from "../../lib/constants";
 import CodeBlock from "../CodeBlock";
 
 function HeroCodeBlock() {
-  const lines = [
-    { type: "keyword", text: "from " },
-    { type: "default", text: "chatvector " },
-    { type: "keyword", text: "import " },
-    { type: "function", text: "ChatVectorClient" },
-    { type: "br" },
-    { type: "br" },
-    { type: "comment", text: "# Point the client at your running instance" },
-    { type: "br" },
-    { type: "default", text: "cv = " },
-    { type: "function", text: "ChatVectorClient" },
-    { type: "default", text: "(" },
-    { type: "string", text: '"http://localhost:8000"' },
-    { type: "default", text: ")" },
-    { type: "br" },
-    { type: "br" },
-    { type: "comment", text: "# Upload a document" },
-    { type: "br" },
-    { type: "default", text: "doc = cv." },
-    { type: "function", text: "upload_document" },
-    { type: "default", text: "(" },
-    { type: "string", text: '"contract.pdf"' },
-    { type: "default", text: ")" },
-    { type: "br" },
-    { type: "default", text: "cv." },
-    { type: "function", text: "wait_for_ready" },
-    { type: "default", text: "(doc.document_id)" },
-    { type: "br" },
-    { type: "br" },
-    { type: "comment", text: "# Get a grounded, cited answer" },
-    { type: "br" },
-    { type: "default", text: "answer = cv." },
-    { type: "function", text: "chat" },
-    { type: "default", text: "(" },
-    { type: "string", text: '"What are the payment terms?"' },
-    { type: "default", text: ", doc.document_id)" },
-    { type: "br" },
-    { type: "default", text: "print(answer.answer)  " },
-    { type: "comment", text: "# Cited, accurate" },
-  ];
-
+ const codeLines = [
+  {
+    parts: [
+      { c: SYNTAX.kw, t: "from " },
+      { c: SYNTAX.plain, t: "chatvector " },
+      { c: SYNTAX.kw, t: "import " },
+      { c: SYNTAX.fn, t: "ChatVectorClient" },
+    ],
+  },
+  { parts: [{ c: SYNTAX.plain, t: " " }] },
+  {
+    parts: [{ c: SYNTAX.cm, t: "# Point the client at your running instance" }],
+  },
+  {
+    parts: [
+      { c: SYNTAX.plain, t: "cv = " },
+      { c: SYNTAX.fn, t: "ChatVectorClient" },
+      { c: SYNTAX.plain, t: "(" },
+      { c: SYNTAX.str, t: '"http://localhost:8000"' },
+      { c: SYNTAX.plain, t: ")" },
+    ],
+  },
+  { parts: [{ c: SYNTAX.plain, t: " " }] },
+  {
+    parts: [{ c: SYNTAX.cm, t: "# Upload a document" }],
+  },
+  {
+    parts: [
+      { c: SYNTAX.plain, t: "doc = cv." },
+      { c: SYNTAX.fn, t: "upload_document" },
+      { c: SYNTAX.plain, t: "(" },
+      { c: SYNTAX.str, t: '"contract.pdf"' },
+      { c: SYNTAX.plain, t: ")" },
+    ],
+  },
+  {
+    parts: [
+      { c: SYNTAX.plain, t: "cv." },
+      { c: SYNTAX.fn, t: "wait_for_ready" },
+      { c: SYNTAX.plain, t: "(doc.document_id)" },
+    ],
+  },
+  { parts: [{ c: SYNTAX.plain, t: " " }] },
+  {
+    parts: [{ c: SYNTAX.cm, t: "# Get a grounded, cited answer" }],
+  },
+  {
+    parts: [
+      { c: SYNTAX.plain, t: "answer = cv." },
+      { c: SYNTAX.fn, t: "chat" },
+      { c: SYNTAX.plain, t: "(" },
+      { c: SYNTAX.str, t: '"What are the payment terms?"' },
+      { c: SYNTAX.plain, t: ", doc.document_id)" },
+    ],
+  },
+  {
+    parts: [
+      { c: SYNTAX.plain, t: "print(answer.answer)  " },
+      { c: SYNTAX.cm, t: "# Cited, accurate" },
+    ],
+  },
+];
   return (
     <div className="relative z-[1] mt-12 w-full max-w-[700px]">
       <CodeBlock language="python" filename="quickstart.py">
-        {lines.map((t, i) =>
-          t.type === "br" ? (
-            <br key={i} />
-          ) : (
-            <span
-              key={i}
-              style={{
-                color: `var(--syntax-${t.type})`,
-              }}
-            >
-              {t.text}
-            </span>
-          ),
-        )}
+        {codeLines.map((line, i) => (
+              <div key={i}>
+                {line.parts.map((p, j) => (
+                  <span key={j} style={{ color: p.c }}>
+                    {p.t}
+                  </span>
+                ))}
+              </div>
+            ))}
       </CodeBlock>
     </div>
   );

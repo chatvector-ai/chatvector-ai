@@ -41,7 +41,7 @@ export default function Developers() {
         { c: SYNTAX.plain, t: "(doc.document_id)" },
       ],
     },
-    { parts: [] },
+    { parts: [{ c: SYNTAX.plain, t: " " }] },
     { parts: [{ c: SYNTAX.cm, t: "# Ask questions against the document" }] },
     {
       parts: [
@@ -59,7 +59,7 @@ export default function Developers() {
     },
     { parts: [{ c: SYNTAX.plain, t: "  doc.document_id" }] },
     { parts: [{ c: SYNTAX.plain, t: ")" }] },
-    { parts: [] },
+    { parts: [{ c: SYNTAX.plain, t: " " }] },
     {
       parts: [{ c: SYNTAX.cm, t: "# Full response with source citations" }],
     },
