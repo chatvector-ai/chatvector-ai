@@ -74,6 +74,7 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         self._client = openai.AsyncOpenAI(
             api_key=api_key or config.OPENAI_API_KEY,
             base_url=base_url or config.OPENAI_BASE_URL,
+            timeout=float(config.EMBEDDING_HTTP_TIMEOUT_SEC),
         )
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
@@ -107,6 +108,7 @@ class OpenAILLMProvider(LLMProvider):
         self._client = openai.AsyncOpenAI(
             api_key=api_key or config.OPENAI_API_KEY,
             base_url=base_url or config.OPENAI_BASE_URL,
+            timeout=float(config.LLM_HTTP_TIMEOUT_MS) / 1000.0,
         )
 
     async def generate(

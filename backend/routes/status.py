@@ -240,7 +240,10 @@ async def _embedding_health_check() -> dict:
 
     t0 = time.monotonic()
     try:
-        await asyncio.wait_for(get_embedding("health check"), timeout=10.0)
+        await asyncio.wait_for(
+            get_embedding("health check"),
+            timeout=float(config.EMBEDDING_HEALTH_CHECK_TIMEOUT_SEC),
+        )
         latency_ms = int((time.monotonic() - t0) * 1000)
         return {"status": "ok", "latency_ms": latency_ms}
     except asyncio.TimeoutError:

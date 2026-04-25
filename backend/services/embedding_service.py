@@ -2,7 +2,7 @@
 
 import logging
 
-from core.config import get_embedding_dim
+from core.config import config, get_embedding_dim
 from services.providers import get_embedding_provider
 from utils.retry import retry_async
 
@@ -31,7 +31,7 @@ async def get_embeddings(texts: list[str]) -> list[list[float]]:
         max_retries=3,
         base_delay=1.0,
         backoff=2.0,
-        timeout=30.0,
+        timeout=float(config.EMBEDDING_HTTP_TIMEOUT_SEC),
         func_name="embedding_service.get_embeddings",
     )
 

@@ -69,7 +69,7 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
         self._base_url = (base_url or config.OLLAMA_BASE_URL).rstrip("/")
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
-            timeout=60.0,
+            timeout=float(config.EMBEDDING_HTTP_TIMEOUT_SEC),
         )
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
@@ -120,7 +120,7 @@ class OllamaLLMProvider(LLMProvider):
         self._base_url = (base_url or config.OLLAMA_BASE_URL).rstrip("/")
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
-            timeout=120.0,
+            timeout=float(config.LLM_HTTP_TIMEOUT_MS) / 1000.0,
         )
 
     async def generate(

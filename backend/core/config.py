@@ -160,6 +160,14 @@ class Settings:
     LLM_HTTP_TIMEOUT_MS: int = max(
         1000, int(os.getenv("LLM_HTTP_TIMEOUT_MS", "60000"))
     )
+    # Outbound calls to embedding providers (and embedding_service retry_async).
+    EMBEDDING_HTTP_TIMEOUT_SEC: int = max(
+        1, int(os.getenv("EMBEDDING_HTTP_TIMEOUT_SEC", "60"))
+    )
+    # /status health probe for the embedding sub-check only.
+    EMBEDDING_HEALTH_CHECK_TIMEOUT_SEC: int = max(
+        1, int(os.getenv("EMBEDDING_HEALTH_CHECK_TIMEOUT_SEC", "10"))
+    )
     LLM_HEALTH_CHECK_TIMEOUT_SEC: int = max(
         1, int(os.getenv("LLM_HEALTH_CHECK_TIMEOUT_SEC", "120"))
     )
