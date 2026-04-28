@@ -8,6 +8,8 @@ type Props = {
   heading: string;
   message: string;
   onRetry?: () => void; // renders a retry button when provided
+  /** Use "h1" only when this is the sole page title (e.g. 404). Default "h2" for inline error blocks. */
+  headingLevel?: "h1" | "h2";
 };
 
 export default function ErrorState({
@@ -15,6 +17,7 @@ export default function ErrorState({
   heading,
   message,
   onRetry,
+  headingLevel = "h2",
 }: Props) {
   return (
     <div className="flex flex-col items-center text-center gap-3">
@@ -38,7 +41,11 @@ export default function ErrorState({
       <Kicker spacing="sm" className="!mb-0">
         {kicker}
       </Kicker>
-      <h2 className="text-foreground font-semibold text-xl">{heading}</h2>
+      {headingLevel === "h1" ? (
+        <h1 className="text-foreground font-semibold text-xl">{heading}</h1>
+      ) : (
+        <h2 className="text-foreground font-semibold text-xl">{heading}</h2>
+      )}
       <p className="text-muted text-[1rem]">{message}</p>
       {onRetry && (
         <button

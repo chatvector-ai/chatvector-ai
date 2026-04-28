@@ -1,10 +1,166 @@
 import { DocLayout } from "@/app/components/DocLayout";
 import { DocPageHeader } from "@/app/components/DocPageHeader";
 import { Kicker } from "@/app/components/Kicker";
-
 import CodeBlock from "../components/CodeBlock";
+import { SYNTAX } from "../lib/constants";
 
 export default function SdkPage() {
+  const upload_chat_codeLines = [
+  {
+    parts: [
+      { c: SYNTAX.kw, t: "from " },
+      { c: SYNTAX.plain, t: "chatvector " },
+      { c: SYNTAX.kw, t: "import " },
+      { c: SYNTAX.fn, t: "ChatVectorClient" },
+    ],
+  },
+  { parts: [{ c: SYNTAX.plain, t: " " }] },
+  {
+    parts: [
+      { c: SYNTAX.kw, t: "with " },
+      { c: SYNTAX.fn, t: "ChatVectorClient" },
+      { c: SYNTAX.plain, t: "(" },
+      { c: SYNTAX.str, t: '"http://localhost:8000"' },
+      { c: SYNTAX.plain, t: ")" },
+      { c: SYNTAX.kw, t: " as " },
+      { c: SYNTAX.plain, t: "client:" },
+    ],
+  },
+  {
+    parts: [{ c: SYNTAX.cm, t: "    # Upload a document" }],
+  },
+  {
+    parts: [
+      { c: SYNTAX.plain, t: "    doc = client." },
+      { c: SYNTAX.fn, t: "upload_document" },
+      { c: SYNTAX.plain, t: "(" },
+      { c: SYNTAX.str, t: '"report.pdf"' },
+      { c: SYNTAX.plain, t: ")" },
+    ],
+  },
+  { parts: [{ c: SYNTAX.plain, t: " " }] },
+  {
+    parts: [{ c: SYNTAX.cm, t: "    # Wait until the document is ready to query" }],
+  },
+  {
+    parts: [
+      { c: SYNTAX.plain, t: "    client." },
+      { c: SYNTAX.fn, t: "wait_for_ready" },
+      { c: SYNTAX.plain, t: "(doc.document_id, timeout=90)" },
+    ],
+  },
+  { parts: [{ c: SYNTAX.plain, t: " " }] },
+  {
+    parts: [{ c: SYNTAX.cm, t: "    # Ask a question" }],
+  },
+  {
+    parts: [
+      { c: SYNTAX.plain, t: "    answer = client." },
+      { c: SYNTAX.fn, t: "chat" },
+      { c: SYNTAX.plain, t: "(" },
+      { c: SYNTAX.str, t: '"What are the key findings?"' },
+      { c: SYNTAX.plain, t: ", doc.document_id)" },
+    ],
+  },
+  { parts: [{ c: SYNTAX.plain, t: " " }] },
+  {
+    parts: [{ c: SYNTAX.plain, t: "    print(answer.answer)" }],
+  },
+  { parts: [{ c: SYNTAX.plain, t: " " }] },
+  {
+    parts: [{ c: SYNTAX.cm, t: "    # Print cited sources" }],
+  },
+  {
+    parts: [
+      { c: SYNTAX.kw, t: "    for " },
+      { c: SYNTAX.plain, t: "source " },
+      { c: SYNTAX.kw, t: "in " },
+      { c: SYNTAX.plain, t: "answer.sources:" },
+    ],
+  },
+  {
+    parts: [
+      { c: SYNTAX.plain, t: "        print(source.file_name, source.page_number)" },
+    ],
+  },
+];
+  const error_handling_codeLines = [
+  {
+    parts: [
+      { c: SYNTAX.kw, t: "from " },
+      { c: SYNTAX.plain, t: "chatvector.exceptions " },
+      { c: SYNTAX.kw, t: "import (" },
+    ],
+  },
+  { parts: [{ c: SYNTAX.fn, t: "    ChatVectorAPIError," }] },
+  { parts: [{ c: SYNTAX.fn, t: "    ChatVectorAuthError," }] },
+  { parts: [{ c: SYNTAX.fn, t: "    ChatVectorRateLimitError," }] },
+  { parts: [{ c: SYNTAX.fn, t: "    ChatVectorTimeoutError," }] },
+  { parts: [{ c: SYNTAX.plain, t: ")" }] },
+  { parts: [{ c: SYNTAX.plain, t: " " }] },
+  { parts: [{ c: SYNTAX.kw, t: "try:" }] },
+  {
+    parts: [
+      { c: SYNTAX.plain, t: "    doc = client." },
+      { c: SYNTAX.fn, t: "upload_document" },
+      { c: SYNTAX.plain, t: '("report.pdf")' },
+    ],
+  },
+  {
+    parts: [
+      { c: SYNTAX.plain, t: "    client." },
+      { c: SYNTAX.fn, t: "wait_for_ready" },
+      { c: SYNTAX.plain, t: "(doc.document_id, timeout=60)" },
+    ],
+  },
+  {
+    parts: [
+      { c: SYNTAX.plain, t: "    answer = client." },
+      { c: SYNTAX.fn, t: "chat" },
+      { c: SYNTAX.plain, t: '("Summarise the document.", doc.document_id)' },
+    ],
+  },
+  {
+    parts: [
+      { c: SYNTAX.kw, t: "except " },
+      { c: SYNTAX.fn, t: "ChatVectorAuthError" },
+      { c: SYNTAX.plain, t: ":" },
+    ],
+  },
+  {
+    parts: [{ c: SYNTAX.plain, t: '    print("Authentication failed. Check your api_key.")' }],
+  },
+  {
+    parts: [
+      { c: SYNTAX.kw, t: "except " },
+      { c: SYNTAX.fn, t: "ChatVectorRateLimitError" },
+      { c: SYNTAX.plain, t: ":" },
+    ],
+  },
+  {
+    parts: [{ c: SYNTAX.plain, t: '    print("Rate limit hit. Wait and retry.")' }],
+  },
+  {
+    parts: [
+      { c: SYNTAX.kw, t: "except " },
+      { c: SYNTAX.fn, t: "ChatVectorTimeoutError" },
+      { c: SYNTAX.plain, t: ":" },
+    ],
+  },
+  {
+    parts: [{ c: SYNTAX.plain, t: '    print("Document took too long to process.")' }],
+  },
+  {
+    parts: [
+      { c: SYNTAX.kw, t: "except " },
+      { c: SYNTAX.fn, t: "ChatVectorAPIError" },
+      { c: SYNTAX.plain, t: " as e:" },
+    ],
+  },
+  {
+    parts: [{ c: SYNTAX.plain, t: '    print("SDK error:", e)' }],
+  },
+];
   return (
     <DocLayout>
       <div className="text-[1rem] leading-[1.8] text-foreground">
@@ -44,23 +200,15 @@ export default function SdkPage() {
               question:
             </p>
             <CodeBlock language="python" filename="upload_and_chat.py">
-              <code>{`from chatvector import ChatVectorClient
-
-with ChatVectorClient("http://localhost:8000") as client:
-    # Upload a document
-    doc = client.upload_document("report.pdf")
-
-    # Wait until the document is ready to query
-    client.wait_for_ready(doc.document_id, timeout=90)
-
-    # Ask a question
-    answer = client.chat("What are the key findings?", doc.document_id)
-
-    print(answer.answer)
-
-    # Print cited sources
-    for source in answer.sources:
-        print(source.file_name, source.page_number)`}</code>
+             {upload_chat_codeLines.map((line, i) => (
+              <div key={i}>
+                {line.parts.map((p, j) => (
+                  <span key={j} style={{ color: p.c }}>
+                    {p.t}
+                  </span>
+                ))}
+              </div>
+            ))}
             </CodeBlock>
           </section>
 
@@ -118,25 +266,15 @@ with ChatVectorClient("http://localhost:8000") as client:
             </div>
             <div className="mt-5">
               <CodeBlock language="python" filename="error_handling.py">
-                <code>{`from chatvector.exceptions import (
-    ChatVectorAPIError,
-    ChatVectorAuthError,
-    ChatVectorRateLimitError,
-    ChatVectorTimeoutError,
-)
-
-try:
-    doc = client.upload_document("report.pdf")
-    client.wait_for_ready(doc.document_id, timeout=60)
-    answer = client.chat("Summarise the document.", doc.document_id)
-except ChatVectorAuthError:
-    print("Authentication failed. Check your api_key.")
-except ChatVectorRateLimitError:
-    print("Rate limit hit. Wait and retry.")
-except ChatVectorTimeoutError:
-    print("Document took too long to process.")
-except ChatVectorAPIError as e:
-    print("SDK error:", e)`}</code>
+                {error_handling_codeLines.map((line, i) => (
+              <div key={i}>
+                {line.parts.map((p, j) => (
+                  <span key={j} style={{ color: p.c }}>
+                    {p.t}
+                  </span>
+                ))}
+              </div>
+            ))}
               </CodeBlock>
             </div>
           </section>

@@ -4,7 +4,7 @@ const FEATURES = [
   {
     icon: "⬆",
     color: "var(--accent)",
-    bg: "rgba(0,229,160,0.1)",
+    bg: "color-mix(in srgb, var(--accent) 10%, transparent)",
     title: "Multi-format ingestion",
     desc: "PDF, Markdown, HTML, DOCX, plain text. Drop a folder and go.",
     tag: "ingestion",
@@ -76,11 +76,11 @@ function FeatureCard({
       >
         <span style={{ color }}>{icon}</span>
       </div>
-      <h3 className="mb-2 text-[1.05rem] font-medium text-foreground">{title}</h3>
-      <p className="m-0 text-[0.92rem] leading-snug text-muted">{desc}</p>
+      <h3 className="mb-2 text-lg font-medium text-foreground">{title}</h3>
+      <p className="m-0 text-lg leading-relaxed text-muted">{desc}</p>
       {/* Tag badge: sub-20% alpha on blue — kept inline for exact rgba match */}
       <div
-        className="mt-3 inline-block rounded px-2.5 py-0.5 font-mono text-[0.72rem] text-blue"
+        className="mt-3 inline-block rounded px-2.5 py-0.5 font-mono text-sm text-blue"
         style={{
           background: "rgba(0,128,255,0.1)",
           border: "1px solid rgba(0,128,255,0.2)",

@@ -150,7 +150,7 @@ export default function UploadModal({
                 onClick={onClose}
                 tabIndex={showDismissWait ? 0 : -1}
                 aria-hidden={!showDismissWait}
-                className={`inline-flex items-center justify-center rounded-lg px-3.5 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue/50 ${
+                className={`inline-flex items-center justify-center rounded-lg px-3.5 py-2 text-sm font-medium transition ${
                   showDismissWait
                     ? "cursor-pointer text-muted hover:bg-background hover:text-foreground"
                     : "pointer-events-none invisible"
@@ -163,7 +163,7 @@ export default function UploadModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl p-2 text-muted transition-colors hover:bg-background hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-border"
+            className="rounded-xl p-2 text-muted transition-colors hover:bg-background hover:text-foreground"
             aria-label="Close"
           >
             <X size={20} strokeWidth={1.75} />
@@ -174,6 +174,23 @@ export default function UploadModal({
           onDrop={dropZoneInteractive ? handleDrop : (e) => e.preventDefault()}
           onDragOver={(e) => e.preventDefault()}
           onClick={() => dropZoneInteractive && inputRef.current?.click()}
+          onKeyDown={
+            dropZoneInteractive
+              ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    inputRef.current?.click();
+                  }
+                }
+              : undefined
+          }
+          role={dropZoneInteractive ? "button" : undefined}
+          tabIndex={dropZoneInteractive ? 0 : undefined}
+          aria-label={
+            dropZoneInteractive
+              ? "Upload document — drop a file or press Enter to browse"
+              : undefined
+          }
           className={dropZoneClassName}
         >
           <input
@@ -220,7 +237,7 @@ export default function UploadModal({
                   e.stopPropagation();
                   handleRetry();
                 }}
-                className="rounded-full border border-border bg-background px-4 py-2 text-base font-medium text-foreground transition hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-blue/50"
+                className="rounded-full border border-border bg-background px-4 py-2 text-base font-medium text-foreground transition hover:bg-surface"
               >
                 Retry
               </button>

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Github } from "lucide-react";
 import { useState } from "react";
 import ThemeToggle from "./ThemeToggle";
 
@@ -50,10 +50,8 @@ function NavLinks({
             <Link
               href={href}
               onClick={onNavigate}
-              className={`text-[1.05rem] no-underline transition-colors duration-200 ${
-                isActive
-                  ? "text-accent"
-                  : "text-foreground hover:text-accent"
+              className={`text-base text-bold no-underline text-[1.15rem] transition-colors duration-200 ${
+                isActive ? "text-accent" : "text-foreground hover:text-accent"
               }`}
             >
               {label}
@@ -65,15 +63,21 @@ function NavLinks({
   );
 }
 
-function GitHubButton({ className }: { className?: string }) {
+function GitHubNavLink() {
   return (
     <a
       href={GITHUB_REPO}
       target="_blank"
       rel="noopener noreferrer"
-      className={`inline-flex cursor-pointer items-center justify-center rounded-md border border-border bg-transparent px-[18px] py-[7px] text-[1.05rem] text-foreground no-underline transition-all duration-200 hover:border-accent hover:bg-accent/10 hover:text-accent ${className ?? ""}`}
+      aria-label="View ChatVector on GitHub"
+      className="inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-transparent p-2 text-base leading-none text-foreground no-underline transition-all duration-200 hover:border-accent hover:bg-accent/10 hover:text-accent md:px-[18px] md:py-2"
     >
-      GitHub
+      <Github
+        className="size-[1.1rem] shrink-0 md:hidden"
+        strokeWidth={1.75}
+        aria-hidden
+      />
+      <span className="hidden md:inline">GitHub</span>
     </a>
   );
 }
@@ -82,6 +86,8 @@ export default function Navigation() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
+  /** Desktop flyout: sync aria-expanded with hover / focus-within */
+  const [docsFlyoutOpen, setDocsFlyoutOpen] = useState(false);
 
   const docsActive = isDocsActive(pathname);
 
@@ -91,43 +97,54 @@ export default function Navigation() {
       style={{ background: "var(--nav-bg)" }}
     >
       {/* Header scrim: 88% of active theme background — see --nav-bg token in globals.css */}
-      <nav className="mx-auto flex min-h-[60px] max-w-[1100px] items-center justify-between gap-4 px-4">
+      <nav className="mx-auto flex min-h-[60px] max-w-[1100px] items-center justify-between gap-4 px-3 py-2">
         <Link
           href="/"
-          className="flex shrink-0 items-center font-mono text-[1.25rem] font-bold no-underline"
+          className="flex shrink-0 items-center gap-1.5 font-mono font-bold no-underline md:gap-2"
         >
           {/* Both images rendered; CSS shows/hides based on data-theme on <html> */}
           <Image
             src="/chatvector-logo-dark.svg"
             alt=""
-            width={40}
-            height={40}
+            width={70}
+            height={70}
             unoptimized
-            className="size-10 shrink-0 [[data-theme=light]_&]:hidden"
+            className="size-9 shrink-0 md:size-10 lg:size-12 [[data-theme=light]_&]:hidden"
           />
           <Image
             src="/chatvector-logo-light.svg"
             alt=""
-            width={40}
-            height={40}
+            width={70}
+            height={70}
             unoptimized
-            className="size-10 shrink-0 hidden [[data-theme=light]_&]:block"
+            className="size-9 shrink-0 hidden md:size-10 lg:size-12 [[data-theme=light]_&]:block"
           />
-          <span className="text-[1.5rem] bg-gradient-to-r from-accent to-blue bg-clip-text text-transparent">
+          <span className="whitespace-nowrap text-[1.2rem] leading-tight text-transparent md:text-[1.45rem] lg:text-[1.7rem] bg-gradient-to-r from-accent to-blue bg-clip-text">
             ChatVector
           </span>
         </Link>
 
-        <ul className="m-0 hidden list-none flex-1 flex-row flex-wrap items-center justify-center gap-8 p-0 md:flex">
+        <ul className="m-0 hidden list-none flex-1 flex-row flex-wrap items-center justify-center gap-6 p-0 md:flex lg:gap-8">
           <NavLinks pathname={pathname} />
-          <li className="group relative">
+          <li
+            className="group relative"
+            onMouseEnter={() => setDocsFlyoutOpen(true)}
+            onMouseLeave={() => setDocsFlyoutOpen(false)}
+            onFocusCapture={() => setDocsFlyoutOpen(true)}
+            onBlurCapture={(e) => {
+              const next = e.relatedTarget;
+              if (next instanceof Node && e.currentTarget.contains(next))
+                return;
+              setDocsFlyoutOpen(false);
+            }}
+          >
             <button
               type="button"
               aria-haspopup="menu"
-              className={`flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[1.05rem] no-underline transition-colors duration-200 ${
-                docsActive
-                  ? "text-accent"
-                  : "text-foreground hover:text-accent"
+              aria-expanded={docsFlyoutOpen}
+              aria-controls="docs-menu"
+              className={`flex cursor-pointer text-[1.15rem] items-center gap-1 border-0 bg-transparent p-0 text-base no-underline transition-colors duration-200 ${
+                docsActive ? "text-accent" : "text-foreground hover:text-accent"
               }`}
             >
               Docs
@@ -138,6 +155,7 @@ export default function Navigation() {
             </button>
             <div className="pointer-events-none invisible absolute right-0 top-full z-50 pt-2 opacity-0 transition-[opacity,visibility] duration-200 group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:opacity-100">
               <div
+                id="docs-menu"
                 className="min-w-[180px] rounded-xl border border-border bg-surface py-2"
                 role="menu"
               >
@@ -146,7 +164,7 @@ export default function Navigation() {
                     key={href}
                     href={href}
                     role="menuitem"
-                    className="block px-4 py-2 text-[0.9rem] text-muted no-underline transition-colors hover:text-foreground"
+                    className="block px-4 py-2 text-base text-muted no-underline transition-colors hover:text-foreground"
                   >
                     {label}
                   </Link>
@@ -156,8 +174,8 @@ export default function Navigation() {
           </li>
         </ul>
 
-        <div className="flex shrink-0 items-center gap-3">
-          <GitHubButton className="hidden md:inline-flex" />
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <GitHubNavLink />
           <ThemeToggle />
           <button
             type="button"
@@ -182,9 +200,11 @@ export default function Navigation() {
             <li className="w-full text-center">
               <button
                 type="button"
+                aria-haspopup="menu"
                 aria-expanded={docsOpen}
+                aria-controls="docs-menu-mobile"
                 onClick={() => setDocsOpen((o) => !o)}
-                className={`inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[1.05rem] no-underline transition-colors duration-200 ${
+                className={`inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-base no-underline transition-colors duration-200 ${
                   docsActive
                     ? "text-accent"
                     : "text-foreground hover:text-accent"
@@ -199,7 +219,10 @@ export default function Navigation() {
                 />
               </button>
               {docsOpen ? (
-                <ul className="m-0 mt-3 flex list-none flex-col items-stretch gap-2 p-0 pl-4">
+                <ul
+                  id="docs-menu-mobile"
+                  className="m-0 mt-3 flex list-none flex-col items-stretch gap-2 p-0 pl-4"
+                >
                   {DOC_LINKS.map(({ label, href }) => (
                     <li key={href} className="w-full text-center">
                       <Link
@@ -208,7 +231,7 @@ export default function Navigation() {
                           setMobileOpen(false);
                           setDocsOpen(false);
                         }}
-                        className="block px-4 py-2 text-[0.9rem] text-foreground no-underline transition-colors hover:text-accent"
+                        className="block px-4 py-2 text-base text-foreground no-underline transition-colors hover:text-accent"
                       >
                         {label}
                       </Link>
@@ -218,9 +241,6 @@ export default function Navigation() {
               ) : null}
             </li>
           </ul>
-          <div className="flex justify-center">
-            <GitHubButton />
-          </div>
         </div>
       ) : null}
     </header>

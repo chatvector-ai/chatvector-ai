@@ -9,6 +9,7 @@ export default function NotFound() {
           kicker="404"
           heading="Page not found"
           message="This page doesn't exist or has been moved."
+          headingLevel="h1"
         />
       </div>
 

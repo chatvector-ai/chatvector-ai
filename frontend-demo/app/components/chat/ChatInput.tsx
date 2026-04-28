@@ -95,6 +95,7 @@ export default function ChatInput({
             type="button"
             onClick={() => void handleSend()}
             disabled={sendDisabled}
+            aria-label="Send message"
             title={
               inflight
                 ? "Waiting for response..."
@@ -107,7 +108,7 @@ export default function ChatInput({
             className={`w-8 h-8 rounded-lg flex items-center justify-center transition ${
               sendDisabled
                 ? "bg-surface cursor-not-allowed opacity-50"
-                : "bg-accent hover:bg-accent/80 cursor-pointer text-black"
+                : "bg-accent hover:bg-accent/80 cursor-pointer text-background"
             }`}
           >
             <Send size={15} />
