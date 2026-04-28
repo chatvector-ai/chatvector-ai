@@ -15,17 +15,17 @@ function PipelineStep({
       <div
         className="flex size-7 shrink-0 items-center justify-center rounded-md border font-mono text-xs font-bold text-accent"
         style={{
-          background: "rgba(0,229,160,0.1)",
-          borderColor: "rgba(0,229,160,0.2)",
+          background: "color-mix(in srgb, var(--accent) 10%, transparent)",
+          borderColor: "color-mix(in srgb, var(--accent) 20%, transparent)",
         }}
       >
         {num}
       </div>
       <div>
-        <h4 className="mb-0.5 text-[0.95rem] font-medium text-foreground">
+        <h3 className="mb-0.5 text-base font-medium text-foreground">
           {title}
-        </h4>
-        <p className="m-0 text-[0.9rem] text-muted">{desc}</p>
+        </h3>
+        <p className="m-0 text-base leading-relaxed text-muted">{desc}</p>
       </div>
     </div>
   );
@@ -63,7 +63,7 @@ export default function WhatIs() {
           <br />
           and open source.
         </h2>
-        <p className="max-w-[560px] text-[1.1rem] font-light leading-[1.7] text-muted">
+        <p className="max-w-[560px] text-lg font-light leading-relaxed text-muted">
           ChatVector handles the entire retrieval pipeline — from raw documents
           to grounded LLM responses — so you can focus on building, not
           plumbing.
@@ -71,12 +71,12 @@ export default function WhatIs() {
 
         <div className="mt-12 grid grid-cols-1 items-center gap-12 md:grid-cols-2">
           <div>
-            <p className="mb-5 text-[0.95rem] leading-[1.8] text-muted">
+            <p className="mb-5 text-lg leading-relaxed text-muted">
               Most RAG implementations are fragile, slow, or locked into a
               vendor. ChatVector is different — a deployable service you host
               yourself, with a clean HTTP API and no cloud dependency.
             </p>
-            <p className="text-[1rem] leading-[1.8] text-muted">
+            <p className="text-lg leading-relaxed text-muted">
               Spin up the Docker container, point the SDK at it, and start
               querying your documents in minutes. Built on FastAPI and pgvector.
               Runs anywhere Docker runs.

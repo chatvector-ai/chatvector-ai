@@ -18,7 +18,7 @@
   --foreground: #e8edf5;
   --surface: #111418;
   --border: #1e2530;
-  --muted: #6b7685;
+  --muted: #96a2ab;
   --subtle: #3d4555;
   --accent: #00e5a0;
   --blue: #0080ff;
@@ -42,7 +42,7 @@
   --border: #e2e5ea;
   --muted: #5a6270;
   --subtle: #9ba3af;
-  --accent: #00c48a;
+  --accent: #008059;
   --blue: #0070e0;
   --nav-bg: rgba(255, 255, 255, 0.88);
   --syntax-keyword: #ff7b72;
@@ -78,6 +78,21 @@ body {
 
 html {
   scroll-behavior: smooth;
+}
+
+@layer base {
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [role="button"]:focus-visible,
+  [role="link"]:focus-visible,
+  [role="menuitem"]:focus-visible,
+  [role="tab"]:focus-visible,
+  [tabindex]:not([tabindex="-1"]):focus-visible {
+    @apply outline-none ring-2 ring-accent/50 ring-offset-2 ring-offset-background;
+  }
 }
 
 @keyframes pulse {

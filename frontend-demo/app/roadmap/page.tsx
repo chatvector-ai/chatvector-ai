@@ -7,7 +7,7 @@ const phases = [
     number: "Phase 1",
     title: "Stabilize & Optimize Core Engine",
     status: "Complete",
-    statusStyles: "bg-accent text-black",
+    statusStyles: "bg-accent text-background",
     description:
       "Core RAG backend hardened for reliability, observability, and performance. Shipped features include a robust ingestion pipeline, centralized retry logic, and built-in observability.",
   },
@@ -38,6 +38,7 @@ export default function RoadmapPage() {
         description="Phased delivery from stabilizing the core engine through developer experience and long-term scale."
       />
 
+      <h2 className="sr-only">Development phases</h2>
       <div className="mt-12 grid gap-6">
         {phases.map((phase, i) => (
           <section
@@ -55,16 +56,22 @@ export default function RoadmapPage() {
               </span>
             </div>
 
-            <h2 className="mb-3 text-xl font-semibold text-foreground">{phase.title}</h2>
+            <h3 className="mb-3 text-xl font-semibold text-foreground">
+              {phase.title}
+            </h3>
 
-            <p className="text-[1rem] leading-[1.8] text-foreground/90">{phase.description}</p>
+            <p className="text-[1rem] leading-[1.8] text-foreground/90">
+              {phase.description}
+            </p>
           </section>
         ))}
       </div>
 
       <div className="mt-16 flex flex-col gap-6 border-t border-border pt-8">
         <div>
-          <p className="mb-2 text-sm text-foreground/80">Want to see what we&apos;re building right now?</p>
+          <p className="mb-2 text-sm text-foreground/80">
+            Want to see what we&apos;re building right now?
+          </p>
           <Link
             href="https://github.com/orgs/chatvector-ai/projects/1"
             className="inline-flex items-center gap-2 font-medium text-accent transition-colors hover:text-accent/80"
