@@ -6,7 +6,7 @@ Example:
 
     result = await retry_async(
         lambda: service.save(payload),
-        max_retries=3,
+        max_retries=3,      # up to 3 retries after the first attempt (4 total)
         base_delay=1.0,
         backoff=2.0,
         timeout=10.0,
@@ -72,8 +72,9 @@ async def retry_async(
         func_name = getattr(func, '__name__', 'unknown_function')
 
     last_exception = None
+    max_attempts = max_retries + 1
 
-    for attempt in range(max_retries):
+    for attempt in range(max_attempts):
         try:
             if timeout is not None:
                 return await asyncio.wait_for(func(), timeout=timeout)
@@ -81,27 +82,27 @@ async def retry_async(
                 return await func()
         except asyncio.TimeoutError as e:
             last_exception = e
-            if attempt == max_retries - 1:
+            if attempt == max_attempts - 1:
                 logger.error(
-                    f"Final retry attempt timed out for {func_name}",
+                    f"Final attempt timed out for {func_name}",
                     extra={
                         "error_type": "TimeoutError",
                         "timeout_seconds": timeout,
                         "attempt": attempt + 1,
-                        "max_retries": max_retries,
+                        "max_attempts": max_attempts,
                     },
                 )
                 raise
             cap = base_delay * (backoff ** attempt)
             delay = random.uniform(0, cap)
             logger.warning(
-                f"Attempt {attempt + 1}/{max_retries} timed out for "
+                f"Attempt {attempt + 1}/{max_attempts} timed out for "
                 f"{func_name} after {timeout}s, retrying in {delay:.2f}s",
                 extra={
                     "error_type": "TimeoutError",
                     "timeout_seconds": timeout,
                     "attempt": attempt + 1,
-                    "max_retries": max_retries,
+                    "max_attempts": max_attempts,
                     "next_retry_delay": delay,
                 },
             )
@@ -117,19 +118,19 @@ async def retry_async(
                         "error_type": type(e).__name__,
                         "error_message": str(e),
                         "attempt": attempt + 1,
-                        "max_retries": max_retries,
+                        "max_attempts": max_attempts,
                     }
                 )
                 raise
 
-            if attempt == max_retries - 1:
+            if attempt == max_attempts - 1:
                 logger.error(
-                    f"Final retry attempt failed for {func_name}",
+                    f"Final attempt failed for {func_name}",
                     extra={
                         "error_type": type(e).__name__,
                         "error_message": str(e),
                         "attempt": attempt + 1,
-                        "max_retries": max_retries,
+                        "max_attempts": max_attempts,
                     }
                 )
                 raise
@@ -139,12 +140,12 @@ async def retry_async(
 
             logger.warning(
                 f"Transient error in {func_name}, "
-                f"retrying in {delay:.2f}s (attempt {attempt + 1}/{max_retries})",
+                f"retrying in {delay:.2f}s (attempt {attempt + 1}/{max_attempts})",
                 extra={
                     "error_type": type(e).__name__,
                     "error_message": str(e),
                     "attempt": attempt + 1,
-                    "max_retries": max_retries,
+                    "max_attempts": max_attempts,
                     "next_retry_delay": delay,
                 }
             )

@@ -644,6 +644,8 @@ def _sanitize_filename(name: str | None, max_length: int = 255) -> str:
     name = pathlib.Path(name or "").name
     name = re.sub(r"[^\w \-.]", "", name)
     name = name.strip()[:max_length]
+    if name in (".", ".."):
+        return "upload"
     return name or "upload"
 
 

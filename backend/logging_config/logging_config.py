@@ -101,9 +101,11 @@ def setup_logging(
     )
     access_file_handler.setFormatter(uvicorn_formatter)
 
+    log_level = getattr(logging, config.LOG_LEVEL, logging.INFO)
+
     # -------- ROOT LOGGER (APP LOGS) --------
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(log_level)
     root_logger.handlers.clear()
     root_logger.addHandler(file_handler)
 
@@ -113,5 +115,5 @@ def setup_logging(
         logger.handlers.clear()
         logger.addHandler(console_handler)
         logger.addHandler(access_file_handler)
-        logger.setLevel(logging.INFO)
+        logger.setLevel(log_level)
         logger.propagate = False

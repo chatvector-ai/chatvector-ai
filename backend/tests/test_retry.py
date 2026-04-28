@@ -41,16 +41,16 @@ async def test_retry_fails_on_permanent_error():
 
 @pytest.mark.asyncio
 async def test_retry_exhaustion():
-    """Should raise after max retries."""
+    """Should raise after 1 initial attempt + max_retries retries (3 total)."""
     mock_func = AsyncMock()
     mock_func.side_effect = Exception("timeout")
-    
+
     with patch('utils.retry.is_transient_error', return_value=True):
         with patch('utils.retry.asyncio.sleep', new_callable=AsyncMock):
             with pytest.raises(Exception, match="timeout"):
                 await retry_async(mock_func, max_retries=2, timeout=None)
-    
-    assert mock_func.call_count == 2
+
+    assert mock_func.call_count == 3  # 1 initial + 2 retries
 
 @pytest.mark.asyncio
 async def test_exponential_backoff():
@@ -125,7 +125,7 @@ async def test_timeout_error_after_max_retries_exhausted():
                     func_name="test.always_timeout",
                 )
 
-    assert mock_inner.call_count == 2
+    assert mock_inner.call_count == 3  # 1 initial + 2 retries
 
 @pytest.mark.asyncio
 async def test_timeout_none_skips_wait_for():

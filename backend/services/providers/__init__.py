@@ -15,6 +15,8 @@ from services.providers.base import EmbeddingProvider, LLMProvider
 logger = logging.getLogger(__name__)
 
 # Singletons — public so tests can reset them (same pattern as db.db_service).
+# NOTE: Phase 3 will require per-tenant or per-request provider instances.
+# Current singleton pattern will be replaced.
 _embedding_provider: EmbeddingProvider | None = None
 _llm_provider: LLMProvider | None = None
 

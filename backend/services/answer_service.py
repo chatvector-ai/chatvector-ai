@@ -15,16 +15,21 @@ from services.providers.base import (
 logger = logging.getLogger(__name__)
 
 
-def _load_system_prompt() -> str:
+_SYSTEM_PROMPT: str | None = None
+
+
+def _get_system_prompt() -> str:
+    global _SYSTEM_PROMPT
+    if _SYSTEM_PROMPT is not None:
+        return _SYSTEM_PROMPT
     path = Path(config.SYSTEM_PROMPT_PATH)
     if not path.is_file():
         raise FileNotFoundError(
-            f"System prompt file not found at {path} (SYSTEM_PROMPT_PATH is set but the file is missing)."
+            f"System prompt file not found at {path} "
+            f"(SYSTEM_PROMPT_PATH={config.SYSTEM_PROMPT_PATH!r})."
         )
-    return path.read_text(encoding="utf-8").strip()
-
-
-_SYSTEM_PROMPT = _load_system_prompt()
+    _SYSTEM_PROMPT = path.read_text(encoding="utf-8").strip()
+    return _SYSTEM_PROMPT
 
 LLM_MSG_MISSING_API_KEY = (
     "LLM service is not available: API key is missing or not configured."
@@ -94,7 +99,7 @@ async def generate_answer(question: str, context: str) -> str:
         provider = get_llm_provider()
         answer = await provider.generate(
             contents,
-            system_instruction=_SYSTEM_PROMPT,
+            system_instruction=_get_system_prompt(),
             temperature=config.LLM_TEMPERATURE,
             max_output_tokens=config.LLM_MAX_OUTPUT_TOKENS,
         )

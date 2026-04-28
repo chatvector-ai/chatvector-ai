@@ -1,4 +1,5 @@
 import logging
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -17,7 +18,7 @@ router = APIRouter()
 
 class ChatBatchItem(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
-    doc_ids: list[str] = Field(..., min_length=1)
+    doc_ids: list[UUID] = Field(..., min_length=1)
     match_count: int = Field(default=5, ge=1, le=20)
 
 
@@ -27,7 +28,7 @@ class ChatBatchRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
-    doc_id: str = Field(..., min_length=1, max_length=100)
+    doc_id: UUID
     match_count: int = Field(default=5, ge=1, le=20)
 
 
@@ -37,7 +38,7 @@ async def chat(request: Request, payload: ChatRequest):
     logger.info(f"Chat request received for document {payload.doc_id}")
     return await answer_question_for_document(
         question=payload.question,
-        doc_id=payload.doc_id,
+        doc_id=str(payload.doc_id),
         match_count=payload.match_count,
     )
 
@@ -49,7 +50,7 @@ async def chat_batch(request: Request, payload: ChatBatchRequest):
 
     try:
         results = await answer_questions_for_documents_batch(
-            [query.model_dump() for query in payload.queries]
+            [query.model_dump(mode="json") for query in payload.queries]
         )
     except ValueError as e:
         raise HTTPException(
