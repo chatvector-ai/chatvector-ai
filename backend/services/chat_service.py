@@ -1,6 +1,7 @@
 import logging
 import asyncio
-from typing import Optional
+import json
+from typing import Optional, AsyncGenerator
 
 from core.auth import AuthContext, get_current_tenant
 from core.config import config
@@ -68,6 +69,15 @@ async def generate_answer(question: str, context: str) -> str:
     from services.answer_service import generate_answer as _generate_answer
 
     return await _generate_answer(question, context)
+
+async def generate_answer_stream(question: str, context: str) -> AsyncGenerator[str, None]:
+    """
+    Lazily import answer stream dependency.
+    """
+    from services.answer_service import generate_answer_stream as _generate_answer_stream
+
+    async for chunk in _generate_answer_stream(question, context):
+        yield chunk
 
 
 async def get_embeddings(texts: list[str]) -> list[list[float]]:
@@ -205,6 +215,53 @@ async def answer_question_for_document(
         "status": "ok",
     }
 
+
+async def answer_question_stream_for_document(
+    question: str,
+    doc_id: str,
+    match_count: int = 5,
+    auth: Optional[AuthContext] = None,
+) -> AsyncGenerator[str, None]:
+    """
+    Orchestrate the chat flow for a single question/document pair, yielding
+    a server-sent events (SSE) stream.
+    """
+    logger.info(f"Starting chat stream for document {doc_id}")
+    tenant_id = get_current_tenant(auth) if auth else None
+
+    try:
+        transformed_queries = await transform_query(question)
+        query_embeddings = await get_embeddings(transformed_queries)
+        all_chunks: list = []
+        seen_chunk_keys: set = set()
+        for query_embedding in query_embeddings:
+            chunks = await _retrieve_chunks_for_documents(
+                doc_ids=[doc_id],
+                query_embedding=query_embedding,
+                match_count=match_count,
+                tenant_id=tenant_id,
+            )
+            for chunk in chunks:
+                key = (chunk.document_id, chunk.chunk_index)
+                if key not in seen_chunk_keys:
+                    seen_chunk_keys.add(key)
+                    all_chunks.append(chunk)
+        matching_chunks = all_chunks
+        context = build_context_from_chunks(matching_chunks)
+
+        async for chunk in generate_answer_stream(question, context):
+            err = _structured_error_from_llm_answer(chunk)
+            if err is not None:
+                yield f"event: error\ndata: {json.dumps(err['message'])}\n\n"
+            else:
+                yield f"event: token\ndata: {json.dumps(chunk)}\n\n"
+
+        yield "event: done\ndata: [DONE]\n\n"
+        logger.info(f"Answer stream generated successfully for document {doc_id}")
+
+    except Exception as e:
+        logger.error(f"Stream failed for document {doc_id}: {e}", exc_info=True)
+        yield f"event: error\ndata: {json.dumps('An unexpected error occurred.')}\n\n"
 
 async def answer_questions_for_documents_batch(
     queries: list[dict],

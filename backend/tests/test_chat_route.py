@@ -91,3 +91,48 @@ def test_chat_batch_route_returns_422_for_value_error():
         except HTTPException as exc:
             assert exc.status_code == 422
             assert exc.detail["code"] == "invalid_batch_request"
+
+import pytest
+from routes.chat import chat_stream
+
+@pytest.mark.asyncio
+async def test_chat_stream_route_disabled():
+    with patch("routes.chat.config") as mock_config:
+        mock_config.ENABLE_STREAMING = False
+        with pytest.raises(HTTPException) as exc_info:
+            await chat_stream(
+                make_test_request("POST", "/chat/stream"),
+                ChatRequest(question="q", doc_id=_DOC_ID_1),
+                auth=AuthContext(),
+            )
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["code"] == "streaming_disabled"
+
+@pytest.mark.asyncio
+async def test_chat_stream_route_enabled():
+    async def mock_stream(*args, **kwargs):
+        yield "event: token\ndata: \"Hello\"\n\n"
+        yield "event: done\ndata: [DONE]\n\n"
+
+    with (
+        patch("routes.chat.config") as mock_config,
+        patch("routes.chat.answer_question_stream_for_document", new=mock_stream) as mock_answer
+    ):
+        mock_config.ENABLE_STREAMING = True
+        response = await chat_stream(
+            make_test_request("POST", "/chat/stream"),
+            ChatRequest(question="q", doc_id=_DOC_ID_1),
+            auth=AuthContext(),
+        )
+
+        assert response.media_type == "text/event-stream"
+        
+        # Read streaming response chunks
+        chunks = []
+        async for chunk in response.body_iterator:
+            chunks.append(chunk)
+
+        assert len(chunks) == 2
+        assert chunks[0] == "event: token\ndata: \"Hello\"\n\n"
+        assert chunks[1] == "event: done\ndata: [DONE]\n\n"
+

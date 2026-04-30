@@ -2,6 +2,7 @@
 
 import logging
 from pathlib import Path
+from typing import AsyncGenerator
 
 from core.config import config
 from services.providers import get_llm_provider
@@ -153,3 +154,83 @@ async def generate_answer(question: str, context: str) -> str:
             extra={"error_type": type(e).__name__},
         )
         return _msg_unexpected()
+
+async def generate_answer_stream(question: str, context: str) -> AsyncGenerator[str, None]:
+    """
+    Generate an answer token-by-token using the configured LLM provider.
+
+    Error classification is provider-agnostic: providers raise common
+    exceptions (ProviderRateLimitError, etc.) and this function maps
+    them to user-facing messages.
+    """
+    contents = f"CONTEXT:\n{context}\n\nQUESTION:\n{question}"
+
+    if not _api_key_present():
+        logger.error(
+            "LLM cannot run: API key is missing or empty for provider %s",
+            config.LLM_PROVIDER,
+            extra={"error_type": "MissingAPIKey"},
+        )
+        yield _msg_missing_api_key()
+        return
+
+    try:
+        provider = get_llm_provider()
+        async for chunk in provider.generate_stream(
+            contents,
+            system_instruction=_get_system_prompt(),
+            temperature=config.LLM_TEMPERATURE,
+            max_output_tokens=config.LLM_MAX_OUTPUT_TOKENS,
+        ):
+            yield chunk
+
+        logger.info("Answer stream generated successfully")
+
+    except ProviderRateLimitError as e:
+        logger.error(
+            "LLM rate limit or quota (%s): %s",
+            type(e).__name__,
+            e,
+            extra={"error_type": type(e).__name__},
+        )
+        yield _msg_rate_limit()
+
+    except ProviderAuthError as e:
+        logger.error(
+            "LLM API key rejected or unauthorized (%s): %s",
+            type(e).__name__,
+            e,
+            extra={"error_type": type(e).__name__},
+        )
+        yield _msg_invalid_api_key()
+
+    except ProviderTimeoutError as e:
+        logger.error(
+            "LLM request timeout (%s): %s",
+            type(e).__name__,
+            e,
+            exc_info=True,
+            extra={"error_type": type(e).__name__},
+        )
+        yield _msg_timeout_or_connection()
+
+    except ProviderConnectionError as e:
+        logger.error(
+            "LLM connection error (%s): %s",
+            type(e).__name__,
+            e,
+            exc_info=True,
+            extra={"error_type": type(e).__name__},
+        )
+        yield _msg_timeout_or_connection()
+
+    except Exception as e:
+        logger.error(
+            "LLM unexpected error (%s): %s",
+            type(e).__name__,
+            e,
+            exc_info=True,
+            extra={"error_type": type(e).__name__},
+        )
+        yield _msg_unexpected()
+

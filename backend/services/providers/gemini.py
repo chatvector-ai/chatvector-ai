@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, AsyncGenerator
 
 import httpx
 from google import genai
@@ -187,3 +187,85 @@ class GeminiLLMProvider(LLMProvider):
             BrokenPipeError,
         ) as exc:
             raise _classify_network_error(exc) from exc
+
+    async def generate_stream(
+        self,
+        prompt: str,
+        *,
+        system_instruction: str,
+        temperature: float,
+        max_output_tokens: int,
+        extra_params: dict[str, Any] | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """Call Gemini's ``generateContentStream`` endpoint."""
+        config_kwargs: dict[str, Any] = {
+            "system_instruction": system_instruction,
+            "temperature": temperature,
+            "max_output_tokens": max_output_tokens,
+        }
+        if extra_params:
+            for key in ("top_p", "top_k", "stop_sequences", "candidate_count"):
+                if key in extra_params:
+                    config_kwargs[key] = extra_params[key]
+        gen_config = genai_types.GenerateContentConfig(**config_kwargs)
+
+        try:
+            # We use an async client context for streaming if needed, but since genai client is not purely async
+            # we'll run generate_content_stream in an async-friendly wrapper or just use the async methods if available.
+            # wait, google-genai async methods are accessible via client.aio... Let's use self._client.aio
+            # Let's check if the client exposes .aio. Wait, the non-streaming uses `asyncio.to_thread(self._client.models.generate_content...)`
+            # For streaming, if there's no native async iterator we might need to wrap it.
+            # Actually, `google-genai` supports `client.aio.models.generate_content_stream`. We should check if we can use it.
+            # If not, we can use `asyncio.to_thread` for the initial call, and then wrap the sync iterator. But better to use `client.aio` if possible.
+            # However, looking at the sync one, it's just using asyncio.to_thread because the client is synchronous.
+            # Let's wrap the generator using asyncio.to_thread for next().
+            
+            # Actually, wait. I will just use asyncio.to_thread for the chunks or `self._client.aio` if I can.
+            # But let's look at `google-genai` docs. `client.aio.models.generate_content_stream` is the standard way.
+            # Let's assume we can use `self._client.aio.models.generate_content_stream`. Wait, if the provider init did `genai.Client()`, does it have `.aio`? Yes.
+            
+            if hasattr(self._client, "aio"):
+                response_stream = await self._client.aio.models.generate_content_stream(
+                    model=self._model,
+                    contents=prompt,
+                    config=gen_config,
+                )
+                async for chunk in response_stream:
+                    if chunk.text:
+                        yield chunk.text
+            else:
+                # Fallback to wrapping the sync iterator
+                response_stream = await asyncio.to_thread(
+                    self._client.models.generate_content_stream,
+                    model=self._model,
+                    contents=prompt,
+                    config=gen_config,
+                )
+                
+                def _get_next(iterator):
+                    try:
+                        return next(iterator)
+                    except StopIteration:
+                        return None
+
+                iterator = iter(response_stream)
+                while True:
+                    chunk = await asyncio.to_thread(_get_next, iterator)
+                    if chunk is None:
+                        break
+                    if chunk.text:
+                        yield chunk.text
+
+        except APIError as exc:
+            raise _classify_gemini_error(exc) from exc
+        except (
+            httpx.TimeoutException,
+            httpx.ConnectError,
+            httpx.RemoteProtocolError,
+            httpx.NetworkError,
+            TimeoutError,
+            ConnectionError,
+            BrokenPipeError,
+        ) as exc:
+            raise _classify_network_error(exc) from exc
+

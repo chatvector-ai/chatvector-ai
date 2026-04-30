@@ -2,6 +2,7 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 from core.auth import AuthContext, require_auth
 from core.config import config
@@ -10,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from services.chat_service import (
     answer_question_for_document,
+    answer_question_stream_for_document,
     answer_questions_for_documents_batch,
 )
 
@@ -42,6 +44,30 @@ async def chat(request: Request, payload: ChatRequest, auth: AuthContext = Depen
         doc_id=str(payload.doc_id),
         match_count=payload.match_count,
         auth=auth,
+    )
+
+
+@router.post("/chat/stream")
+@limiter.limit(config.RATE_LIMIT_CHAT)
+async def chat_stream(request: Request, payload: ChatRequest, auth: AuthContext = Depends(require_auth)):
+    if not config.ENABLE_STREAMING:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "streaming_disabled",
+                "message": "Streaming responses are currently disabled.",
+            },
+        )
+
+    logger.info(f"Chat stream request received for document {payload.doc_id}")
+    return StreamingResponse(
+        answer_question_stream_for_document(
+            question=payload.question,
+            doc_id=str(payload.doc_id),
+            match_count=payload.match_count,
+            auth=auth,
+        ),
+        media_type="text/event-stream",
     )
 
 

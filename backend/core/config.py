@@ -73,6 +73,7 @@ def _get_embedding_provider() -> str:
 class Settings:
     APP_ENV: str = os.getenv("APP_ENV", "production")
     IS_PROD = APP_ENV.lower() == "production"
+    ENABLE_STREAMING: bool = os.getenv("ENABLE_STREAMING", "false").lower() in ("1", "true", "yes")
     SUPABASE_URL: str | None = os.getenv("SUPABASE_URL")
     SUPABASE_KEY: str | None = os.getenv("SUPABASE_KEY")
     SUPABASE_HTTP_TIMEOUT_SEC: int = max(

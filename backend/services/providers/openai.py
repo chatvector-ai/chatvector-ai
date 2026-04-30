@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, AsyncGenerator
 
 import openai
 
@@ -140,3 +140,39 @@ class OpenAILLMProvider(LLMProvider):
 
         except openai.APIError as exc:
             raise _classify_openai_error(exc) from exc
+
+    async def generate_stream(
+        self,
+        prompt: str,
+        *,
+        system_instruction: str,
+        temperature: float,
+        max_output_tokens: int,
+        extra_params: dict[str, Any] | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """Call OpenAI's chat completions endpoint with stream=True."""
+        try:
+            create_kwargs: dict[str, Any] = {
+                "model": self._model,
+                "messages": [
+                    {"role": "system", "content": system_instruction},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": temperature,
+                "max_tokens": max_output_tokens,
+                "stream": True,
+            }
+            if extra_params:
+                for key in ("top_p", "frequency_penalty", "presence_penalty", "stop", "seed"):
+                    if key in extra_params:
+                        create_kwargs[key] = extra_params[key]
+            
+            response = await self._client.chat.completions.create(**create_kwargs)
+            async for chunk in response:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield content
+
+        except openai.APIError as exc:
+            raise _classify_openai_error(exc) from exc
+

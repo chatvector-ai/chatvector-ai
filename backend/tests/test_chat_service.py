@@ -372,3 +372,55 @@ def test_batch_soft_llm_error_uses_same_error_codes_as_single_chat():
     assert result[0]["status"] == "error"
     assert result[0]["error"]["code"] == "llm_missing_api_key"
     assert "sources" in result[0]
+
+@pytest.mark.asyncio
+async def test_answer_question_stream_for_document_success():
+    """Test successful generation of an SSE stream."""
+    from services.chat_service import answer_question_stream_for_document
+    from core.auth import AuthContext
+    
+    async def mock_generate_stream(q, c):
+        yield "part1 "
+        yield "part2"
+
+    with (
+        patch("services.chat_service.transform_query", new=AsyncMock(return_value=["q"])),
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1, 0.2]])),
+        patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="context"),
+        patch("services.chat_service.generate_answer_stream", new=mock_generate_stream)
+    ):
+        chunks = []
+        async for chunk in answer_question_stream_for_document("q", "doc-1", match_count=5, auth=AuthContext()):
+            chunks.append(chunk)
+
+        assert len(chunks) == 3
+        assert chunks[0] == "event: token\ndata: \"part1 \"\n\n"
+        assert chunks[1] == "event: token\ndata: \"part2\"\n\n"
+        assert chunks[2] == "event: done\ndata: [DONE]\n\n"
+
+@pytest.mark.asyncio
+async def test_answer_question_stream_for_document_error():
+    """Test error handling in SSE stream."""
+    from services.chat_service import answer_question_stream_for_document
+    from core.auth import AuthContext
+    from services.answer_service import LLM_MSG_RATE_LIMIT
+    
+    async def mock_generate_stream(q, c):
+        yield LLM_MSG_RATE_LIMIT
+
+    with (
+        patch("services.chat_service.transform_query", new=AsyncMock(return_value=["q"])),
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1, 0.2]])),
+        patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="context"),
+        patch("services.chat_service.generate_answer_stream", new=mock_generate_stream)
+    ):
+        chunks = []
+        async for chunk in answer_question_stream_for_document("q", "doc-1", match_count=5, auth=AuthContext()):
+            chunks.append(chunk)
+
+        assert len(chunks) == 2
+        assert chunks[0] == f"event: error\ndata: \"{LLM_MSG_RATE_LIMIT}\"\n\n"
+        assert chunks[1] == "event: done\ndata: [DONE]\n\n"
+

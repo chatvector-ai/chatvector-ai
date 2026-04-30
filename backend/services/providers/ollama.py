@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+import json
+from typing import Any, AsyncGenerator
 
 import httpx
 
@@ -159,3 +160,51 @@ class OllamaLLMProvider(LLMProvider):
             raise _classify_http_error(exc) from exc
         except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
             raise _classify_network_error(exc) from exc
+
+    async def generate_stream(
+        self,
+        prompt: str,
+        *,
+        system_instruction: str,
+        temperature: float,
+        max_output_tokens: int,
+        extra_params: dict[str, Any] | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """POST to ``/api/generate`` for streaming text generation."""
+        try:
+            options: dict[str, Any] = {
+                "temperature": temperature,
+                "num_predict": max_output_tokens,
+            }
+            if extra_params:
+                for key in ("top_p", "top_k", "stop", "repeat_penalty", "seed"):
+                    if key in extra_params:
+                        options[key] = extra_params[key]
+            
+            async with self._client.stream(
+                "POST",
+                "/api/generate",
+                json={
+                    "model": self._model,
+                    "prompt": prompt,
+                    "system": system_instruction,
+                    "stream": True,
+                    "options": options,
+                },
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                        if "response" in data:
+                            yield data["response"]
+                    except json.JSONDecodeError:
+                        continue
+
+        except httpx.HTTPStatusError as exc:
+            raise _classify_http_error(exc) from exc
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
+            raise _classify_network_error(exc) from exc
+

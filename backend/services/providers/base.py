@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
-
+from typing import Any, AsyncGenerator
 
 # ---------------------------------------------------------------------------
 # Common provider exceptions
@@ -136,3 +135,24 @@ class LLMProvider(ABC):
             sequences).  Each provider maps relevant keys to its SDK
             format and ignores unrecognised keys.
         """
+
+    @abstractmethod
+    async def generate_stream(
+        self,
+        prompt: str,
+        *,
+        system_instruction: str,
+        temperature: float,
+        max_output_tokens: int,
+        extra_params: dict[str, Any] | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """Generate a streaming text response for the given prompt.
+
+        Parameters
+        ----------
+        extra_params
+            Optional provider-specific parameters (e.g. top_p, stop
+            sequences).  Each provider maps relevant keys to its SDK
+            format and ignores unrecognised keys.
+        """
+
