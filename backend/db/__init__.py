@@ -99,11 +99,11 @@ async def worker_db_context():
             logger.warning("Failed to dispose worker DB engine")
 
 
-async def create_document(filename: str) -> str:
+async def create_document(filename: str, tenant_id: str | None = None) -> str:
     service = get_db_service()
 
     async def _create():
-        return await service.create_document(filename)
+        return await service.create_document(filename, tenant_id=tenant_id)
 
     return await retry_async(
         _create,
@@ -118,11 +118,14 @@ async def create_document(filename: str) -> str:
 async def store_chunks_with_embeddings(
     doc_id: str,
     chunk_records: list[ChunkRecord],
+    tenant_id: str | None = None,
 ) -> list[str]:
     service = get_db_service()
 
     async def _store():
-        return await service.store_chunks_with_embeddings(doc_id, chunk_records)
+        return await service.store_chunks_with_embeddings(
+            doc_id, chunk_records, tenant_id=tenant_id
+        )
 
     return await retry_async(
         _store,
@@ -134,11 +137,11 @@ async def store_chunks_with_embeddings(
     )
 
 
-async def get_document(doc_id: str) -> dict:
+async def get_document(doc_id: str, tenant_id: str | None = None) -> dict:
     service = get_db_service()
 
     async def _get():
-        return await service.get_document(doc_id)
+        return await service.get_document(doc_id, tenant_id=tenant_id)
 
     return await retry_async(
         _get,
@@ -153,12 +156,15 @@ async def get_document(doc_id: str) -> dict:
 async def create_document_with_chunks_atomic(
     file_name: str,
     chunk_records: list[ChunkRecord],
+    tenant_id: str | None = None,
 ) -> tuple[str, list[str]]:
     """Atomic document+chunk creation with retry logic."""
     service = get_db_service()
 
     async def _atomic():
-        return await service.create_document_with_chunks_atomic(file_name, chunk_records)
+        return await service.create_document_with_chunks_atomic(
+            file_name, chunk_records, tenant_id=tenant_id
+        )
 
     return await retry_async(
         _atomic,
@@ -174,12 +180,15 @@ async def find_similar_chunks(
     doc_id: str,
     query_embedding: list[float],
     match_count: int = 5,
+    tenant_id: str | None = None,
 ) -> list[ChunkMatch]:
     """Find similar chunks with retry logic."""
     service = get_db_service()
 
     async def _search():
-        return await service.find_similar_chunks(doc_id, query_embedding, match_count)
+        return await service.find_similar_chunks(
+            doc_id, query_embedding, match_count, tenant_id=tenant_id
+        )
 
     return await retry_async(
         _search,
@@ -196,6 +205,7 @@ async def update_document_status(
     status: str,
     error: dict | None = None,
     chunks: dict | None = None,
+    tenant_id: str | None = None,
 ) -> None:
     """Persist status/progress updates with retry logic."""
     service = get_db_service()
@@ -206,6 +216,7 @@ async def update_document_status(
             status=status,
             error=error,
             chunks=chunks,
+            tenant_id=tenant_id,
         )
 
     await retry_async(
@@ -218,12 +229,12 @@ async def update_document_status(
     )
 
 
-async def get_document_status(doc_id: str) -> dict | None:
+async def get_document_status(doc_id: str, tenant_id: str | None = None) -> dict | None:
     """Read status/progress payload for polling clients."""
     service = get_db_service()
 
     async def _get_status():
-        return await service.get_document_status(doc_id)
+        return await service.get_document_status(doc_id, tenant_id=tenant_id)
 
     return await retry_async(
         _get_status,
@@ -235,12 +246,12 @@ async def get_document_status(doc_id: str) -> dict | None:
     )
 
 
-async def delete_document_chunks(doc_id: str) -> None:
+async def delete_document_chunks(doc_id: str, tenant_id: str | None = None) -> None:
     """Cleanup helper for failed uploads."""
     service = get_db_service()
 
     async def _cleanup():
-        await service.delete_document_chunks(doc_id)
+        await service.delete_document_chunks(doc_id, tenant_id=tenant_id)
 
     await retry_async(
         _cleanup,
@@ -252,12 +263,12 @@ async def delete_document_chunks(doc_id: str) -> None:
     )
 
 
-async def delete_document(doc_id: str) -> None:
+async def delete_document(doc_id: str, tenant_id: str | None = None) -> None:
     """Delete a document and all its chunks."""
     service = get_db_service()
 
     async def _delete():
-        await service.delete_document(doc_id)
+        await service.delete_document(doc_id, tenant_id=tenant_id)
 
     await retry_async(
         _delete,
@@ -269,7 +280,9 @@ async def delete_document(doc_id: str) -> None:
     )
 
 
-async def fail_stale_documents(statuses: list[str]) -> set[str]:
+async def fail_stale_documents(
+    statuses: list[str], tenant_id: str | None = None
+) -> set[str]:
     """
     Bulk-fail documents left in an in-progress state by a previous restart.
 
@@ -278,7 +291,7 @@ async def fail_stale_documents(statuses: list[str]) -> set[str]:
     service = get_db_service()
 
     async def _fail_stale():
-        return await service.fail_stale_documents(statuses)
+        return await service.fail_stale_documents(statuses, tenant_id=tenant_id)
 
     return await retry_async(
         _fail_stale,

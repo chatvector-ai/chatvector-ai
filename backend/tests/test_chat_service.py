@@ -81,6 +81,7 @@ def test_answer_question_for_document_orchestrates_flow():
         doc_id="doc-123",
         query_embedding=[0.1, 0.2],
         match_count=7,
+        tenant_id=None,
     )
     mock_context.assert_called_once_with(chunks)
     mock_answer.assert_awaited_once_with("What is this about?", "combined context")
@@ -113,7 +114,7 @@ def test_answer_questions_for_documents_batch_processes_queries():
         {"question": "Q2", "doc_ids": ["doc-c"]},
     ]
 
-    async def fake_find_similar_chunks(doc_id: str, query_embedding: list[float], match_count: int):
+    async def fake_find_similar_chunks(doc_id: str, query_embedding: list[float], match_count: int, **kwargs):
         # Same chunk_index across docs; distinct document_id so dedupe keeps one chunk per document.
         return [
             _FakeChunk(
@@ -162,7 +163,7 @@ def test_answer_questions_for_documents_batch_respects_retrieval_concurrency_lim
     active_calls = 0
     max_active_calls = 0
 
-    async def fake_find_similar_chunks(doc_id: str, query_embedding: list[float], match_count: int):
+    async def fake_find_similar_chunks(doc_id: str, query_embedding: list[float], match_count: int, **kwargs):
         nonlocal active_calls, max_active_calls
         active_calls += 1
         max_active_calls = max(max_active_calls, active_calls)
@@ -215,7 +216,7 @@ def test_answer_questions_for_documents_batch_returns_partial_failures():
     ), patch(
         "services.chat_service.find_similar_chunks",
         new=AsyncMock(
-            side_effect=lambda doc_id, query_embedding, match_count: [
+            side_effect=lambda doc_id, query_embedding, match_count, **kwargs: [
                 _FakeChunk(id="c1", chunk_text="ctx", document_id=doc_id, chunk_index=0)
             ]
         ),

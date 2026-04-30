@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from core.config import config
 from core.clients import supabase_client
@@ -45,7 +45,7 @@ class SupabaseService(DatabaseService):
                 logger.exception("[Supabase] I/O operation failed: %s", operation_name)
                 raise
 
-    async def create_document(self, filename: str) -> str:
+    async def create_document(self, filename: str, tenant_id: Optional[str] = None) -> str:
         result = await self._run_io(
             lambda: supabase_client.table("documents")
             .insert(
@@ -67,6 +67,7 @@ class SupabaseService(DatabaseService):
         self,
         doc_id: str,
         chunk_records: list[ChunkRecord],
+        tenant_id: Optional[str] = None,
     ) -> list[str]:
         payload = [
             {
@@ -90,7 +91,7 @@ class SupabaseService(DatabaseService):
         logger.info(f"[Supabase] Inserted {len(chunk_ids)} chunks for document {doc_id}")
         return chunk_ids
 
-    async def get_document(self, doc_id: str) -> dict | None:
+    async def get_document(self, doc_id: str, tenant_id: Optional[str] = None) -> dict | None:
         result = await self._run_io(
             lambda: supabase_client.table("documents").select("*").eq("id", doc_id).execute(),
             operation_name="get_document",
@@ -103,16 +104,18 @@ class SupabaseService(DatabaseService):
         self,
         file_name: str,
         chunk_records: list[ChunkRecord],
+        tenant_id: Optional[str] = None,
     ) -> tuple[str, list[str]]:
         """Atomic-like behavior with compensating cleanup for Supabase."""
         doc_id = None
         try:
-            doc_id = await self.create_document(file_name)
-            chunk_ids = await self.store_chunks_with_embeddings(doc_id, chunk_records)
+            doc_id = await self.create_document(file_name, tenant_id=tenant_id)
+            chunk_ids = await self.store_chunks_with_embeddings(doc_id, chunk_records, tenant_id=tenant_id)
             await self.update_document_status(
                 doc_id,
                 status="completed",
                 chunks={"total": len(chunk_records), "processed": len(chunk_ids)},
+                tenant_id=tenant_id,
             )
 
             logger.info(f"[Supabase] Atomic upload: {doc_id} with {len(chunk_ids)} chunks")
@@ -121,7 +124,7 @@ class SupabaseService(DatabaseService):
         except Exception as e:
             logger.error(f"[Supabase] Atomic upload failed: {e}")
             if doc_id:
-                await self.delete_document_chunks(doc_id)
+                await self.delete_document_chunks(doc_id, tenant_id=tenant_id)
                 await self.update_document_status(
                     doc_id,
                     status="failed",
@@ -130,6 +133,7 @@ class SupabaseService(DatabaseService):
                         "code": "pipeline_error", 
                         "message": "Document processing failed."
                     },
+                    tenant_id=tenant_id,
                 )
             raise
 
@@ -139,6 +143,7 @@ class SupabaseService(DatabaseService):
         status: str,
         error: dict | None = None,
         chunks: dict | None = None,
+        tenant_id: Optional[str] = None,
     ) -> None:
         payload: dict = {
             "status": status,
@@ -155,7 +160,7 @@ class SupabaseService(DatabaseService):
         )
         logger.debug(f"[Supabase] Updated status for {doc_id} -> {status}")
 
-    async def get_document_status(self, doc_id: str) -> dict | None:
+    async def get_document_status(self, doc_id: str, tenant_id: Optional[str] = None) -> dict | None:
         result = await self._run_io(
             lambda: supabase_client.table("documents")
             .select("id,status,chunks,error,created_at,updated_at")
@@ -178,14 +183,14 @@ class SupabaseService(DatabaseService):
             "updated_at": row.get("updated_at"),
         }
 
-    async def delete_document_chunks(self, doc_id: str) -> None:
+    async def delete_document_chunks(self, doc_id: str, tenant_id: Optional[str] = None) -> None:
         await self._run_io(
             lambda: supabase_client.table("document_chunks").delete().eq("document_id", doc_id).execute(),
             operation_name="delete_document_chunks",
         )
         logger.info(f"[Supabase] Deleted chunks for failed upload document {doc_id}")
 
-    async def delete_document(self, document_id: str) -> None:
+    async def delete_document(self, document_id: str, tenant_id: Optional[str] = None) -> None:
         """Atomically delete a document and its chunks using RPC."""
         try:
             await self._run_io(
@@ -199,7 +204,7 @@ class SupabaseService(DatabaseService):
             logger.error(f"[Supabase] Deletion failed for document {document_id}: {e}")
             raise
 
-    async def fail_stale_documents(self, statuses: list[str]) -> set[str]:
+    async def fail_stale_documents(self, statuses: list[str], tenant_id: Optional[str] = None) -> set[str]:
         result = await self._run_io(
             lambda: supabase_client.table("documents")
             .update(
@@ -225,6 +230,7 @@ class SupabaseService(DatabaseService):
         doc_id: str,
         query_embedding: list[float],
         match_count: int = 5,
+        tenant_id: Optional[str] = None,
     ) -> list[ChunkMatch]:
         """Find similar chunks using Supabase RPC."""
         try:

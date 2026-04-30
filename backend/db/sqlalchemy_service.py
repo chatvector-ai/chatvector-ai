@@ -4,6 +4,7 @@ import asyncio
 import time
 import uuid
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import delete, select, update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -42,7 +43,7 @@ class SQLAlchemyService(DatabaseService):
         )
         self._retrieval_semaphore = asyncio.Semaphore(config.SQLALCHEMY_RETRIEVAL_CONCURRENCY)
 
-    async def create_document(self, filename: str) -> str:
+    async def create_document(self, filename: str, tenant_id: Optional[str] = None) -> str:
         async with self.async_session() as session:
             doc_id = str(uuid.uuid4())
             document = Document(
@@ -60,6 +61,7 @@ class SQLAlchemyService(DatabaseService):
         self,
         doc_id: str,
         chunk_records: list[ChunkRecord],
+        tenant_id: Optional[str] = None,
     ) -> list[str]:
         async with self.async_session() as session:
             chunk_rows = []
@@ -87,7 +89,7 @@ class SQLAlchemyService(DatabaseService):
             logger.info(f"[PostgreSQL] Inserted {len(chunk_ids)} chunks for document {doc_id}")
             return chunk_ids
 
-    async def get_document(self, doc_id: str) -> dict | None:
+    async def get_document(self, doc_id: str, tenant_id: Optional[str] = None) -> dict | None:
         async with self.async_session() as session:
             document = await session.get(Document, doc_id)
             if not document:
@@ -106,6 +108,7 @@ class SQLAlchemyService(DatabaseService):
         self,
         file_name: str,
         chunk_records: list[ChunkRecord],
+        tenant_id: Optional[str] = None,
     ) -> tuple[str, list[str]]:
         """Atomic document+chunk creation with transaction."""
         async with self.async_session() as session:
@@ -150,6 +153,7 @@ class SQLAlchemyService(DatabaseService):
         status: str,
         error: dict | None = None,
         chunks: dict | None = None,
+        tenant_id: Optional[str] = None,
     ) -> None:
         async with self.async_session() as session:
             document = await session.get(Document, doc_id)
@@ -170,7 +174,7 @@ class SQLAlchemyService(DatabaseService):
             await session.commit()
             logger.debug(f"[PostgreSQL] Updated status for {doc_id} -> {status}")
 
-    async def get_document_status(self, doc_id: str) -> dict | None:
+    async def get_document_status(self, doc_id: str, tenant_id: Optional[str] = None) -> dict | None:
         async with self.async_session() as session:
             document = await session.get(Document, doc_id)
             if not document:
@@ -185,13 +189,13 @@ class SQLAlchemyService(DatabaseService):
                 "updated_at": str(document.updated_at) if document.updated_at else None,
             }
 
-    async def delete_document_chunks(self, doc_id: str) -> None:
+    async def delete_document_chunks(self, doc_id: str, tenant_id: Optional[str] = None) -> None:
         async with self.async_session() as session:
             await session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == doc_id))
             await session.commit()
             logger.info(f"[PostgreSQL] Deleted chunks for failed upload document {doc_id}")
 
-    async def delete_document(self, document_id: str) -> None:
+    async def delete_document(self, document_id: str, tenant_id: Optional[str] = None) -> None:
         async with self.async_session() as session:
             try:
                 async with session.begin():
@@ -207,7 +211,7 @@ class SQLAlchemyService(DatabaseService):
                 logger.error(f"[PostgreSQL] Failed to delete document {document_id}")
                 raise
 
-    async def fail_stale_documents(self, statuses: list[str]) -> set[str]:
+    async def fail_stale_documents(self, statuses: list[str], tenant_id: Optional[str] = None) -> set[str]:
         async with self.async_session() as session:
             rows = await session.execute(
                 select(Document.id).where(Document.status.in_(statuses))
@@ -234,6 +238,7 @@ class SQLAlchemyService(DatabaseService):
         doc_id: str,
         query_embedding: list[float],
         match_count: int = 5,
+        tenant_id: Optional[str] = None,
     ) -> list[ChunkMatch]:
         """Find similar chunks using pgvector."""
         start = time.perf_counter()

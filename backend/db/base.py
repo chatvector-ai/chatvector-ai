@@ -39,7 +39,7 @@ class DatabaseService(ABC):
     """Abstract base class for database services."""
 
     @abstractmethod
-    async def create_document(self, filename: str) -> str:
+    async def create_document(self, filename: str, tenant_id: Optional[str] = None) -> str:
         """Create a document record and return document ID."""
         pass
 
@@ -48,12 +48,13 @@ class DatabaseService(ABC):
         self,
         doc_id: str,
         chunk_records: list[ChunkRecord],
+        tenant_id: Optional[str] = None,
     ) -> list[str]:
         """Insert chunks/embeddings and return chunk IDs."""
         pass
 
     @abstractmethod
-    async def get_document(self, doc_id: str) -> Optional[dict]:
+    async def get_document(self, doc_id: str, tenant_id: Optional[str] = None) -> Optional[dict]:
         """Fetch a document by ID."""
         pass
 
@@ -63,6 +64,7 @@ class DatabaseService(ABC):
         doc_id: str,
         query_embedding: list[float],
         match_count: int = 5,
+        tenant_id: Optional[str] = None,
     ) -> list[ChunkMatch]:
         """Run vector similarity search for chunks."""
         pass
@@ -72,6 +74,7 @@ class DatabaseService(ABC):
         self,
         file_name: str,
         chunk_records: list[ChunkRecord],
+        tenant_id: Optional[str] = None,
     ) -> tuple[str, list[str]]:
         """Atomically create document with chunk records."""
         pass
@@ -83,27 +86,28 @@ class DatabaseService(ABC):
         status: str,
         error: Optional[dict] = None,
         chunks: Optional[dict] = None,
+        tenant_id: Optional[str] = None,
     ) -> None:
         """Update upload status/progress metadata."""
         pass
 
     @abstractmethod
-    async def get_document_status(self, doc_id: str) -> Optional[dict]:
+    async def get_document_status(self, doc_id: str, tenant_id: Optional[str] = None) -> Optional[dict]:
         """Get document upload status payload for polling."""
         pass
 
     @abstractmethod
-    async def delete_document_chunks(self, doc_id: str) -> None:
+    async def delete_document_chunks(self, doc_id: str, tenant_id: Optional[str] = None) -> None:
         """Delete all chunks for a document (cleanup on failures)."""
         pass
 
     @abstractmethod
-    async def delete_document(self, document_id: str) -> None:
+    async def delete_document(self, document_id: str, tenant_id: Optional[str] = None) -> None:
         """Delete a document and all its associated chunks atomically."""
         pass
 
     @abstractmethod
-    async def fail_stale_documents(self, statuses: list[str]) -> set[str]:
+    async def fail_stale_documents(self, statuses: list[str], tenant_id: Optional[str] = None) -> set[str]:
         """
         Mark documents in any of the given statuses as failed.
 

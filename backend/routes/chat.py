@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from core.auth import require_auth
+from core.auth import AuthContext, require_auth
 from core.config import config
 from middleware.rate_limit import limiter
 from pydantic import BaseModel, Field
@@ -35,23 +35,25 @@ class ChatRequest(BaseModel):
 
 @router.post("/chat")
 @limiter.limit(config.RATE_LIMIT_CHAT)
-async def chat(request: Request, payload: ChatRequest, auth: dict = Depends(require_auth)):
+async def chat(request: Request, payload: ChatRequest, auth: AuthContext = Depends(require_auth)):
     logger.info(f"Chat request received for document {payload.doc_id}")
     return await answer_question_for_document(
         question=payload.question,
         doc_id=str(payload.doc_id),
         match_count=payload.match_count,
+        auth=auth,
     )
 
 
 @router.post("/chat/batch")
 @limiter.limit(config.RATE_LIMIT_CHAT_BATCH)
-async def chat_batch(request: Request, payload: ChatBatchRequest, auth: dict = Depends(require_auth)):
+async def chat_batch(request: Request, payload: ChatBatchRequest, auth: AuthContext = Depends(require_auth)):
     logger.info(f"Batch chat request received with {len(payload.queries)} queries")
 
     try:
         results = await answer_questions_for_documents_batch(
-            [query.model_dump(mode="json") for query in payload.queries]
+            [query.model_dump(mode="json") for query in payload.queries],
+            auth=auth,
         )
     except ValueError as e:
         raise HTTPException(
@@ -71,4 +73,3 @@ async def chat_batch(request: Request, payload: ChatBatchRequest, auth: dict = D
         "failure_count": failure_count,
         "results": results,
     }
-

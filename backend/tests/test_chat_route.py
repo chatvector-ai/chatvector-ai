@@ -8,6 +8,8 @@ from routes.chat import ChatBatchItem, ChatBatchRequest, ChatRequest, chat, chat
 _DOC_ID_1 = "00000000-0000-0000-0000-000000000001"
 _DOC_ID_2 = "00000000-0000-0000-0000-000000000002"
 
+from core.auth import AuthContext
+from unittest.mock import ANY
 
 def test_chat_route_delegates_to_chat_service():
     payload = {"question": "q", "chunks": 1, "answer": "a"}
@@ -17,12 +19,12 @@ def test_chat_route_delegates_to_chat_service():
             chat(
                 make_test_request("POST", "/chat"),
                 ChatRequest(question="q", doc_id=_DOC_ID_1),
+                auth=AuthContext(),
             )
         )
 
     assert result == payload
-    mock_chat.assert_awaited_once_with(question="q", doc_id=_DOC_ID_1, match_count=5)
-
+    mock_chat.assert_awaited_once_with(question="q", doc_id=_DOC_ID_1, match_count=5, auth=ANY)
 
 def test_chat_batch_route_delegates_to_chat_service():
     payload = {
@@ -38,12 +40,12 @@ def test_chat_batch_route_delegates_to_chat_service():
         new=AsyncMock(return_value=payload["results"]),
     ) as mock_batch:
         result = asyncio.run(
-            chat_batch(make_test_request("POST", "/chat/batch"), batch_request)
+            chat_batch(make_test_request("POST", "/chat/batch"), batch_request, auth=AuthContext())
         )
 
     assert result == payload
     mock_batch.assert_awaited_once_with(
-        [{"question": "q", "doc_ids": [_DOC_ID_1], "match_count": 5}]
+        [{"question": "q", "doc_ids": [_DOC_ID_1], "match_count": 5}], auth=ANY
     )
 
 
@@ -66,7 +68,7 @@ def test_chat_batch_route_counts_failures_and_successes():
         ),
     ):
         result = asyncio.run(
-            chat_batch(make_test_request("POST", "/chat/batch"), batch_request)
+            chat_batch(make_test_request("POST", "/chat/batch"), batch_request, auth=AuthContext())
         )
 
     assert result["count"] == 2
@@ -83,7 +85,7 @@ def test_chat_batch_route_returns_422_for_value_error():
     ):
         try:
             asyncio.run(
-                chat_batch(make_test_request("POST", "/chat/batch"), batch_request)
+                chat_batch(make_test_request("POST", "/chat/batch"), batch_request, auth=AuthContext())
             )
             raise AssertionError("Expected HTTPException was not raised")
         except HTTPException as exc:

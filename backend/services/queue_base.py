@@ -28,6 +28,7 @@ class QueueJob:
     file_name: str
     content_type: str
     file_bytes: bytes
+    tenant_id: Optional[str] = None
     attempt: int = 0
     enqueued_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
