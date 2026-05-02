@@ -1,4 +1,6 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { getSessionId } from "./session";
+
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type ChatSource = {
   file_name: string;
@@ -37,12 +39,21 @@ export async function sendMessage(
   docId: string,
   matchCount = 5
 ): Promise<ChatResponse> {
+  const sessionId = getSessionId();
   let res: Response;
   try {
     res = await fetch(`${API_BASE}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, doc_id: docId, match_count: matchCount }),
+      headers: {
+        "Content-Type": "application/json",
+        "X-Session-Id": sessionId,
+      },
+      body: JSON.stringify({
+        question,
+        doc_id: docId,
+        match_count: matchCount,
+        session_id: sessionId,
+      }),
     });
   } catch {
     throw new ChatError(
@@ -131,10 +142,14 @@ export async function getDocumentStatus(
 export async function uploadDocument(
   file: File
 ): Promise<{ documentId: string; statusEndpoint: string }> {
+  const sessionId = getSessionId();
   const formData = new FormData();
   formData.append("file", file);
   const res = await fetch(`${API_BASE}/upload`, {
     method: "POST",
+    headers: {
+      "X-Session-Id": sessionId,
+    },
     body: formData,
   });
   if (!res.ok) {
