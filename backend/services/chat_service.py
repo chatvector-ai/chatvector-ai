@@ -1,9 +1,10 @@
 import logging
 import asyncio
+from typing import Optional
 
 from core.config import config
 from db import find_similar_chunks
-from services.context_service import build_context_from_chunks
+from services.context_service import SessionContext, build_context_from_chunks
 from services.query_service import transform_query
 
 logger = logging.getLogger(__name__)
@@ -151,6 +152,7 @@ async def answer_question_for_document(
     question: str,
     doc_id: str,
     match_count: int = 5,
+    session_context: Optional[SessionContext] = None,
 ) -> dict:
     """
     Orchestrate the chat flow for a single question/document pair.
@@ -173,7 +175,7 @@ async def answer_question_for_document(
                 seen_chunk_keys.add(key)
                 all_chunks.append(chunk)
     matching_chunks = all_chunks
-    context = build_context_from_chunks(matching_chunks)
+    context = build_context_from_chunks(matching_chunks, session_context=session_context)
     answer = await generate_answer(question, context)
 
     base: dict = {
@@ -201,6 +203,7 @@ async def answer_question_for_document(
 
 async def answer_questions_for_documents_batch(
     queries: list[dict],
+    session_context: Optional[SessionContext] = None,
 ) -> list[dict]:
     """
     Process multiple question/document retrieval requests in one call.
@@ -289,7 +292,7 @@ async def answer_questions_for_documents_batch(
                         seen_chunk_keys.add(key)
                         all_chunks.append(chunk)
             matching_chunks = all_chunks
-            context = build_context_from_chunks(matching_chunks)
+            context = build_context_from_chunks(matching_chunks, session_context=session_context)
             answer = await generate_answer(query["question"], context)
 
             sources = _build_sources(matching_chunks)

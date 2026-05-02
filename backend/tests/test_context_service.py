@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from services.context_service import build_context_from_chunks
+from services.context_service import SessionContext, build_context_from_chunks
 
 
 def _chunk(text: str, file_name: str = "doc.pdf", page_number: int | None = None):
@@ -108,3 +108,36 @@ def test_oversized_single_chunk_is_still_included():
     with patch("services.context_service.MAX_CONTEXT_CHARS", cap):
         result = build_context_from_chunks([chunk])
     assert big_text in result
+
+# ---------------------------------------------------------------------------
+# Session Context
+# ---------------------------------------------------------------------------
+
+def test_session_context_included():
+    chunks = [_chunk("short", file_name="f1.pdf")]
+    session_ctx = SessionContext(
+        recent_queries=["hello?", "what is this?"],
+        active_documents=["f1.pdf"]
+    )
+    result = build_context_from_chunks(chunks, session_context=session_ctx)
+    
+    assert "[Session History]" in result
+    assert "Recent queries: hello?, what is this?" in result
+    assert "Active documents: f1.pdf" in result
+    assert "[Retrieved Context]" in result
+    assert "short" in result
+
+def test_session_context_truncates_chunks():
+    """If session context takes up space, chunks should be truncated earlier."""
+    session_ctx = SessionContext(recent_queries=["x" * 200])
+    chunks = [_chunk("c" * 200, file_name=f"f{i}.pdf") for i in range(5)]
+    
+    cap = 500
+    with patch("services.context_service.MAX_CONTEXT_CHARS", cap):
+        result = build_context_from_chunks(chunks, session_context=session_ctx)
+        
+    assert "[Session History]" in result
+    assert len(result) <= cap
+    # The session context is ~200 chars. We only have ~300 chars left for chunks.
+    # Each chunk is ~200 chars + formatting, so only 1 chunk should fit.
+    assert result.count("[Source:") == 1
