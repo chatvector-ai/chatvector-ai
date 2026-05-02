@@ -1,4 +1,3 @@
-from core.auth import AuthContext
 """
 Tests for AsyncioIngestionQueue, TokenBucketRateLimiter, and queue-related
 upload/status behaviour.
@@ -7,6 +6,8 @@ Mocks are used throughout to avoid real DB or Gemini API calls.
 All tests monkeypatch QUEUE_BACKEND=memory so they always use the asyncio
 backend regardless of environment variables.
 """
+
+from core.auth import AuthContext
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch

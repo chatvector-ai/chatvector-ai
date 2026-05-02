@@ -240,6 +240,7 @@ class SQLAlchemyService(DatabaseService):
         match_count: int = 5,
         tenant_id: Optional[str] = None,
     ) -> list[ChunkMatch]:
+        # TODO(Phase 3): use tenant_id for query isolation once column exists
         """Find similar chunks using pgvector."""
         start = time.perf_counter()
         try:

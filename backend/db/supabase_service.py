@@ -232,6 +232,7 @@ class SupabaseService(DatabaseService):
         match_count: int = 5,
         tenant_id: Optional[str] = None,
     ) -> list[ChunkMatch]:
+        # TODO(Phase 3): use tenant_id for query isolation once column exists
         """Find similar chunks using Supabase RPC."""
         try:
             result = await self._run_io(

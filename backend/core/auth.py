@@ -1,6 +1,5 @@
 from typing import Optional
 from pydantic import BaseModel
-from fastapi import Depends  # noqa: F401  — kept for Phase 3 wiring
 
 
 class AuthContext(BaseModel):

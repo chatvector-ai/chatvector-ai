@@ -424,7 +424,7 @@ def _status_fallback_health_dict(exc: BaseException, label: str) -> dict:
 
 @router.get("/status")
 @limiter.limit(config.RATE_LIMIT_STATUS)
-async def status(request: Request, auth: AuthContext = Depends(require_auth)):
+async def status(request: Request, auth: AuthContext = Depends(require_auth)):  # auth reserved for Phase 3 tenant scoping
     start = getattr(request.app.state, "start_time", time.time())
     db_result, embedding_result, llm_result = await asyncio.gather(
         _database_connected_and_document_count(),
