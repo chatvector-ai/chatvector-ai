@@ -238,10 +238,11 @@ class SQLAlchemyService(DatabaseService):
         doc_id: str,
         query_embedding: list[float],
         match_count: int = 5,
-        tenant_id: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> list[ChunkMatch]:
-        # TODO(Phase 3): use tenant_id for query isolation once column exists
+        # TODO(Phase 3): use session_id for context filtering once implemented
         """Find similar chunks using pgvector."""
+        # TODO(Phase 3): use session_id for context filtering once implemented
         start = time.perf_counter()
         try:
             async with self._retrieval_semaphore:

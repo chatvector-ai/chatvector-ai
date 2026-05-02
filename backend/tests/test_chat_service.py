@@ -81,15 +81,14 @@ def test_answer_question_for_document_orchestrates_flow():
         doc_id="doc-123",
         query_embedding=[0.1, 0.2],
         match_count=7,
-        tenant_id=None,
+        session_id=None,
     )
     mock_context.assert_called_once_with(chunks)
     mock_answer.assert_awaited_once_with("What is this about?", "combined context")
 
 
-def test_answer_question_for_document_passes_tenant_id():
-    """Verify that a non-None tenant_id reaches find_similar_chunks."""
-    from core.auth import AuthContext
+def test_answer_question_for_document_passes_session_id():
+    """Verify that a non-None session_id reaches find_similar_chunks."""
     with patch(
         "services.chat_service.get_embeddings",
         new=AsyncMock(return_value=[[0.1, 0.2]]),
@@ -103,17 +102,17 @@ def test_answer_question_for_document_passes_tenant_id():
         asyncio.run(
             answer_question_for_document(
                 question="Q",
-                doc_id="doc-tenant",
+                doc_id="doc-session",
                 match_count=7,
-                auth=AuthContext(tenant_id="tenant-abc"),
+                session_id="session-abc",
             )
         )
 
     mock_find.assert_awaited_once_with(
-        doc_id="doc-tenant",
+        doc_id="doc-session",
         query_embedding=[0.1, 0.2],
         match_count=7,
-        tenant_id="tenant-abc",
+        session_id="session-abc",
     )
 
 

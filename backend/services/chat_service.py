@@ -125,7 +125,7 @@ async def _retrieve_chunks_for_documents(
     doc_ids: list[str],
     query_embedding: list[float],
     match_count: int,
-    tenant_id: Optional[str] = None,
+    session_id: Optional[str] = None,
 ) -> list:
     retrieval_semaphore = _get_retrieval_semaphore()
 
@@ -135,7 +135,7 @@ async def _retrieve_chunks_for_documents(
                 doc_id=doc_id,
                 query_embedding=query_embedding,
                 match_count=match_count,
-                tenant_id=tenant_id,
+                session_id=session_id,
             )
 
     per_document_chunks = await asyncio.gather(
@@ -166,12 +166,13 @@ async def answer_question_for_document(
     doc_id: str,
     match_count: int = 5,
     auth: Optional[AuthContext] = None,
+    session_id: Optional[str] = None,
 ) -> dict:
     """
     Orchestrate the chat flow for a single question/document pair.
     """
-    logger.info(f"Starting chat for document {doc_id}")
-    tenant_id = get_current_tenant(auth) if auth else None
+    logger.info(f"Starting chat for document {doc_id} (session={session_id})")
+    tenant_id = get_current_tenant(auth) if auth else None  # noqa: F841 — reserved for Phase 3 tenant scoping
 
     transformed_queries = await transform_query(question)
     query_embeddings = await get_embeddings(transformed_queries)
@@ -182,7 +183,7 @@ async def answer_question_for_document(
             doc_ids=[doc_id],
             query_embedding=query_embedding,
             match_count=match_count,
-            tenant_id=tenant_id,
+            session_id=session_id,
         )
         for chunk in chunks:
             key = (chunk.document_id, chunk.chunk_index)
@@ -227,7 +228,7 @@ async def answer_question_stream_for_document(
     a server-sent events (SSE) stream.
     """
     logger.info(f"Starting chat stream for document {doc_id}")
-    tenant_id = get_current_tenant(auth) if auth else None
+    tenant_id = get_current_tenant(auth) if auth else None  # noqa: F841 — reserved for Phase 3 tenant scoping
 
     try:
         transformed_queries = await transform_query(question)
@@ -239,7 +240,6 @@ async def answer_question_stream_for_document(
                 doc_ids=[doc_id],
                 query_embedding=query_embedding,
                 match_count=match_count,
-                tenant_id=tenant_id,
             )
             for chunk in chunks:
                 key = (chunk.document_id, chunk.chunk_index)
@@ -304,6 +304,7 @@ async def answer_questions_for_documents_batch(
                 "question": question,
                 "doc_ids": doc_ids,
                 "match_count": match_count,
+                "session_id": query.get("session_id"),
             }
         )
 
@@ -342,6 +343,7 @@ async def answer_questions_for_documents_batch(
         query: dict, query_embeddings: list[list[float]]
     ) -> dict:
         try:
+            session_id = query.get("session_id")
             all_chunks: list = []
             seen_chunk_keys: set = set()
             for query_embedding in query_embeddings:
@@ -349,7 +351,7 @@ async def answer_questions_for_documents_batch(
                     doc_ids=query["doc_ids"],
                     query_embedding=query_embedding,
                     match_count=query["match_count"],
-                    tenant_id=tenant_id,
+                    session_id=session_id,
                 )
                 for chunk in chunks:
                     key = (chunk.document_id, chunk.chunk_index)
@@ -371,6 +373,7 @@ async def answer_questions_for_documents_batch(
                     "answer": answer,
                     "sources": sources,
                     "error": llm_err,
+                    "session_id": session_id,
                 }
 
             return {
@@ -380,6 +383,7 @@ async def answer_questions_for_documents_batch(
                 "chunks": len(matching_chunks),
                 "answer": answer,
                 "sources": sources,
+                "session_id": session_id,
             }
         except Exception:
             logger.exception(

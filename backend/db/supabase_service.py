@@ -230,10 +230,11 @@ class SupabaseService(DatabaseService):
         doc_id: str,
         query_embedding: list[float],
         match_count: int = 5,
-        tenant_id: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> list[ChunkMatch]:
-        # TODO(Phase 3): use tenant_id for query isolation once column exists
+        # TODO(Phase 3): use session_id for context filtering once implemented
         """Find similar chunks using Supabase RPC."""
+        # TODO(Phase 3): use session_id for context filtering once implemented
         try:
             result = await self._run_io(
                 lambda: supabase_client.rpc(
