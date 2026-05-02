@@ -1,4 +1,7 @@
+import { getSessionId } from "./session";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export { API_BASE };
 
 export type ChatSource = {
   file_name: string;
@@ -37,12 +40,21 @@ export async function sendMessage(
   docId: string,
   matchCount = 5
 ): Promise<ChatResponse> {
+  const sessionId = getSessionId();
   let res: Response;
   try {
     res = await fetch(`${API_BASE}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, doc_id: docId, match_count: matchCount }),
+      headers: {
+        "Content-Type": "application/json",
+        "X-Session-Id": sessionId,
+      },
+      body: JSON.stringify({
+        question,
+        doc_id: docId,
+        match_count: matchCount,
+        session_id: sessionId,
+      }),
     });
   } catch {
     throw new ChatError(
