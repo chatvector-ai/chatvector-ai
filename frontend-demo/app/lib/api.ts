@@ -37,10 +37,11 @@ export class ChatError extends Error {
 export async function sendMessage(
   question: string,
   docId: string,
-  matchCount = 5
+  matchCount = 5,
+  sessionIdOverride?: string | null
 ): Promise<ChatResponse> {
-  const sessionId = getSessionId();
-  
+  const sessionId = sessionIdOverride !== undefined ? sessionIdOverride : getSessionId();
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };

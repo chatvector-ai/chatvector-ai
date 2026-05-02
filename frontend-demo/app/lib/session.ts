@@ -6,7 +6,7 @@ export type SessionData = {
   expiresAt: number;
 };
 
-function generateId(): string {
+export function generateId(): string {
   if (typeof crypto !== "undefined") {
     if (crypto.randomUUID) {
       return crypto.randomUUID();
@@ -16,6 +16,22 @@ function generateId(): string {
     return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
   }
   return Math.random().toString(36).substring(2, 15);
+}
+
+function saveSession(id: string): string {
+  const now = Date.now();
+  const session: SessionData = {
+    id,
+    expiresAt: now + SESSION_TTL_MS,
+  };
+  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  return id;
+}
+
+export function setActiveSession(id: string): void {
+  if (typeof window !== "undefined") {
+    saveSession(id);
+  }
 }
 
 export function getSessionId(): string | null {
