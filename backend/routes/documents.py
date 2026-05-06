@@ -1,7 +1,10 @@
+import asyncio
+import json
 import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 
 from core.auth import AuthContext, get_current_tenant, require_auth
 from core.config import config
@@ -46,6 +49,56 @@ async def get_document_status(request: Request, document_id: UUID, auth: AuthCon
             response["queue_position"] = queue_pos
 
     return response
+
+
+@router.get("/documents/{document_id}/status/stream")
+@limiter.limit(config.RATE_LIMIT_DOCUMENT_STATUS)
+async def get_document_status_stream(request: Request, document_id: UUID, auth: dict = Depends(require_auth)):
+    # Fallback if config does not have ENABLE_STREAMING (e.g. PR #262 not merged yet)
+    if not getattr(config, "ENABLE_STREAMING", True):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "streaming_disabled",
+                "message": "Streaming responses are currently disabled.",
+            },
+        )
+
+    async def event_generator():
+        while True:
+            if await request.is_disconnected():
+                break
+
+            status_payload = await db.get_document_status(str(document_id))
+            if not status_payload:
+                yield f"event: error\ndata: {json.dumps({'message': 'Document not found.'})}\n\n"
+                break
+
+            response = {
+                "document_id": str(document_id),
+                "status": status_payload.get("status"),
+                "chunks": status_payload.get("chunks"),
+                "created_at": status_payload.get("created_at"),
+                "updated_at": status_payload.get("updated_at"),
+            }
+
+            if status_payload.get("error") is not None:
+                response["error"] = status_payload["error"]
+
+            if status_payload.get("status") == "queued":
+                queue_pos = ingestion_queue.queue_position(str(document_id))
+                if queue_pos is not None:
+                    response["queue_position"] = queue_pos
+
+            yield f"event: status\ndata: {json.dumps(response)}\n\n"
+
+            status = status_payload.get("status")
+            if status in ("completed", "failed"):
+                break
+
+            await asyncio.sleep(1)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.delete("/documents/{document_id}", status_code=204)
