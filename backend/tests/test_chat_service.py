@@ -87,6 +87,36 @@ def test_answer_question_for_document_orchestrates_flow():
     mock_answer.assert_awaited_once_with("What is this about?", "combined context")
 
 
+def test_answer_question_for_document_passes_tenant_id():
+    """Verify that a non-None tenant_id reaches find_similar_chunks."""
+    from core.auth import AuthContext
+    with patch(
+        "services.chat_service.get_embeddings",
+        new=AsyncMock(return_value=[[0.1, 0.2]]),
+    ), patch(
+        "services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])
+    ) as mock_find, patch(
+        "services.chat_service.build_context_from_chunks", return_value="combined context"
+    ), patch(
+        "services.chat_service.generate_answer", new=AsyncMock(return_value="final answer")
+    ):
+        asyncio.run(
+            answer_question_for_document(
+                question="Q",
+                doc_id="doc-tenant",
+                match_count=7,
+                auth=AuthContext(tenant_id="tenant-abc"),
+            )
+        )
+
+    mock_find.assert_awaited_once_with(
+        doc_id="doc-tenant",
+        query_embedding=[0.1, 0.2],
+        match_count=7,
+        tenant_id="tenant-abc",
+    )
+
+
 def test_answer_question_soft_llm_error_matches_batch_error_shape():
     """When the LLM returns a soft-failure string, /chat should mirror batch: status + error."""
     from services.answer_service import LLM_MSG_RATE_LIMIT

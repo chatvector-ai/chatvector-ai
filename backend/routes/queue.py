@@ -22,7 +22,7 @@ router = APIRouter()
 
 @router.get("/queue/stats")
 @limiter.limit(config.RATE_LIMIT_QUEUE_STATS)
-def get_queue_stats(request: Request, auth: AuthContext = Depends(require_auth)):
+def get_queue_stats(request: Request, auth: AuthContext = Depends(require_auth)):  # auth reserved for Phase 3 tenant scoping
     """
     Return live ingestion queue statistics and dead-letter queue entries.
 

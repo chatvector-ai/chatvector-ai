@@ -8,6 +8,8 @@ All tests monkeypatch QUEUE_BACKEND=memory so they always use the asyncio
 backend regardless of environment variables.
 """
 
+from core.auth import AuthContext
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
