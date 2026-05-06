@@ -219,6 +219,7 @@ class AsyncioIngestionQueue(BaseIngestionQueue):
                 file_name=job.file_name,
                 content_type=job.content_type,
                 file_bytes=job.file_bytes,
+                tenant_id=job.tenant_id,
                 rate_limiter=self._rate_limiter,
             )
         except Exception as exc:
@@ -248,7 +249,9 @@ class AsyncioIngestionQueue(BaseIngestionQueue):
                 )
                 try:
                     await db.update_document_status(
-                        doc_id=job.doc_id, status="retrying"
+                        doc_id=job.doc_id, 
+                        status="retrying",
+                        tenant_id=job.tenant_id,
                     )
                 except Exception as status_err:
                     logger.error(

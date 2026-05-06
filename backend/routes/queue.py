@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from core.auth import require_auth
+from core.auth import AuthContext, require_auth
 from core.config import config
 from middleware.rate_limit import limiter
 from services.queue_service import ingestion_queue
@@ -22,7 +22,7 @@ router = APIRouter()
 
 @router.get("/queue/stats")
 @limiter.limit(config.RATE_LIMIT_QUEUE_STATS)
-def get_queue_stats(request: Request, auth: dict = Depends(require_auth)):
+def get_queue_stats(request: Request, auth: AuthContext = Depends(require_auth)):  # auth reserved for Phase 3 tenant scoping
     """
     Return live ingestion queue statistics and dead-letter queue entries.
 

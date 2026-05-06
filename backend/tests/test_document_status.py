@@ -1,3 +1,4 @@
+from core.auth import AuthContext
 import pytest
 from fastapi import HTTPException
 from unittest.mock import AsyncMock, patch
@@ -17,7 +18,7 @@ async def test_get_document_status_success():
 
     with patch("routes.documents.db.get_document_status", new=AsyncMock(return_value=payload)):
         result = await get_document_status(
-            make_test_request("GET", "/documents/doc-1/status"), "doc-1"
+            make_test_request("GET", "/documents/doc-1/status"), "doc-1", auth=AuthContext()
         )
 
     assert result["document_id"] == "doc-1"
@@ -33,6 +34,7 @@ async def test_get_document_status_not_found():
             await get_document_status(
                 make_test_request("GET", "/documents/missing-doc/status"),
                 "missing-doc",
+                auth=AuthContext(),
             )
 
     assert excinfo.value.status_code == 404

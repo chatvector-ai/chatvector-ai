@@ -1,6 +1,8 @@
 import logging
 import asyncio
+from typing import Optional
 
+from core.auth import AuthContext, get_current_tenant
 from core.config import config
 from db import find_similar_chunks
 from services.context_service import build_context_from_chunks
@@ -113,6 +115,7 @@ async def _retrieve_chunks_for_documents(
     doc_ids: list[str],
     query_embedding: list[float],
     match_count: int,
+    tenant_id: Optional[str] = None,
 ) -> list:
     retrieval_semaphore = _get_retrieval_semaphore()
 
@@ -122,6 +125,7 @@ async def _retrieve_chunks_for_documents(
                 doc_id=doc_id,
                 query_embedding=query_embedding,
                 match_count=match_count,
+                tenant_id=tenant_id,
             )
 
     per_document_chunks = await asyncio.gather(
@@ -151,11 +155,13 @@ async def answer_question_for_document(
     question: str,
     doc_id: str,
     match_count: int = 5,
+    auth: Optional[AuthContext] = None,
 ) -> dict:
     """
     Orchestrate the chat flow for a single question/document pair.
     """
     logger.info(f"Starting chat for document {doc_id}")
+    tenant_id = get_current_tenant(auth) if auth else None
 
     transformed_queries = await transform_query(question)
     query_embeddings = await get_embeddings(transformed_queries)
@@ -166,6 +172,7 @@ async def answer_question_for_document(
             doc_ids=[doc_id],
             query_embedding=query_embedding,
             match_count=match_count,
+            tenant_id=tenant_id,
         )
         for chunk in chunks:
             key = (chunk.document_id, chunk.chunk_index)
@@ -201,12 +208,15 @@ async def answer_question_for_document(
 
 async def answer_questions_for_documents_batch(
     queries: list[dict],
+    auth: Optional[AuthContext] = None,
 ) -> list[dict]:
     """
     Process multiple question/document retrieval requests in one call.
     """
     if not queries:
         return []
+
+    tenant_id = get_current_tenant(auth) if auth else None
 
     if len(queries) > config.CHAT_BATCH_MAX_ITEMS:
         raise ValueError(
@@ -282,6 +292,7 @@ async def answer_questions_for_documents_batch(
                     doc_ids=query["doc_ids"],
                     query_embedding=query_embedding,
                     match_count=query["match_count"],
+                    tenant_id=tenant_id,
                 )
                 for chunk in chunks:
                     key = (chunk.document_id, chunk.chunk_index)

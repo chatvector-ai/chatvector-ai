@@ -7,6 +7,8 @@ All tests monkeypatch QUEUE_BACKEND=memory so they always use the asyncio
 backend regardless of environment variables.
 """
 
+from core.auth import AuthContext
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -344,7 +346,7 @@ async def test_upload_returns_503_when_queue_is_full():
         ),
     ):
         with pytest.raises(HTTPException) as exc_info:
-            await upload(make_test_request("POST", "/upload"), mock_file)
+            await upload(make_test_request("POST", "/upload"), mock_file, auth=AuthContext())
 
     assert exc_info.value.status_code == 503
     assert exc_info.value.detail["code"] == "queue_full"
@@ -371,7 +373,7 @@ async def test_upload_returns_immediately_with_queue_position():
         patch("routes.upload.db.update_document_status", new=AsyncMock()),
         patch("routes.upload.ingestion_queue.enqueue", new=AsyncMock(return_value=3)),
     ):
-        result = await upload(make_test_request("POST", "/upload"), mock_file)
+        result = await upload(make_test_request("POST", "/upload"), mock_file, auth=AuthContext())
 
     assert result["status"] == "queued"
     assert result["document_id"] == "doc-queued"
@@ -401,7 +403,7 @@ async def test_document_status_includes_queue_position_when_queued():
         patch("routes.documents.ingestion_queue.queue_position", return_value=2),
     ):
         result = await get_document_status(
-            make_test_request("GET", "/documents/doc-q/status"), "doc-q"
+            make_test_request("GET", "/documents/doc-q/status"), "doc-q", auth=AuthContext()
         )
 
     assert result["status"] == "queued"
@@ -418,7 +420,7 @@ async def test_document_status_queue_position_omitted_when_not_queued():
 
     with patch("routes.documents.db.get_document_status", new=AsyncMock(return_value=db_payload)):
         result = await get_document_status(
-            make_test_request("GET", "/documents/doc-emb/status"), "doc-emb"
+            make_test_request("GET", "/documents/doc-emb/status"), "doc-emb", auth=AuthContext()
         )
 
     assert "queue_position" not in result
