@@ -54,8 +54,7 @@ async def get_document_status(request: Request, document_id: UUID, auth: dict = 
 @router.get("/documents/{document_id}/status/stream")
 @limiter.limit(config.RATE_LIMIT_DOCUMENT_STATUS)
 async def get_document_status_stream(request: Request, document_id: UUID, auth: dict = Depends(require_auth)):
-    # Fallback if config does not have ENABLE_STREAMING (e.g. PR #262 not merged yet)
-    if not getattr(config, "ENABLE_STREAMING", True):
+    if not config.ENABLE_STREAMING:
         raise HTTPException(
             status_code=400,
             detail={
@@ -65,7 +64,9 @@ async def get_document_status_stream(request: Request, document_id: UUID, auth: 
         )
 
     async def event_generator():
-        while True:
+        MAX_POLL_SECONDS = 300
+        elapsed = 0
+        while elapsed < MAX_POLL_SECONDS:
             if await request.is_disconnected():
                 break
 
@@ -97,8 +98,16 @@ async def get_document_status_stream(request: Request, document_id: UUID, auth: 
                 break
 
             await asyncio.sleep(1)
+            elapsed += 1
+        
+        if elapsed >= MAX_POLL_SECONDS:
+            yield f"event: error\ndata: {json.dumps({'message': 'Timed out waiting for status.'})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.delete("/documents/{document_id}", status_code=204)

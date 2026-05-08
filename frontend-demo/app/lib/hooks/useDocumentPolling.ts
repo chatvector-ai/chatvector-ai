@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   DocumentNotFoundError,
   getDocumentStatus,
+  API_BASE,
 } from "../api";
-import { API_BASE } from "../api";
 
 export type PolledDocumentStatus = "processing" | "ready" | "failed";
 
