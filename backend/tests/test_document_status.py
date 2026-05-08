@@ -1,4 +1,5 @@
 import json
+from core.auth import AuthContext
 import pytest
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
@@ -19,7 +20,7 @@ async def test_get_document_status_success():
 
     with patch("routes.documents.db.get_document_status", new=AsyncMock(return_value=payload)):
         result = await get_document_status(
-            make_test_request("GET", "/documents/doc-1/status"), "doc-1"
+            make_test_request("GET", "/documents/doc-1/status"), "doc-1", auth=AuthContext()
         )
 
     assert result["document_id"] == "doc-1"
@@ -35,6 +36,7 @@ async def test_get_document_status_not_found():
             await get_document_status(
                 make_test_request("GET", "/documents/missing-doc/status"),
                 "missing-doc",
+                auth=AuthContext(),
             )
 
     assert excinfo.value.status_code == 404
@@ -50,6 +52,7 @@ async def test_get_document_status_stream_disabled():
             await get_document_status_stream(
                 make_test_request("GET", "/documents/doc-1/status/stream"),
                 "doc-1",
+                auth=AuthContext(),
             )
         assert excinfo.value.status_code == 400
         assert excinfo.value.detail["code"] == "streaming_disabled"
@@ -62,6 +65,7 @@ async def test_get_document_status_stream_enabled_content_type():
         response = await get_document_status_stream(
             make_test_request("GET", "/documents/doc-1/status/stream"),
             "doc-1",
+            auth=AuthContext(),
         )
         assert isinstance(response, StreamingResponse)
         assert response.media_type == "text/event-stream"
@@ -87,7 +91,7 @@ async def test_get_document_status_stream_emits_status_and_closes_on_completed()
     with patch("routes.documents.config") as mock_config, \
          patch("routes.documents.db.get_document_status", new=AsyncMock(side_effect=mock_get_document_status)):
         mock_config.ENABLE_STREAMING = True
-        response = await get_document_status_stream(request, "doc-1")
+        response = await get_document_status_stream(request, "doc-1", auth=AuthContext())
         
         chunks = []
         async for chunk in response.body_iterator:
