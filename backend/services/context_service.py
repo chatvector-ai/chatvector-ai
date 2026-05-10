@@ -1,17 +1,11 @@
 import logging
 import os
-from dataclasses import dataclass, field
 from typing import Optional
+from core.session import SessionContext
 
 logger = logging.getLogger(__name__)
 
 MAX_CONTEXT_CHARS: int = int(os.getenv("MAX_CONTEXT_CHARS", "32000"))
-
-
-@dataclass
-class SessionContext:
-    recent_queries: list[str] = field(default_factory=list)
-    active_documents: list[str] = field(default_factory=list)
 
 
 def build_context_from_chunks(

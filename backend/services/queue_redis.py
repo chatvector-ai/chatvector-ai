@@ -60,6 +60,7 @@ def _execute_job(
     content_type: str,
     temp_file_path: str,
     attempt: int,
+    tenant_id: Optional[str] = None,
 ) -> None:
     """
     Synchronous entry point invoked by RQ workers.
@@ -67,7 +68,7 @@ def _execute_job(
     """
     import asyncio
     asyncio.run(_async_execute_job(
-        doc_id, file_name, content_type, temp_file_path, attempt,
+        doc_id, file_name, content_type, temp_file_path, attempt, tenant_id
     ))
 
 
@@ -77,6 +78,7 @@ async def _async_execute_job(
     content_type: str,
     temp_file_path: str,
     attempt: int,
+    tenant_id: Optional[str] = None,
 ) -> None:
     """Async bridge that replicates the retry / DLQ logic from AsyncioIngestionQueue."""
     import db as db_module
@@ -95,6 +97,7 @@ async def _async_execute_job(
                     doc_id=doc_id,
                     status="failed",
                     error={"stage": "queued", "message": error_msg},
+                    tenant_id=tenant_id,
                 )
             except Exception:
                 logger.exception("Failed to mark document %s as failed", doc_id)
@@ -117,6 +120,7 @@ async def _async_execute_job(
                     doc_id=doc_id,
                     status="failed",
                     error={"stage": "queued", "message": error_msg},
+                    tenant_id=tenant_id,
                 )
             except Exception:
                 logger.exception("Failed to mark document %s as failed", doc_id)
@@ -141,6 +145,7 @@ async def _async_execute_job(
                 file_name=file_name,
                 content_type=content_type,
                 file_bytes=file_bytes,
+                tenant_id=tenant_id,
                 rate_limiter=rate_limiter,
             )
             _cleanup_temp_file(temp_path)
@@ -171,7 +176,7 @@ async def _async_execute_job(
                 )
                 try:
                     await db_module.update_document_status(
-                        doc_id=doc_id, status="retrying"
+                        doc_id=doc_id, status="retrying", tenant_id=tenant_id,
                     )
                 except Exception as status_err:
                     logger.error(
@@ -182,7 +187,7 @@ async def _async_execute_job(
                 rq_queue = RQQueue(RQ_QUEUE_NAME, connection=_redis_conn)
                 rq_queue.enqueue(
                     _execute_job,
-                    doc_id, file_name, content_type, temp_file_path, next_attempt,
+                    doc_id, file_name, content_type, temp_file_path, next_attempt, tenant_id,
                     job_id=f"chatvector:{doc_id}:{next_attempt}",
                     job_timeout=600,
                 )
@@ -349,6 +354,7 @@ class RedisIngestionQueue(BaseIngestionQueue):
             job.content_type,
             str(temp_file_path),
             job.attempt,
+            job.tenant_id,
             job_id=f"chatvector:{job.doc_id}:{job.attempt}",
             job_timeout=600,
         )

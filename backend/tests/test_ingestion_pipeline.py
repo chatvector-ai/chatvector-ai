@@ -213,7 +213,7 @@ async def test_process_document_marks_failed_when_no_text_extracted(monkeypatch)
     assert excinfo.value.code == "no_text_extracted"
     assert excinfo.value.document_id == "doc-no-text"
 
-    mock_cleanup.assert_awaited_once_with("doc-no-text")
+    mock_cleanup.assert_awaited_once_with("doc-no-text", tenant_id=None)
     assert mock_update.await_args_list[-1].kwargs["status"] == "failed"
     assert mock_update.await_args_list[-1].kwargs["error"]["stage"] == "extracting"
 
@@ -249,7 +249,7 @@ async def test_process_document_marks_failed_on_storage_error(monkeypatch):
     assert excinfo.value.stage == "storing"
     assert excinfo.value.document_id == "doc-store-fail"
 
-    mock_cleanup.assert_awaited_once_with("doc-store-fail")
+    mock_cleanup.assert_awaited_once_with("doc-store-fail", tenant_id=None)
     assert mock_update.await_args_list[-1].kwargs["status"] == "failed"
     assert mock_update.await_args_list[-1].kwargs["error"]["stage"] == "storing"
 

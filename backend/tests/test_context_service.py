@@ -11,7 +11,8 @@ from unittest.mock import patch
 
 import pytest
 
-from services.context_service import SessionContext, build_context_from_chunks
+from core.session import SessionContext
+from services.context_service import build_context_from_chunks
 
 
 def _chunk(text: str, file_name: str = "doc.pdf", page_number: int | None = None):
