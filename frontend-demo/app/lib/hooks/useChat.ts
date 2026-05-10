@@ -150,7 +150,7 @@ export function useChat(sessionId: string | null) {
     setInflight(true);
 
     try {
-      const response = await sendMessage(text, attachment.documentId);
+      const response = await sendMessage(text, attachment.documentId, 5, sessionId);
       setMessages((prev) => [
         ...prev,
         {
