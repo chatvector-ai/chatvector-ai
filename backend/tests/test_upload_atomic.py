@@ -31,11 +31,11 @@ async def test_create_document_with_chunks_atomic_supabase_success(monkeypatch):
     db.db_service = None
     monkeypatch.setattr("core.config.config.APP_ENV", "production")
 
-    async def fake_create_document(self, file_name: str):
+    async def fake_create_document(self, file_name: str, **kwargs):
         assert file_name == "example.pdf"
         return "doc-123"
 
-    async def fake_store_chunks(self, doc_id: str, chunk_records: list[ChunkRecord]):
+    async def fake_store_chunks(self, doc_id: str, chunk_records: list[ChunkRecord], **kwargs):
         assert doc_id == "doc-123"
         assert len(chunk_records) == 2
         return ["chunk-1", "chunk-2"]
@@ -45,7 +45,7 @@ async def test_create_document_with_chunks_atomic_supabase_success(monkeypatch):
     async def fake_update_status(self, doc_id: str, **kwargs):
         status_updates.append((doc_id, kwargs))
 
-    async def fake_cleanup(self, doc_id: str):
+    async def fake_cleanup(self, doc_id: str, **kwargs):
         raise AssertionError("cleanup should not be called on success")
 
     monkeypatch.setattr("db.supabase_service.SupabaseService.create_document", fake_create_document)
@@ -68,16 +68,16 @@ async def test_create_document_with_chunks_atomic_supabase_failure_cleanup(monke
     db.db_service = None
     monkeypatch.setattr("core.config.config.APP_ENV", "production")
 
-    async def fake_create_document(self, file_name: str):
+    async def fake_create_document(self, file_name: str, **kwargs):
         return "doc-rollback"
 
-    async def fake_store_chunks(self, doc_id: str, chunk_records: list[ChunkRecord]):
+    async def fake_store_chunks(self, doc_id: str, chunk_records: list[ChunkRecord], **kwargs):
         raise RuntimeError("chunk insert failed")
 
     cleanup_calls = []
     status_updates = []
 
-    async def fake_cleanup(self, doc_id: str):
+    async def fake_cleanup(self, doc_id: str, **kwargs):
         cleanup_calls.append(doc_id)
 
     async def fake_update_status(self, doc_id: str, **kwargs):

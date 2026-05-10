@@ -7,17 +7,20 @@ export type SessionData = {
 };
 
 function generateId(): string {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID();
+  if (typeof crypto !== "undefined") {
+    if (crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
   }
   return Math.random().toString(36).substring(2, 15);
 }
 
-export function getSessionId(): string {
+export function getSessionId(): string | null {
   if (typeof window === "undefined") {
-    // Return a dummy ID during SSR; hydration will use the real one if needed,
-    // but typically getSessionId is only called on user actions (like send).
-    return "ssr-session";
+    return null;
   }
 
   const now = Date.now();

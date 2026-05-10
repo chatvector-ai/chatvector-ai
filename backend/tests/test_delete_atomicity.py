@@ -15,6 +15,9 @@ async def test_delete_document_atomicity_integration():
     delete path against local Postgres in CI (avoids coupling to APP_ENV after
     other tests reload core.config). Supabase deletes are covered by the RPC migration.
     """
+    import sys
+    if sys.platform == "win32":
+        pytest.skip("Psycopg async mode not supported with ProactorEventLoop on Windows")
     pytest.importorskip("pgvector")
     dim = get_embedding_dim()
     filler = [0.1] * dim

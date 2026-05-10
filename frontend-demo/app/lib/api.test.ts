@@ -10,6 +10,8 @@ const MOCK_RESPONSE = {
   ],
 };
 
+vi.mock("./session", () => ({ getSessionId: () => "test-session-id" }));
+
 describe("sendMessage", () => {
   const originalFetch = globalThis.fetch;
 
@@ -33,11 +35,15 @@ describe("sendMessage", () => {
       expect.stringContaining("/chat"),
       expect.objectContaining({
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Session-Id": "test-session-id",
+        },
         body: JSON.stringify({
           question: "What is RAG?",
           doc_id: "doc-123",
           match_count: 5,
+          session_id: "test-session-id",
         }),
       })
     );

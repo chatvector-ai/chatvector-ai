@@ -81,9 +81,39 @@ def test_answer_question_for_document_orchestrates_flow():
         doc_id="doc-123",
         query_embedding=[0.1, 0.2],
         match_count=7,
+        session_id=None,
     )
     mock_context.assert_called_once_with(chunks)
     mock_answer.assert_awaited_once_with("What is this about?", "combined context")
+
+
+def test_answer_question_for_document_passes_session_id():
+    """Verify that a non-None session_id reaches find_similar_chunks."""
+    with patch(
+        "services.chat_service.get_embeddings",
+        new=AsyncMock(return_value=[[0.1, 0.2]]),
+    ), patch(
+        "services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])
+    ) as mock_find, patch(
+        "services.chat_service.build_context_from_chunks", return_value="combined context"
+    ), patch(
+        "services.chat_service.generate_answer", new=AsyncMock(return_value="final answer")
+    ):
+        asyncio.run(
+            answer_question_for_document(
+                question="Q",
+                doc_id="doc-session",
+                match_count=7,
+                session_id="session-abc",
+            )
+        )
+
+    mock_find.assert_awaited_once_with(
+        doc_id="doc-session",
+        query_embedding=[0.1, 0.2],
+        match_count=7,
+        session_id="session-abc",
+    )
 
 
 def test_answer_question_soft_llm_error_matches_batch_error_shape():
@@ -113,7 +143,7 @@ def test_answer_questions_for_documents_batch_processes_queries():
         {"question": "Q2", "doc_ids": ["doc-c"]},
     ]
 
-    async def fake_find_similar_chunks(doc_id: str, query_embedding: list[float], match_count: int):
+    async def fake_find_similar_chunks(doc_id: str, query_embedding: list[float], match_count: int, **kwargs):
         # Same chunk_index across docs; distinct document_id so dedupe keeps one chunk per document.
         return [
             _FakeChunk(
@@ -162,7 +192,7 @@ def test_answer_questions_for_documents_batch_respects_retrieval_concurrency_lim
     active_calls = 0
     max_active_calls = 0
 
-    async def fake_find_similar_chunks(doc_id: str, query_embedding: list[float], match_count: int):
+    async def fake_find_similar_chunks(doc_id: str, query_embedding: list[float], match_count: int, **kwargs):
         nonlocal active_calls, max_active_calls
         active_calls += 1
         max_active_calls = max(max_active_calls, active_calls)
@@ -215,7 +245,7 @@ def test_answer_questions_for_documents_batch_returns_partial_failures():
     ), patch(
         "services.chat_service.find_similar_chunks",
         new=AsyncMock(
-            side_effect=lambda doc_id, query_embedding, match_count: [
+            side_effect=lambda doc_id, query_embedding, match_count, **kwargs: [
                 _FakeChunk(id="c1", chunk_text="ctx", document_id=doc_id, chunk_index=0)
             ]
         ),
@@ -371,3 +401,54 @@ def test_batch_soft_llm_error_uses_same_error_codes_as_single_chat():
     assert result[0]["status"] == "error"
     assert result[0]["error"]["code"] == "llm_missing_api_key"
     assert "sources" in result[0]
+
+@pytest.mark.asyncio
+async def test_answer_question_stream_for_document_success():
+    """Test successful generation of an SSE stream."""
+    from services.chat_service import answer_question_stream_for_document
+    from core.auth import AuthContext
+    
+    async def mock_generate_stream(q, c):
+        yield "part1 "
+        yield "part2"
+
+    with (
+        patch("services.chat_service.transform_query", new=AsyncMock(return_value=["q"])),
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1, 0.2]])),
+        patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="context"),
+        patch("services.chat_service.generate_answer_stream", new=mock_generate_stream)
+    ):
+        chunks = []
+        async for chunk in answer_question_stream_for_document("q", "doc-1", match_count=5, auth=AuthContext()):
+            chunks.append(chunk)
+
+        assert len(chunks) == 3
+        assert chunks[0] == "event: token\ndata: \"part1 \"\n\n"
+        assert chunks[1] == "event: token\ndata: \"part2\"\n\n"
+        assert chunks[2] == "event: done\ndata: [DONE]\n\n"
+
+@pytest.mark.asyncio
+async def test_answer_question_stream_for_document_error():
+    """Test error handling in SSE stream."""
+    from services.chat_service import answer_question_stream_for_document
+    from core.auth import AuthContext
+    from services.answer_service import LLM_MSG_RATE_LIMIT
+    
+    async def mock_generate_stream(q, c):
+        yield LLM_MSG_RATE_LIMIT
+
+    with (
+        patch("services.chat_service.transform_query", new=AsyncMock(return_value=["q"])),
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1, 0.2]])),
+        patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="context"),
+        patch("services.chat_service.generate_answer_stream", new=mock_generate_stream)
+    ):
+        chunks = []
+        async for chunk in answer_question_stream_for_document("q", "doc-1", match_count=5, auth=AuthContext()):
+            chunks.append(chunk)
+
+        assert len(chunks) == 1
+        assert chunks[0] == f"event: error\ndata: \"{LLM_MSG_RATE_LIMIT}\"\n\n"
+

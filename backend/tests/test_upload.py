@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import HTTPException, UploadFile
 
+from core.auth import AuthContext
 from request_utils import make_test_request
 from routes.upload import upload
 from services.ingestion_pipeline import UploadPipelineError
@@ -20,15 +21,18 @@ async def test_upload_route_enqueues_job_and_returns_accepted():
         patch("routes.upload.ingestion_pipeline.validate_file", return_value=None),
         patch("routes.upload.db.create_document", new=AsyncMock(return_value="doc-1")),
         patch("routes.upload.db.update_document_status", new=AsyncMock()),
-        patch("routes.upload.ingestion_queue.enqueue", new=AsyncMock(return_value=1)),
+        patch("routes.upload.ingestion_queue.enqueue", new=AsyncMock(return_value=1)) as mock_enqueue,
     ):
-        result = await upload(make_test_request("POST", "/upload"), mock_file)
+        result = await upload(make_test_request("POST", "/upload"), mock_file, auth=AuthContext(tenant_id="tenant-123"))
 
     assert result["message"] == "Accepted"
     assert result["document_id"] == "doc-1"
     assert result["status"] == "queued"
     assert result["queue_position"] == 1
     assert result["status_endpoint"] == "/documents/doc-1/status"
+    
+    enqueued_job = mock_enqueue.call_args[0][0]
+    assert enqueued_job.tenant_id == "tenant-123"
 
 
 @pytest.mark.asyncio
@@ -49,7 +53,7 @@ async def test_upload_route_maps_validation_error_to_http_exception():
         ),
     ):
         with pytest.raises(HTTPException) as exc_info:
-            await upload(make_test_request("POST", "/upload"), mock_file)
+            await upload(make_test_request("POST", "/upload"), mock_file, auth=AuthContext())
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail["code"] == "invalid_file_type"

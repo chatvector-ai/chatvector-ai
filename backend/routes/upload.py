@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
-from core.auth import require_auth
+from core.auth import AuthContext, get_current_tenant, require_auth
 from core.config import config
 from middleware.rate_limit import limiter
 
@@ -35,7 +35,7 @@ def _http_error(
 
 @router.post("/upload", status_code=202)
 @limiter.limit(config.RATE_LIMIT_UPLOAD)
-async def upload(request: Request, file: UploadFile = File(...), auth: dict = Depends(require_auth)):
+async def upload(request: Request, file: UploadFile = File(...), auth: AuthContext = Depends(require_auth)):
     """
     Accept a file upload, validate it, and enqueue it for background processing.
 
@@ -43,6 +43,7 @@ async def upload(request: Request, file: UploadFile = File(...), auth: dict = De
     the client can poll /documents/{document_id}/status for progress.
     """
     doc_id: str | None = None
+    tenant_id = get_current_tenant(auth)
 
     try:
         safe_filename = _sanitize_filename(file.filename)
@@ -52,14 +53,15 @@ async def upload(request: Request, file: UploadFile = File(...), auth: dict = De
         ingestion_pipeline.validate_file(file, file_bytes)
 
         # Persist the document record so the status endpoint works immediately
-        doc_id = await db.create_document(safe_filename)
-        await db.update_document_status(doc_id=doc_id, status="queued")
+        doc_id = await db.create_document(safe_filename, tenant_id=tenant_id)
+        await db.update_document_status(doc_id=doc_id, status="queued", tenant_id=tenant_id)
 
         job = QueueJob(
             doc_id=doc_id,
             file_name=safe_filename,
             content_type=file.content_type,
             file_bytes=file_bytes,
+            tenant_id=tenant_id,
         )
 
         try:
@@ -70,6 +72,7 @@ async def upload(request: Request, file: UploadFile = File(...), auth: dict = De
                 doc_id=doc_id,
                 status="failed",
                 error={"stage": "queued", "message": "Queue is at capacity. Please retry later."},
+                tenant_id=tenant_id,
             )
             raise _http_error(
                     status_code=503,
@@ -120,6 +123,7 @@ async def upload(request: Request, file: UploadFile = File(...), auth: dict = De
                     "code": "upload_failed", 
                     "message": "An unexpected error occurred during upload."
                 },
+                tenant_id=tenant_id,
             )
         logger.error(f"Unexpected error during upload of {safe_filename!r}: {e}")
         raise _http_error(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, AsyncGenerator
 
 import httpx
 from google import genai
@@ -187,3 +187,48 @@ class GeminiLLMProvider(LLMProvider):
             BrokenPipeError,
         ) as exc:
             raise _classify_network_error(exc) from exc
+
+    async def generate_stream(
+        self,
+        prompt: str,
+        *,
+        system_instruction: str,
+        temperature: float,
+        max_output_tokens: int,
+        extra_params: dict[str, Any] | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """Call Gemini's ``generateContentStream`` endpoint."""
+        config_kwargs: dict[str, Any] = {
+            "system_instruction": system_instruction,
+            "temperature": temperature,
+            "max_output_tokens": max_output_tokens,
+        }
+        if extra_params:
+            for key in ("top_p", "top_k", "stop_sequences", "candidate_count"):
+                if key in extra_params:
+                    config_kwargs[key] = extra_params[key]
+        gen_config = genai_types.GenerateContentConfig(**config_kwargs)
+
+        try:
+            response_stream = await self._client.aio.models.generate_content_stream(
+                model=self._model,
+                contents=prompt,
+                config=gen_config,
+            )
+            async for chunk in response_stream:
+                if chunk.text:
+                    yield chunk.text
+
+        except APIError as exc:
+            raise _classify_gemini_error(exc) from exc
+        except (
+            httpx.TimeoutException,
+            httpx.ConnectError,
+            httpx.RemoteProtocolError,
+            httpx.NetworkError,
+            TimeoutError,
+            ConnectionError,
+            BrokenPipeError,
+        ) as exc:
+            raise _classify_network_error(exc) from exc
+

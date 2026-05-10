@@ -4,7 +4,7 @@ import logging
 import pathlib
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 try:
     import nltk
@@ -758,15 +758,23 @@ class IngestionPipeline:
         status: str,
         error: dict | None = None,
         chunks: dict | None = None,
+        tenant_id: Optional[str] = None,
     ) -> None:
         await db.update_document_status(
             doc_id=doc_id,
             status=status,
             error=error,
             chunks=chunks,
+            tenant_id=tenant_id,
         )
 
-    async def _handle_error(self, doc_id: str, stage: str, message: str) -> None:
+    async def _handle_error(
+        self,
+        doc_id: str,
+        stage: str,
+        message: str,
+        tenant_id: Optional[str] = None,
+    ) -> None:
         try:
             await self._update_status(
                 doc_id=doc_id,
@@ -776,16 +784,21 @@ class IngestionPipeline:
                     "code": "pipeline_error",
                     "message": "An error occurred during document processing."
                 },
+                tenant_id=tenant_id,
             )
         except Exception as status_error:
             logger.error(f"Failed to mark document {doc_id} as failed: {status_error}")
 
         try:
-            await db.delete_document_chunks(doc_id)
+            await db.delete_document_chunks(doc_id, tenant_id=tenant_id)
         except Exception as cleanup_error:
             logger.error(f"Failed to cleanup chunks for document {doc_id}: {cleanup_error}")
 
-    async def process_document(self, file: UploadFile) -> dict:
+    async def process_document(
+        self,
+        file: UploadFile,
+        tenant_id: Optional[str] = None,
+    ) -> dict:
         safe_filename = _sanitize_filename(file.filename or "")
         logger.info(f"Starting upload for file: {safe_filename} ({file.content_type})")
 
@@ -797,11 +810,11 @@ class IngestionPipeline:
             self.validate_file(file, file_bytes)
 
             stage = "uploaded"
-            doc_id = await db.create_document(safe_filename)
-            await self._update_status(doc_id=doc_id, status="uploaded")
+            doc_id = await db.create_document(safe_filename, tenant_id=tenant_id)
+            await self._update_status(doc_id=doc_id, status="uploaded", tenant_id=tenant_id)
 
             stage = "extracting"
-            await self._update_status(doc_id=doc_id, status="extracting")
+            await self._update_status(doc_id=doc_id, status="extracting", tenant_id=tenant_id)
             file_meta = _FileMetadata(content_type=file.content_type, filename=safe_filename)
             file_text, page_boundaries = await extract_text_with_metadata(file_meta, file_bytes)
             file_text = clean_text(file_text)
@@ -815,7 +828,7 @@ class IngestionPipeline:
                 )
 
             stage = "chunking"
-            await self._update_status(doc_id=doc_id, status="chunking")
+            await self._update_status(doc_id=doc_id, status="chunking", tenant_id=tenant_id)
             langchain_docs = self._chunk_document_text(
                 file_text,
                 file_name=safe_filename,
@@ -835,6 +848,7 @@ class IngestionPipeline:
                 doc_id=doc_id,
                 status="embedding",
                 chunks={"total": len(langchain_docs), "processed": 0},
+                tenant_id=tenant_id,
             )
             embeddings = await get_embeddings([doc.page_content for doc in langchain_docs])
 
@@ -847,14 +861,15 @@ class IngestionPipeline:
                 )
 
             stage = "storing"
-            await self._update_status(doc_id=doc_id, status="storing")
+            await self._update_status(doc_id=doc_id, status="storing", tenant_id=tenant_id)
             chunk_records = _build_chunk_records(langchain_docs, embeddings, page_boundaries)
-            chunk_ids = await db.store_chunks_with_embeddings(doc_id, chunk_records)
+            chunk_ids = await db.store_chunks_with_embeddings(doc_id, chunk_records, tenant_id=tenant_id)
 
             await self._update_status(
                 doc_id=doc_id,
                 status="completed",
                 chunks={"total": len(langchain_docs), "processed": len(chunk_ids)},
+                tenant_id=tenant_id,
             )
 
             logger.info(
@@ -874,7 +889,7 @@ class IngestionPipeline:
                 e.document_id = doc_id
 
             if doc_id:
-                await self._handle_error(doc_id=doc_id, stage=e.stage, message=e.message)
+                await self._handle_error(doc_id=doc_id, stage=e.stage, message=e.message, tenant_id=tenant_id)
 
             logger.warning(
                 f"Upload validation/pipeline failed at stage={e.stage}: {e.message}"
@@ -883,7 +898,7 @@ class IngestionPipeline:
 
         except Exception as e:
             if doc_id:
-                await self._handle_error(doc_id=doc_id, stage=stage, message=str(e))
+                await self._handle_error(doc_id=doc_id, stage=stage, message=str(e), tenant_id=tenant_id)
 
             logger.error(f"Upload failed at stage={stage} for file {safe_filename}: {e}")
             raise UploadPipelineError(
@@ -900,6 +915,7 @@ class IngestionPipeline:
         file_name: str,
         content_type: str,
         file_bytes: bytes,
+        tenant_id: Optional[str] = None,
         rate_limiter=None,
     ) -> None:
         """
@@ -914,7 +930,7 @@ class IngestionPipeline:
         stage = "extracting"
 
         try:
-            await self._update_status(doc_id=doc_id, status="extracting")
+            await self._update_status(doc_id=doc_id, status="extracting", tenant_id=tenant_id)
             file_text, page_boundaries = await extract_text_with_metadata(file_meta, file_bytes)  # type: ignore[arg-type]
             file_text = clean_text(file_text)
 
@@ -928,7 +944,7 @@ class IngestionPipeline:
                 )
 
             stage = "chunking"
-            await self._update_status(doc_id=doc_id, status="chunking")
+            await self._update_status(doc_id=doc_id, status="chunking", tenant_id=tenant_id)
             langchain_docs = self._chunk_document_text(
                 file_text,
                 file_name=safe_filename,
@@ -949,6 +965,7 @@ class IngestionPipeline:
                 doc_id=doc_id,
                 status="embedding",
                 chunks={"total": len(langchain_docs), "processed": 0},
+                tenant_id=tenant_id,
             )
             if rate_limiter is not None:
                 await rate_limiter.acquire()
@@ -964,14 +981,15 @@ class IngestionPipeline:
                 )
 
             stage = "storing"
-            await self._update_status(doc_id=doc_id, status="storing")
+            await self._update_status(doc_id=doc_id, status="storing", tenant_id=tenant_id)
             chunk_records = _build_chunk_records(langchain_docs, embeddings, page_boundaries)
-            chunk_ids = await db.store_chunks_with_embeddings(doc_id, chunk_records)
+            chunk_ids = await db.store_chunks_with_embeddings(doc_id, chunk_records, tenant_id=tenant_id)
 
             await self._update_status(
                 doc_id=doc_id,
                 status="completed",
                 chunks={"total": len(langchain_docs), "processed": len(chunk_ids)},
+                tenant_id=tenant_id,
             )
 
             logger.info(
@@ -980,7 +998,7 @@ class IngestionPipeline:
             )
 
         except UploadPipelineError as e:
-            await self._handle_error(doc_id=doc_id, stage=e.stage, message=e.message)
+            await self._handle_error(doc_id=doc_id, stage=e.stage, message=e.message, tenant_id=tenant_id)
             logger.warning(
                 f"Background pipeline failed at stage={e.stage} "
                 f"for document {doc_id}: {e.message}"
@@ -988,7 +1006,7 @@ class IngestionPipeline:
             raise
 
         except Exception as e:
-            await self._handle_error(doc_id=doc_id, stage=stage, message=str(e))
+            await self._handle_error(doc_id=doc_id, stage=stage, message=str(e), tenant_id=tenant_id)
             logger.error(
                 f"Background pipeline unexpected error at stage={stage} "
                 f"for document {doc_id}: {e}"
