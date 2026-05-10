@@ -6,6 +6,7 @@ import {
   getDocumentStatus,
   API_BASE,
 } from "../api";
+import { PIPELINE_STAGES } from "../stageLabels";
 
 export type PolledDocumentStatus = "processing" | "ready" | "failed";
 
@@ -15,6 +16,13 @@ function mapApiStatusToUi(apiStatus: string): PolledDocumentStatus {
   return "processing";
 }
 
+/** Returns all pipeline stages that come strictly before `currentStage`. */
+function stagesBefore(currentStage: string): string[] {
+  const idx = PIPELINE_STAGES.indexOf(currentStage as never);
+  if (idx <= 0) return [];
+  return Array.from(PIPELINE_STAGES.slice(0, idx));
+}
+
 export function useDocumentPolling(
   documentId: string | undefined,
   statusEndpoint: string | undefined,
@@ -22,6 +30,7 @@ export function useDocumentPolling(
 ): {
   status: PolledDocumentStatus | undefined;
   stage: string | undefined;
+  completedStages: string[];
   chunks: { total: number; processed: number } | undefined;
   awaitingProcessing: boolean;
 } {
@@ -29,6 +38,7 @@ export function useDocumentPolling(
     PolledDocumentStatus | undefined
   >(undefined);
   const [stage, setStage] = useState<string | undefined>(undefined);
+  const [completedStages, setCompletedStages] = useState<string[]>([]);
   const [chunks, setChunks] = useState<
     { total: number; processed: number } | undefined
   >(undefined);
@@ -48,6 +58,7 @@ export function useDocumentPolling(
       prevDocKeyRef.current = docKey;
       setPolledUiStatus(undefined);
       setStage(undefined);
+      setCompletedStages([]);
       setChunks(undefined);
       setAwaitingProcessing(false);
       setUseFallbackPolling(false);
@@ -83,6 +94,7 @@ export function useDocumentPolling(
               ? payload.stage
               : payload.status;
           setStage(rawStage);
+          setCompletedStages(stagesBefore(rawStage));
 
           const c = payload.chunks;
           if (
@@ -142,6 +154,7 @@ export function useDocumentPolling(
               ? payload.stage
               : payload.status;
           setStage(rawStage);
+          setCompletedStages(stagesBefore(rawStage));
 
           const c = payload.chunks;
           if (
@@ -190,6 +203,7 @@ export function useDocumentPolling(
   return {
     status: polledUiStatus,
     stage,
+    completedStages,
     chunks,
     awaitingProcessing: enabled && awaitingProcessing,
   };

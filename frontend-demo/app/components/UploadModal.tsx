@@ -1,9 +1,9 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { X, Upload, Loader2, AlertCircle } from "lucide-react";
+import { X, Upload, AlertCircle } from "lucide-react";
 import { uploadDocument } from "../lib/api";
-import { STAGE_LABELS } from "../lib/stageLabels";
+import IngestionPipeline from "./IngestionPipeline";
 
 export type UploadAcceptedPayload = {
   fileName: string;
@@ -14,6 +14,7 @@ export type UploadAcceptedPayload = {
 export type UploadModalAttachment = {
   status: "processing" | "ready" | "failed";
   stage?: string;
+  completedStages?: string[];
   chunks?: { total: number; processed: number };
 };
 
@@ -97,8 +98,13 @@ export default function UploadModal({
     if (file) handleFile(file);
   };
 
-  const showFailed =
-    !isUploading && (uploadHttpFailed || attachment?.status === "failed");
+  /** HTTP-level failure: POST /upload itself returned an error. */
+  const showHttpFailed = !isUploading && uploadHttpFailed;
+  /** Server-side processing failure: document reached a failed state after upload succeeded. */
+  const showServerFailed =
+    !isUploading && !uploadHttpFailed && attachment?.status === "failed";
+  const showFailed = showHttpFailed || showServerFailed;
+
   const showProcessing =
     !showFailed &&
     !isUploading &&
@@ -115,15 +121,22 @@ export default function UploadModal({
   const dropZoneInteractive = showPicker;
   const showDismissWait = (showUploading || showProcessing) && !showSuccess;
 
+  const showPipeline = showUploading || showProcessing || showServerFailed;
+
   const dropZoneClassName = [
-    "relative min-h-[200px] rounded-2xl border-2 border-dashed p-10 flex flex-col items-center justify-center transition-all duration-300 ease-out",
+    "relative rounded-2xl border-2 border-dashed transition-all duration-300 ease-out",
+    showPipeline
+      ? "border-border bg-background px-6 py-5"
+      : "min-h-[200px] p-10 flex flex-col items-center justify-center",
     showSuccess
       ? "border-emerald-500/40 bg-emerald-500/[0.07]"
-      : showFailed
+      : showHttpFailed
         ? "border-red-500/25 bg-red-500/[0.04]"
         : dropZoneInteractive
           ? "border-border bg-surface hover:border-accent hover:bg-accent/5 cursor-pointer active:scale-[0.99]"
-          : "border-border bg-background",
+          : showPipeline
+            ? ""
+            : "border-border bg-background",
   ].join(" ");
 
   return (
@@ -200,30 +213,31 @@ export default function UploadModal({
             onChange={handleChange}
             className="hidden"
           />
-          {showUploading && (
-            <div className="flex flex-col items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue/10 ring-1 ring-blue/20">
-                <Loader2 className="h-7 w-7 animate-spin text-blue" strokeWidth={2} />
-              </div>
-              <p className="text-base font-medium text-foreground">Uploading…</p>
-            </div>
+          {showPipeline && (
+            <IngestionPipeline
+              currentStage={showUploading ? "uploading" : attachment?.stage}
+              completedStages={
+                showUploading
+                  ? []
+                  : (attachment?.completedStages ?? [])
+              }
+              failed={showServerFailed}
+              chunks={attachment?.chunks}
+            />
           )}
-          {showProcessing && (
-            <div className="flex flex-col items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue/10 ring-1 ring-blue/20">
-                <Loader2 className="h-7 w-7 animate-spin text-blue" strokeWidth={2} />
-              </div>
-              <p className="max-w-[280px] text-center text-base font-medium leading-snug text-foreground">
-                {attachment?.stage
-                  ? STAGE_LABELS[attachment.stage] ?? attachment.stage
-                  : "Processing your document…"}
-                {attachment?.stage === "embedding" && attachment?.chunks?.total
-                  ? ` (${attachment.chunks.total} chunks)`
-                  : ""}
-              </p>
-            </div>
+          {showServerFailed && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRetry();
+              }}
+              className="mt-4 w-full rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-surface"
+            >
+              Retry
+            </button>
           )}
-          {showFailed && (
+          {showHttpFailed && (
             <div className="flex flex-col items-center gap-4 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10 ring-1 ring-red-500/20">
                 <AlertCircle className="h-7 w-7 text-red-400" strokeWidth={1.75} aria-hidden />

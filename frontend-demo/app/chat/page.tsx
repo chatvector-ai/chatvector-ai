@@ -86,6 +86,7 @@ export default function ChatPage() {
                 ? {
                     status: attachment.status,
                     stage: poll.stage,
+                    completedStages: poll.completedStages,
                     chunks: poll.chunks,
                   }
                 : null
