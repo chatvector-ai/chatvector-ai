@@ -56,7 +56,7 @@ export default function UploadModal({
 
   useEffect(() => {
     if (!showSuccess) return;
-    const timer = setTimeout(() => onCloseRef.current(), 1500);
+    const timer = setTimeout(() => onCloseRef.current(), 2500);
     return () => clearTimeout(timer);
   }, [showSuccess]);
 
@@ -121,22 +121,20 @@ export default function UploadModal({
   const dropZoneInteractive = showPicker;
   const showDismissWait = (showUploading || showProcessing) && !showSuccess;
 
-  const showPipeline = showUploading || showProcessing || showServerFailed;
+  const showPipeline = showUploading || showProcessing || showSuccess || showServerFailed;
 
   const dropZoneClassName = [
     "relative rounded-2xl border-2 border-dashed transition-all duration-300 ease-out",
     showPipeline
       ? "border-border bg-background px-6 py-5"
       : "min-h-[200px] p-10 flex flex-col items-center justify-center",
-    showSuccess
-      ? "border-emerald-500/40 bg-emerald-500/[0.07]"
-      : showHttpFailed
-        ? "border-red-500/25 bg-red-500/[0.04]"
-        : dropZoneInteractive
-          ? "border-border bg-surface hover:border-accent hover:bg-accent/5 cursor-pointer active:scale-[0.99]"
-          : showPipeline
-            ? ""
-            : "border-border bg-background",
+    showHttpFailed
+      ? "border-red-500/25 bg-red-500/[0.04]"
+      : dropZoneInteractive
+        ? "border-border bg-surface hover:border-accent hover:bg-accent/5 cursor-pointer active:scale-[0.99]"
+        : showPipeline
+          ? ""
+          : "border-border bg-background",
   ].join(" ");
 
   return (
@@ -255,22 +253,6 @@ export default function UploadModal({
               >
                 Retry
               </button>
-            </div>
-          )}
-          {showSuccess && (
-            <div className="flex flex-col items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/15 ring-1 ring-emerald-400/25">
-                <svg width="22" height="22" viewBox="0 0 20 20" fill="none" aria-hidden>
-                  <path
-                    d="M4 10l4.5 4.5L16 6"
-                    stroke="#34d399"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-              <p className="text-base font-semibold text-emerald-400">Document ready!</p>
             </div>
           )}
           {showPicker && (

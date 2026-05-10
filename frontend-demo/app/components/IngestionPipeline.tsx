@@ -1,7 +1,11 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, AlertCircle } from "lucide-react";
 import { PIPELINE_STAGES, PIPELINE_STAGE_LABELS } from "../lib/stageLabels";
+
+/** ms between each incremental stage completion when fast-forwarding. */
+const STEP_MS = 380;
 
 type StageState = "completed" | "active" | "pending" | "failed";
 
@@ -15,6 +19,74 @@ type Props = {
   /** Chunk info surfaced during embedding stage. */
   chunks?: { total: number; processed: number };
 };
+
+/**
+ * When the actual stage jumps ahead by multiple steps (rapid SSE updates),
+ * this hook steps through each intermediate stage one at a time so each
+ * completion animates in sequentially instead of teleporting.
+ * When `instant` is true (e.g. on failure) it jumps directly without delays.
+ */
+function useAnimatedStage(actualStage: string | undefined, instant = false) {
+  const [displayedIdx, setDisplayedIdx] = useState(-1);
+  const displayedIdxRef = useRef(-1);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+
+    const actualIdx =
+      actualStage != null ? PIPELINE_STAGES.indexOf(actualStage as never) : -1;
+
+    if (actualIdx < 0) {
+      displayedIdxRef.current = -1;
+      setDisplayedIdx(-1);
+      return;
+    }
+
+    const fromIdx = displayedIdxRef.current;
+
+    if (actualIdx <= fromIdx) return;
+
+    if (instant) {
+      displayedIdxRef.current = actualIdx;
+      setDisplayedIdx(actualIdx);
+      return;
+    }
+
+    const steps = actualIdx - fromIdx;
+    for (let s = 1; s <= steps; s++) {
+      const target = fromIdx + s;
+      if (s === 1) {
+        // Advance the first step synchronously so the active stage renders
+        // on the very first paint with no visible delay.
+        displayedIdxRef.current = target;
+        setDisplayedIdx(target);
+      } else {
+        const t = setTimeout(
+          () => {
+            displayedIdxRef.current = target;
+            setDisplayedIdx(target);
+          },
+          (s - 1) * STEP_MS
+        );
+        timersRef.current.push(t);
+      }
+    }
+
+    return () => {
+      timersRef.current.forEach(clearTimeout);
+      timersRef.current = [];
+    };
+  }, [actualStage, instant]);
+
+  const displayedStage =
+    displayedIdx >= 0 ? PIPELINE_STAGES[displayedIdx] : undefined;
+  const displayedCompleted: string[] =
+    displayedIdx > 0 ? Array.from(PIPELINE_STAGES.slice(0, displayedIdx)) : [];
+
+  return { displayedStage, displayedCompleted };
+}
 
 function getStageState(
   stageKey: string,
@@ -112,14 +184,15 @@ function StageRow({
 
 export default function IngestionPipeline({
   currentStage,
-  completedStages,
   failed = false,
   chunks,
 }: Props) {
+  const { displayedStage, displayedCompleted } = useAnimatedStage(currentStage, failed);
+
   return (
     <ul className="w-full" role="list" aria-label="Ingestion progress">
       {PIPELINE_STAGES.map((stageKey, idx) => {
-        const state = getStageState(stageKey, currentStage, completedStages, failed);
+        const state = getStageState(stageKey, displayedStage, displayedCompleted, failed);
         const label = PIPELINE_STAGE_LABELS[stageKey];
         const isLast = idx === PIPELINE_STAGES.length - 1;
 
