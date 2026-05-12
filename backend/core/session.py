@@ -15,6 +15,7 @@ class Session:
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_active: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict = field(default_factory=dict)
+    document_ids: list[str] = field(default_factory=list)
 
 
 @dataclass
