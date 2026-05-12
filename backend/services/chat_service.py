@@ -213,6 +213,19 @@ async def answer_question_for_document(
         }
 
     logger.info(f"Answer generated successfully for document {doc_id}")
+
+    if session_id:
+        try:
+            import db
+            await db.store_chat_message(
+                session_id=session_id, role="user", content=question, tenant_id=tenant_id
+            )
+            await db.store_chat_message(
+                session_id=session_id, role="assistant", content=answer, tenant_id=tenant_id
+            )
+        except Exception as e:
+            logger.error(f"Failed to store chat messages for session {session_id}: {e}", exc_info=True)
+
     return {
         **base,
         "status": "ok",
@@ -224,6 +237,7 @@ async def answer_question_stream_for_document(
     doc_id: str,
     match_count: int = 5,
     auth: Optional[AuthContext] = None,
+    session_id: Optional[str] = None,
     session_context: Optional[SessionContext] = None,
 ) -> AsyncGenerator[str, None]:
     """
@@ -252,15 +266,30 @@ async def answer_question_stream_for_document(
         matching_chunks = all_chunks
         context = build_context_from_chunks(matching_chunks, session_context=session_context)
 
+        full_answer_chunks: list[str] = []
         async for chunk in generate_answer_stream(question, context):
             err = _structured_error_from_llm_answer(chunk)
             if err is not None:
                 yield f"event: error\ndata: {json.dumps(err['message'])}\n\n"
                 return
+            full_answer_chunks.append(chunk)
             yield f"event: token\ndata: {json.dumps(chunk)}\n\n"
 
         yield "event: done\ndata: [DONE]\n\n"
         logger.info(f"Answer stream generated successfully for document {doc_id}")
+
+        if session_id:
+            try:
+                import db
+                full_answer = "".join(full_answer_chunks)
+                await db.store_chat_message(
+                    session_id=session_id, role="user", content=question, tenant_id=tenant_id
+                )
+                await db.store_chat_message(
+                    session_id=session_id, role="assistant", content=full_answer, tenant_id=tenant_id
+                )
+            except Exception as e:
+                logger.error(f"Failed to store streaming chat messages for session {session_id}: {e}", exc_info=True)
 
     except Exception as e:
         logger.error(f"Stream failed for document {doc_id}: {e}", exc_info=True)
@@ -382,6 +411,18 @@ async def answer_questions_for_documents_batch(
                     "error": llm_err,
                     "session_id": session_id,
                 }
+
+            if session_id:
+                try:
+                    import db
+                    await db.store_chat_message(
+                        session_id=session_id, role="user", content=query["question"], tenant_id=tenant_id
+                    )
+                    await db.store_chat_message(
+                        session_id=session_id, role="assistant", content=answer, tenant_id=tenant_id
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to store batch chat messages for session {session_id}: {e}", exc_info=True)
 
             return {
                 "status": "ok",

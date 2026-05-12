@@ -29,6 +29,11 @@ os.environ.setdefault(
 from logging_config.logging_config import setup_logging
 setup_logging()
 
+import sys
+import asyncio
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 env_file = BACKEND_DIR / ".env"
 if not env_file.exists():
     env_file.write_text(
@@ -45,22 +50,6 @@ if not env_file.exists():
         + "\n",
         encoding="utf-8",
     )
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create an instance of the default event loop for each test case.
-    
-    Ensures SelectorEventLoop is used on Windows for psycopg compatibility.
-    """
-    import asyncio
-    import sys
-    if sys.platform == "win32":
-        loop = asyncio.SelectorEventLoop()
-    else:
-        loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest.fixture(scope="session", autouse=True)

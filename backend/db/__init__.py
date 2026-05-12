@@ -303,9 +303,55 @@ async def fail_stale_documents(
     )
 
 
+async def store_chat_message(
+    session_id: str,
+    role: str,
+    content: str,
+    tenant_id: str | None = None,
+) -> str:
+    """Store a single chat message with retry logic."""
+    service = get_db_service()
+
+    async def _store():
+        return await service.store_chat_message(
+            session_id=session_id, role=role, content=content, tenant_id=tenant_id
+        )
+
+    return await retry_async(
+        _store,
+        max_retries=3,
+        base_delay=0.5,
+        backoff=2.0,
+        timeout=10.0,
+        func_name=f"{service.__class__.__name__}.store_chat_message",
+    )
+
+
+async def get_session_history(
+    session_id: str,
+    limit: int = 20,
+    tenant_id: str | None = None,
+) -> list[dict]:
+    """Retrieve recent chat history with retry logic."""
+    service = get_db_service()
+
+    async def _get():
+        return await service.get_session_history(
+            session_id=session_id, limit=limit, tenant_id=tenant_id
+        )
+
+    return await retry_async(
+        _get,
+        max_retries=3,
+        base_delay=0.5,
+        backoff=2.0,
+        timeout=10.0,
+        func_name=f"{service.__class__.__name__}.get_session_history",
+    )
+
+
 __all__ = [
     "get_db_service",
-    "worker_db_context",
     "create_document",
     "store_chunks_with_embeddings",
     "get_document",
@@ -316,6 +362,8 @@ __all__ = [
     "delete_document_chunks",
     "delete_document",
     "fail_stale_documents",
+    "store_chat_message",
+    "get_session_history",
     "ChunkMatch",
     "ChunkRecord",
     "db_service",

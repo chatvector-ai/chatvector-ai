@@ -288,3 +288,52 @@ class SQLAlchemyService(DatabaseService):
                 duration_ms,
             )
             raise
+
+    async def store_chat_message(
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        tenant_id: Optional[str] = None,
+    ) -> str:
+        async with self.async_session() as session:
+            from core.models import ChatMessage
+            msg_id = str(uuid.uuid4())
+            msg = ChatMessage(
+                id=msg_id,
+                session_id=session_id,
+                tenant_id=tenant_id,
+                role=role,
+                content=content,
+            )
+            session.add(msg)
+            await session.commit()
+            logger.debug(f"[PostgreSQL] Stored chat message {msg_id} for session {session_id}")
+            return msg_id
+
+    async def get_session_history(
+        self,
+        session_id: str,
+        limit: int = 20,
+        tenant_id: Optional[str] = None,
+    ) -> list[dict]:
+        async with self.async_session() as session:
+            from core.models import ChatMessage
+            stmt = select(ChatMessage).where(ChatMessage.session_id == session_id)
+            if tenant_id:
+                stmt = stmt.where(ChatMessage.tenant_id == tenant_id)
+            stmt = stmt.order_by(ChatMessage.created_at.desc()).limit(limit)
+            
+            result = await session.execute(stmt)
+            messages = result.scalars().all()
+            
+            # Return ordered ascending (chronological)
+            return [
+                {
+                    "id": str(msg.id),
+                    "role": msg.role,
+                    "content": msg.content,
+                    "created_at": str(msg.created_at) if msg.created_at else None,
+                }
+                for msg in reversed(messages)
+            ]
