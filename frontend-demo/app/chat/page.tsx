@@ -30,11 +30,21 @@ export default function ChatPage() {
 
   if (!isLoaded) {
     return (
-      <div 
-        className="flex h-full w-full items-center justify-center bg-background text-muted"
+      <div
+        className="flex h-full w-full items-center justify-center bg-background px-6 text-muted"
         style={{ height: "calc(100dvh - 60px)" }}
       >
-        Loading sessions...
+        <div className="flex w-full max-w-3xl flex-col gap-4" role="status" aria-label="Loading sessions">
+          <div className="flex items-center gap-3 text-sm">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-accent" />
+            <span>Loading sessions...</span>
+          </div>
+          <div className="space-y-3" aria-hidden="true">
+            <div className="h-16 rounded-lg border border-border bg-surface" />
+            <div className="h-16 rounded-lg border border-border bg-surface/70" />
+            <div className="h-28 rounded-lg border border-border bg-surface/50" />
+          </div>
+        </div>
       </div>
     );
   }
