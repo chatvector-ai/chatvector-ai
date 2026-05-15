@@ -31,18 +31,35 @@ export default function ChatPage() {
   if (!isLoaded) {
     return (
       <div
-        className="flex h-full w-full items-center justify-center bg-background px-6 text-muted"
-        style={{ height: "calc(100dvh - 60px)" }}
+        className="flex min-h-0 w-full flex-1 overflow-hidden bg-background text-foreground"
+        role="status"
+        aria-busy="true"
+        aria-label="Loading chat sessions"
+        style={{
+          height: "calc(100dvh - 60px)",
+          maxHeight: "calc(100dvh - 60px)",
+        }}
       >
-        <div className="flex w-full max-w-3xl flex-col gap-4" role="status" aria-label="Loading sessions">
-          <div className="flex items-center gap-3 text-sm">
-            <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-accent" />
-            <span>Loading sessions...</span>
+        <span className="sr-only">Loading chat sessions...</span>
+        <div className="hidden w-64 flex-col border-r border-border bg-surface md:flex" aria-hidden="true">
+          <div className="border-b border-border p-4">
+            <div className="h-10 w-full animate-pulse rounded-lg bg-muted/20" />
           </div>
-          <div className="space-y-3" aria-hidden="true">
-            <div className="h-16 rounded-lg border border-border bg-surface" />
-            <div className="h-16 rounded-lg border border-border bg-surface/70" />
-            <div className="h-28 rounded-lg border border-border bg-surface/50" />
+          <div className="flex-1 space-y-2 overflow-y-auto p-2">
+            <div className="h-9 animate-pulse rounded-md bg-muted/20" />
+            <div className="h-9 animate-pulse rounded-md bg-muted/15" />
+            <div className="h-9 animate-pulse rounded-md bg-muted/15" />
+          </div>
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden px-4">
+            <div className="flex min-h-0 flex-1 items-end py-6" aria-hidden="true">
+              <div className="h-40 w-full animate-pulse rounded-lg border border-border bg-surface" />
+            </div>
+            <div className="border-t border-border py-4" aria-hidden="true">
+              <div className="h-12 w-full animate-pulse rounded-lg border border-border bg-surface" />
+            </div>
           </div>
         </div>
       </div>
