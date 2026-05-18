@@ -440,6 +440,16 @@ class RedisIngestionQueue(BaseIngestionQueue):
                     burst=False,
                     logging_level=logging.WARNING,
                 )
+            except redis_lib.exceptions.ConnectionError as exc:
+                if not self._stop_event.is_set():
+                    logger.error(
+                        "RQ worker thread-%d failed to connect to Redis at %s: %s. Retrying in 5s...",
+                        worker_id,
+                        config.REDIS_URL,
+                        exc,
+                    )
+                    time.sleep(5.0)
+                    continue
             except Exception:
                 if not self._stop_event.is_set():
                     logger.exception(

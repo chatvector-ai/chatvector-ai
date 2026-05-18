@@ -20,7 +20,7 @@ os.environ.setdefault("GEN_AI_KEY", "test-genai-key")
 os.environ.setdefault("LOG_LEVEL", "DEBUG")
 os.environ.setdefault(
     "DATABASE_URL",
-    "postgresql+psycopg://postgres:postgres@localhost:5432/postgres",
+    "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres",
 )
 
 # Force logging setup BEFORE any app modules are imported.
@@ -39,7 +39,7 @@ if not env_file.exists():
                 "SUPABASE_KEY=test-key-123",
                 "GEN_AI_KEY=test-genai-key",
                 "LOG_LEVEL=DEBUG",
-                "DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/postgres",
+                "DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/postgres",
             ]
         )
         + "\n",
@@ -48,20 +48,12 @@ if not env_file.exists():
 
 
 @pytest.fixture(scope="session")
-def event_loop():
-    """Create an instance of the default event loop for each test case.
-    
-    Ensures SelectorEventLoop is used on Windows for psycopg compatibility.
-    """
+def event_loop_policy():
     import asyncio
     import sys
     if sys.platform == "win32":
-        loop = asyncio.SelectorEventLoop()
-    else:
-        loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
+        return asyncio.WindowsSelectorEventLoopPolicy()
+    return asyncio.DefaultEventLoopPolicy()
 
 @pytest.fixture(scope="session", autouse=True)
 def clear_test_logs():

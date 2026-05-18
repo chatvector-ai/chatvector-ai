@@ -28,8 +28,12 @@ def _make_records(*chunk_texts: str) -> list[ChunkRecord]:
 
 
 async def test_create_document_with_chunks_atomic_supabase_success(monkeypatch):
+    import db
     db.db_service = None
-    monkeypatch.setattr("core.config.config.APP_ENV", "production")
+    import core.config
+    monkeypatch.setattr(db.config, "APP_ENV", "production")
+    monkeypatch.setattr(db.config, "SUPABASE_URL", "https://test.supabase.co")
+    monkeypatch.setattr(db.config, "SUPABASE_KEY", "test-key-123")
 
     async def fake_create_document(self, file_name: str, **kwargs):
         assert file_name == "example.pdf"
@@ -65,8 +69,12 @@ async def test_create_document_with_chunks_atomic_supabase_success(monkeypatch):
 
 
 async def test_create_document_with_chunks_atomic_supabase_failure_cleanup(monkeypatch):
+    import db
     db.db_service = None
-    monkeypatch.setattr("core.config.config.APP_ENV", "production")
+    import core.config
+    monkeypatch.setattr(db.config, "APP_ENV", "production")
+    monkeypatch.setattr(db.config, "SUPABASE_URL", "https://test.supabase.co")
+    monkeypatch.setattr(db.config, "SUPABASE_KEY", "test-key-123")
 
     async def fake_create_document(self, file_name: str, **kwargs):
         return "doc-rollback"
