@@ -25,6 +25,8 @@ def create_session(session_id: Optional[str] = None, tenant_id: Optional[str] = 
 def get_session(session_id: str, tenant_id: Optional[str] = None) -> Optional[Session]:
     session = _SESSIONS.get(session_id)
     if session:
+        # TODO(Phase 3B): Strict tenant isolation.
+        # Currently, if tenant_id is None (from Phase 3A require_auth), isolation is bypassed.
         if tenant_id and session.tenant_id and session.tenant_id != tenant_id:
             logger.warning(
                 f"Session {session_id} tenant mismatch: {session.tenant_id} vs {tenant_id}"
@@ -36,6 +38,7 @@ def get_session(session_id: str, tenant_id: Optional[str] = None) -> Optional[Se
 
 
 def list_sessions(tenant_id: Optional[str] = None) -> List[Session]:
+    # TODO(Phase 3B): Strict tenant isolation.
     return [
         session for session in _SESSIONS.values()
         if not tenant_id or session.tenant_id == tenant_id

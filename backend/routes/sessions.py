@@ -2,7 +2,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from core.auth import AuthContext, get_current_tenant, require_auth
 from core.session import Session
@@ -13,7 +13,7 @@ router = APIRouter()
 
 
 class SessionCreateRequest(BaseModel):
-    session_id: Optional[str] = None
+    session_id: Optional[str] = Field(None, min_length=1, max_length=255)
 
 
 class SessionResponse(BaseModel):
@@ -23,6 +23,10 @@ class SessionResponse(BaseModel):
     last_active: str
     metadata: dict
     document_ids: list[str]
+
+
+class SessionListResponse(BaseModel):
+    sessions: list[SessionResponse]
 
 
 def _format_session(session: Session) -> SessionResponse:
@@ -50,15 +54,20 @@ async def create_session(
         raise HTTPException(status_code=409, detail=str(e))
 
 
-@router.get("/sessions", response_model=dict)
+@router.get("/sessions", response_model=SessionListResponse)
 async def list_sessions(auth: AuthContext = Depends(require_auth)):
     tenant_id = get_current_tenant(auth)
     sessions = session_service.list_sessions(tenant_id=tenant_id)
-    return {"sessions": [_format_session(s).model_dump() for s in sessions]}
+    return SessionListResponse(sessions=[_format_session(s) for s in sessions])
 
 
 @router.get("/sessions/{session_id}", response_model=SessionResponse)
 async def get_session(session_id: str, auth: AuthContext = Depends(require_auth)):
+    """
+    Retrieve session metadata.
+    
+    Note: Reading a session mutates its `last_active` timestamp to track recent activity.
+    """
     tenant_id = get_current_tenant(auth)
     session = session_service.get_session(session_id=session_id, tenant_id=tenant_id)
     if not session:
