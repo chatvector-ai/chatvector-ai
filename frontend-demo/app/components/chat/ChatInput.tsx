@@ -75,7 +75,7 @@ export default function ChatInput({
 
       <div className="bg-background px-4 py-3">
         <div className="flex items-end gap-2 bg-surface rounded-xl px-4 py-2">
-          <UploadButton onClick={onUploadClick} />
+          <UploadButton onClick={onUploadClick} disabled={!!attachment} />
           <textarea
             ref={textareaRef}
             rows={1}

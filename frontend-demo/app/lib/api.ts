@@ -116,6 +116,7 @@ export type AttachmentState = {
 export type DocumentStatusPayload = {
   status: string;
   stage?: string;
+  error?: { stage?: string };
   chunks?: { total: number; processed: number } | null;
 };
 
@@ -140,9 +141,15 @@ export async function getDocumentStatus(
   const stage =
     typeof stageRaw === "string" && stageRaw.length > 0 ? stageRaw : undefined;
   const chunks = parseChunks(data?.chunks);
+  const errorRaw = data?.error;
+  const error =
+    errorRaw != null && typeof errorRaw === "object"
+      ? { stage: (errorRaw as Record<string, unknown>).stage as string | undefined }
+      : undefined;
   return {
     status,
     ...(stage !== undefined ? { stage } : {}),
+    ...(error !== undefined ? { error } : {}),
     ...(chunks !== undefined ? { chunks } : {}),
   };
 }
@@ -166,11 +173,15 @@ export async function uploadDocument(
   });
   
   if (!res.ok) {
+    if (res.status === 429) {
+      throw new Error("Too many requests — please wait a moment and try again.");
+    }
     let message = "Upload failed. Please try again.";
     try {
       const errBody = await res.json();
       const detail = errBody?.detail;
       if (typeof detail?.message === "string") message = detail.message;
+      else if (typeof detail === "string") message = detail;
     } catch {
       /* ignore */
     }

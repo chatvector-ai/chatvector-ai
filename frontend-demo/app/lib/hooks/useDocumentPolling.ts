@@ -6,6 +6,7 @@ import {
   getDocumentStatus,
   API_BASE,
 } from "../api";
+import { PIPELINE_STAGES } from "../stageLabels";
 
 export type PolledDocumentStatus = "processing" | "ready" | "failed";
 
@@ -15,6 +16,45 @@ function mapApiStatusToUi(apiStatus: string): PolledDocumentStatus {
   return "processing";
 }
 
+/** Returns all pipeline stages that come strictly before `currentStage`. */
+function stagesBefore(currentStage: string): string[] {
+  const idx = PIPELINE_STAGES.indexOf(currentStage as never);
+  if (idx <= 0) return [];
+  return Array.from(PIPELINE_STAGES.slice(0, idx));
+}
+
+/**
+ * Resolve the display stage from a raw SSE/poll payload.
+ *
+ * - On failure: use error.stage (the pipeline step that failed) so the
+ *   pipeline list can highlight the correct row. Fall back to the last
+ *   known non-failure stage string.
+ * - "uploaded" is only emitted by the synchronous path and maps to "queued"
+ *   (the nearest PIPELINE_STAGES entry) to avoid an indexOf miss.
+ * - "failed" itself is not a pipeline step — handled via the `failed` flag.
+ */
+function resolveDisplayStage(payload: {
+  status: string;
+  stage?: string;
+  error?: { stage?: string } | null;
+}): string {
+  if (payload.status === "failed") {
+    const errorStage = payload.error?.stage;
+    if (errorStage && errorStage !== "failed" && PIPELINE_STAGES.indexOf(errorStage as never) >= 0) {
+      return errorStage;
+    }
+    // fall back to the last stage field the server sent, or a safe default
+    return payload.stage ?? "extracting";
+  }
+  if (payload.status === "uploaded" || payload.stage === "uploaded") {
+    return "queued";
+  }
+  if (typeof payload.stage === "string" && payload.stage.length > 0) {
+    return payload.stage;
+  }
+  return payload.status;
+}
+
 export function useDocumentPolling(
   documentId: string | undefined,
   statusEndpoint: string | undefined,
@@ -22,6 +62,7 @@ export function useDocumentPolling(
 ): {
   status: PolledDocumentStatus | undefined;
   stage: string | undefined;
+  completedStages: string[];
   chunks: { total: number; processed: number } | undefined;
   awaitingProcessing: boolean;
 } {
@@ -29,6 +70,7 @@ export function useDocumentPolling(
     PolledDocumentStatus | undefined
   >(undefined);
   const [stage, setStage] = useState<string | undefined>(undefined);
+  const [completedStages, setCompletedStages] = useState<string[]>([]);
   const [chunks, setChunks] = useState<
     { total: number; processed: number } | undefined
   >(undefined);
@@ -48,6 +90,7 @@ export function useDocumentPolling(
       prevDocKeyRef.current = docKey;
       setPolledUiStatus(undefined);
       setStage(undefined);
+      setCompletedStages([]);
       setChunks(undefined);
       setAwaitingProcessing(false);
       setUseFallbackPolling(false);
@@ -78,11 +121,9 @@ export function useDocumentPolling(
         try {
           const payload = JSON.parse(event.data);
 
-          const rawStage =
-            typeof payload.stage === "string" && payload.stage.length > 0
-              ? payload.stage
-              : payload.status;
+          const rawStage = resolveDisplayStage(payload);
           setStage(rawStage);
+          setCompletedStages(stagesBefore(rawStage));
 
           const c = payload.chunks;
           if (
@@ -137,11 +178,9 @@ export function useDocumentPolling(
 
           setAwaitingProcessing(false);
 
-          const rawStage =
-            typeof payload.stage === "string" && payload.stage.length > 0
-              ? payload.stage
-              : payload.status;
+          const rawStage = resolveDisplayStage(payload);
           setStage(rawStage);
+          setCompletedStages(stagesBefore(rawStage));
 
           const c = payload.chunks;
           if (
@@ -190,6 +229,7 @@ export function useDocumentPolling(
   return {
     status: polledUiStatus,
     stage,
+    completedStages,
     chunks,
     awaitingProcessing: enabled && awaitingProcessing,
   };
