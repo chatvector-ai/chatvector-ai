@@ -309,21 +309,13 @@ async def store_chat_message(
     content: str,
     tenant_id: str | None = None,
 ) -> str:
-    """Store a single chat message with retry logic."""
+    """Store a single chat message (no retries to avoid duplicates)."""
+    if role not in ("user", "assistant", "system"):
+        raise ValueError(f"Invalid role: {role}")
+    
     service = get_db_service()
-
-    async def _store():
-        return await service.store_chat_message(
-            session_id=session_id, role=role, content=content, tenant_id=tenant_id
-        )
-
-    return await retry_async(
-        _store,
-        max_retries=3,
-        base_delay=0.5,
-        backoff=2.0,
-        timeout=10.0,
-        func_name=f"{service.__class__.__name__}.store_chat_message",
+    return await service.store_chat_message(
+        session_id=session_id, role=role, content=content, tenant_id=tenant_id
     )
 
 

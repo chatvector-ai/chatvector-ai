@@ -34,6 +34,11 @@ def build_context_from_chunks(
         if session_context.active_documents:
             session_lines.append("Active documents: " + ", ".join(session_context.active_documents))
         
+        if session_context.chat_history:
+            for msg in session_context.chat_history:
+                role_label = "User" if msg.get("role") == "user" else "Assistant"
+                session_lines.append(f"[{role_label}]: {msg.get('content')}")
+        
         if len(session_lines) > 1:
             session_lines.append("\n[Retrieved Context]")
             session_part = "\n".join(session_lines)

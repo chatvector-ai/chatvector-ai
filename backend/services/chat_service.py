@@ -193,9 +193,17 @@ async def answer_question_for_document(
                 seen_chunk_keys.add(key)
                 all_chunks.append(chunk)
     matching_chunks = all_chunks
+    if session_id:
+        import db
+        history = await db.get_session_history(
+            session_id=session_id, limit=config.MAX_SESSION_HISTORY_MESSAGES, tenant_id=tenant_id
+        )
+        if not session_context:
+            session_context = SessionContext()
+        session_context.chat_history = history
+
     context = build_context_from_chunks(matching_chunks, session_context=session_context)
     answer = await generate_answer(question, context)
-
     base: dict = {
         "question": question,
         "doc_id": doc_id,
