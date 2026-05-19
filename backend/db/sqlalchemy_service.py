@@ -8,6 +8,7 @@ from typing import Optional
 
 from sqlalchemy import delete, func, literal_column, select, update as sql_update
 from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -17,6 +18,20 @@ from db.base import ChunkMatch, ChunkRecord, DatabaseService
 from services.retrieval_service import merge_chunk_matches, reciprocal_rank_fusion
 
 logger = logging.getLogger(__name__)
+
+# Full-text config matches migration 004 (to_tsvector / plainto_tsquery).
+_FTS_LANGUAGE = "english"
+
+
+def _is_missing_content_tsv_error(exc: BaseException) -> bool:
+    """True when hybrid migration 004 has not been applied."""
+    message = str(exc).lower()
+    if "content_tsv" in message and "does not exist" in message:
+        return True
+    orig = getattr(exc, "__cause__", None) or getattr(exc, "orig", None)
+    if orig is not None and orig is not exc:
+        return _is_missing_content_tsv_error(orig)
+    return False
 
 
 class SQLAlchemyService(DatabaseService):
@@ -280,16 +295,25 @@ class SQLAlchemyService(DatabaseService):
     ) -> list[ChunkMatch]:
         """Full-text search on document_chunks.content_tsv (requires migration 004)."""
         content_tsv = literal_column("document_chunks.content_tsv", type_=TSVECTOR())
-        ts_query = func.plainto_tsquery("english", query_text)
+        ts_query = func.plainto_tsquery(_FTS_LANGUAGE, query_text)
         rank = func.ts_rank(content_tsv, ts_query).label("keyword_rank")
-        result = await session.execute(
-            select(DocumentChunk, Document.file_name, rank)
-            .join(Document, DocumentChunk.document_id == Document.id)
-            .where(DocumentChunk.document_id == doc_id)
-            .where(content_tsv.op("@@")(ts_query))
-            .order_by(rank.desc())
-            .limit(limit)
-        )
+        try:
+            result = await session.execute(
+                select(DocumentChunk, Document.file_name, rank)
+                .join(Document, DocumentChunk.document_id == Document.id)
+                .where(DocumentChunk.document_id == doc_id)
+                .where(content_tsv.op("@@")(ts_query))
+                .order_by(rank.desc())
+                .limit(limit)
+            )
+        except ProgrammingError as exc:
+            if _is_missing_content_tsv_error(exc):
+                logger.warning(
+                    "content_tsv column missing; apply backend/db/init/004_hybrid_retrieval.sql. "
+                    "Using vector-only results for this request."
+                )
+                return []
+            raise
         rows = result.all()
         return [
             self._chunk_match_from_row(chunk, file_name)
@@ -313,7 +337,7 @@ class SQLAlchemyService(DatabaseService):
             and query_text
             and query_text.strip()
         )
-        candidate_limit = max(match_count, match_count * 2)
+        candidate_limit = match_count * 2
 
         try:
             async with self._retrieval_semaphore:

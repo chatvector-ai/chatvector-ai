@@ -16,8 +16,7 @@ def test_reciprocal_rank_fusion_prefers_items_in_both_lists():
     vector_ranked = ["a", "b", "c"]
     keyword_ranked = ["b", "d", "e"]
     fused = reciprocal_rank_fusion([vector_ranked, keyword_ranked], limit=3)
-    assert fused[0] == "b"
-    assert set(fused) == {"b", "a", "d"} or set(fused) == {"b", "d", "a"}
+    assert fused == ["b", "a", "d"]
 
 
 def test_reciprocal_rank_fusion_respects_limit():
@@ -101,6 +100,61 @@ async def test_find_similar_chunks_hybrid_invokes_both_paths():
     service._find_vector_chunks.assert_called_once()
     service._find_keyword_chunks.assert_called_once()
     assert {m.id for m in results} == {"vec-1", "key-1"}
+
+
+@pytest.mark.asyncio
+async def test_find_similar_chunks_hybrid_fusion_order():
+    pytest.importorskip("pgvector")
+    from db.sqlalchemy_service import SQLAlchemyService
+
+    service = SQLAlchemyService()
+    service._retrieval_semaphore = __import__("asyncio").Semaphore(10)
+
+    shared = ChunkMatch(id="shared", chunk_text="both lists")
+    vec_only = ChunkMatch(id="vec-only", chunk_text="vector")
+    key_only = ChunkMatch(id="key-only", chunk_text="keyword")
+    service._find_vector_chunks = AsyncMock(return_value=[shared, vec_only])
+    service._find_keyword_chunks = AsyncMock(return_value=[shared, key_only])
+
+    class _FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    service.async_session = lambda: _FakeSession()
+
+    with patch.object(config, "HYBRID_RETRIEVAL_ENABLED", True):
+        results = await service.find_similar_chunks(
+            "doc-1",
+            [0.1, 0.2],
+            match_count=3,
+            query_text="lookup",
+        )
+
+    assert [m.id for m in results] == ["shared", "vec-only", "key-only"]
+
+
+@pytest.mark.asyncio
+async def test_find_keyword_chunks_returns_empty_when_column_missing():
+    pytest.importorskip("pgvector")
+    from sqlalchemy.exc import ProgrammingError
+
+    from db.sqlalchemy_service import SQLAlchemyService
+
+    service = SQLAlchemyService()
+
+    class _FakeSession:
+        async def execute(self, *args, **kwargs):
+            raise ProgrammingError(
+                "stmt",
+                {},
+                Exception('column "content_tsv" does not exist'),
+            )
+
+    results = await service._find_keyword_chunks(_FakeSession(), "doc-1", "keyword", 5)
+    assert results == []
 
 
 @pytest.mark.asyncio

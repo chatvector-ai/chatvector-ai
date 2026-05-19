@@ -41,6 +41,10 @@ yarn-error.log*
 .next/
 out/
 
+# Local agent docs and tooling (not pushed to remote)
+.cursor/
+docs/
+
 # IDE
 .vscode/
 .idea/
