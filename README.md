@@ -99,7 +99,7 @@ Phases 2 and 2.5 are complete. The core RAG backend and frontend demo are fully 
 - ✅ Query transformations (rewrite, expand, stepback)
 - ✅ Configurable system prompt and LLM parameters
 - ✅ Background ingestion queue with rate limiting, retry, and DLQ
-- ✅ Redis-backed ingestion queue (implemented; in-memory remains the default)
+- ✅ Redis-backed ingestion queue (production default; in-memory fallback for local dev)
 - ✅ Structured logging with request ID tracing
 - ✅ Health checks with TTL caching on /status
 - ✅ Per-IP rate limiting on all public endpoints

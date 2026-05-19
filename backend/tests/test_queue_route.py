@@ -38,13 +38,18 @@ def test_queue_stats_returns_404_in_production(monkeypatch):
 
 
 def test_queue_stats_returns_200_in_non_production(monkeypatch):
-    monkeypatch.setattr(config, "APP_ENV", "development")
+    from core.config import config as main_config
+    from services.queue_service import _reset_queue_singleton
+    monkeypatch.setattr(main_config, "APP_ENV", "development")
+    monkeypatch.setattr(main_config, "QUEUE_BACKEND", "memory")
+    _reset_queue_singleton()
     limiter.reset()
     try:
+        from unittest.mock import patch, AsyncMock
         with TestClient(_queue_app()) as client:
             resp = client.get("/queue/stats")
-        assert resp.status_code == 200
-        data = resp.json()
+            assert resp.status_code == 200
+            data = resp.json()
         assert "queue_size" in data
         assert "dlq" in data
     finally:
