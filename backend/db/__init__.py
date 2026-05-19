@@ -181,13 +181,18 @@ async def find_similar_chunks(
     query_embedding: list[float],
     match_count: int = 5,
     session_id: str | None = None,
+    query_text: str | None = None,
 ) -> list[ChunkMatch]:
     """Find similar chunks with retry logic."""
     service = get_db_service()
 
     async def _search():
         return await service.find_similar_chunks(
-            doc_id, query_embedding, match_count, session_id=session_id
+            doc_id,
+            query_embedding,
+            match_count,
+            session_id=session_id,
+            query_text=query_text,
         )
 
     return await retry_async(

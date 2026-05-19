@@ -6,15 +6,32 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import delete, select, update as sql_update
+from sqlalchemy import delete, func, literal_column, select, update as sql_update
+from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from core.models import Document, DocumentChunk
 from core.config import config
 from db.base import ChunkMatch, ChunkRecord, DatabaseService
+from services.retrieval_service import merge_chunk_matches, reciprocal_rank_fusion
 
 logger = logging.getLogger(__name__)
+
+# Full-text config matches migration 004 (to_tsvector / plainto_tsquery).
+_FTS_LANGUAGE = "english"
+
+
+def _is_missing_content_tsv_error(exc: BaseException) -> bool:
+    """True when hybrid migration 004 has not been applied."""
+    message = str(exc).lower()
+    if "content_tsv" in message and "does not exist" in message:
+        return True
+    orig = getattr(exc, "__cause__", None) or getattr(exc, "orig", None)
+    if orig is not None and orig is not exc:
+        return _is_missing_content_tsv_error(orig)
+    return False
 
 
 class SQLAlchemyService(DatabaseService):
@@ -233,48 +250,129 @@ class SQLAlchemyService(DatabaseService):
             logger.info(f"[PostgreSQL] Marked {len(doc_ids)} stale document(s) as failed on startup")
             return doc_ids
 
+    def _chunk_match_from_row(
+        self, chunk: DocumentChunk, file_name: str, *, similarity: float | None = None
+    ) -> ChunkMatch:
+        return ChunkMatch(
+            id=str(chunk.id),
+            chunk_text=chunk.chunk_text,
+            document_id=str(chunk.document_id),
+            embedding=chunk.embedding,
+            created_at=str(chunk.created_at) if chunk.created_at else None,
+            similarity=similarity,
+            chunk_index=chunk.chunk_index,
+            page_number=chunk.page_number,
+            character_offset_start=chunk.character_offset_start,
+            character_offset_end=chunk.character_offset_end,
+            file_name=file_name,
+        )
+
+    async def _find_vector_chunks(
+        self,
+        session: AsyncSession,
+        doc_id: str,
+        query_embedding: list[float],
+        limit: int,
+    ) -> list[ChunkMatch]:
+        result = await session.execute(
+            select(DocumentChunk, Document.file_name)
+            .join(Document, DocumentChunk.document_id == Document.id)
+            .where(DocumentChunk.document_id == doc_id)
+            .order_by(DocumentChunk.embedding.op("<=>")(query_embedding))
+            .limit(limit)
+        )
+        return [
+            self._chunk_match_from_row(chunk, file_name)
+            for chunk, file_name in result.all()
+        ]
+
+    async def _find_keyword_chunks(
+        self,
+        session: AsyncSession,
+        doc_id: str,
+        query_text: str,
+        limit: int,
+    ) -> list[ChunkMatch]:
+        """Full-text search on document_chunks.content_tsv (requires migration 004)."""
+        content_tsv = literal_column("document_chunks.content_tsv", type_=TSVECTOR())
+        ts_query = func.plainto_tsquery(_FTS_LANGUAGE, query_text)
+        rank = func.ts_rank(content_tsv, ts_query).label("keyword_rank")
+        try:
+            result = await session.execute(
+                select(DocumentChunk, Document.file_name, rank)
+                .join(Document, DocumentChunk.document_id == Document.id)
+                .where(DocumentChunk.document_id == doc_id)
+                .where(content_tsv.op("@@")(ts_query))
+                .order_by(rank.desc())
+                .limit(limit)
+            )
+        except ProgrammingError as exc:
+            if _is_missing_content_tsv_error(exc):
+                logger.warning(
+                    "content_tsv column missing; apply backend/db/init/004_hybrid_retrieval.sql. "
+                    "Using vector-only results for this request."
+                )
+                return []
+            raise
+        rows = result.all()
+        return [
+            self._chunk_match_from_row(chunk, file_name)
+            for chunk, file_name, _rank in rows
+        ]
+
     async def find_similar_chunks(
         self,
         doc_id: str,
         query_embedding: list[float],
         match_count: int = 5,
         session_id: Optional[str] = None,
+        query_text: Optional[str] = None,
     ) -> list[ChunkMatch]:
         # TODO(Phase 3): use session_id for context filtering once implemented
-        """Find similar chunks using pgvector."""
-        # TODO(Phase 3): use session_id for context filtering once implemented
+        """Find chunks via vector search; optionally fuse with PostgreSQL full-text search."""
+        del session_id  # reserved for Phase 3 session-scoped retrieval
         start = time.perf_counter()
+        use_hybrid = (
+            config.HYBRID_RETRIEVAL_ENABLED
+            and query_text
+            and query_text.strip()
+        )
+        candidate_limit = match_count * 2
+
         try:
             async with self._retrieval_semaphore:
                 async with self.async_session() as session:
-                    result = await session.execute(
-                        select(DocumentChunk, Document.file_name)
-                        .join(Document, DocumentChunk.document_id == Document.id)
-                        .where(DocumentChunk.document_id == doc_id)
-                        .order_by(DocumentChunk.embedding.op("<=>")(query_embedding))
-                        .limit(match_count)
-                    )
-                    rows = result.all()
-
-                    matches = [
-                        ChunkMatch(
-                            id=str(chunk.id),
-                            chunk_text=chunk.chunk_text,
-                            document_id=str(chunk.document_id),
-                            embedding=chunk.embedding,
-                            created_at=str(chunk.created_at) if chunk.created_at else None,
-                            chunk_index=chunk.chunk_index,
-                            page_number=chunk.page_number,
-                            character_offset_start=chunk.character_offset_start,
-                            character_offset_end=chunk.character_offset_end,
-                            file_name=file_name,
+                    if not use_hybrid:
+                        matches = await self._find_vector_chunks(
+                            session, doc_id, query_embedding, match_count
                         )
-                        for chunk, file_name in rows
-                    ]
+                    else:
+                        vector_matches, keyword_matches = await asyncio.gather(
+                            self._find_vector_chunks(
+                                session, doc_id, query_embedding, candidate_limit
+                            ),
+                            self._find_keyword_chunks(
+                                session, doc_id, query_text.strip(), candidate_limit
+                            ),
+                        )
+                        matches_by_id: dict[str, ChunkMatch] = {}
+                        for match in vector_matches + keyword_matches:
+                            matches_by_id[match.id] = match
+
+                        fused_ids = reciprocal_rank_fusion(
+                            [
+                                [m.id for m in vector_matches],
+                                [m.id for m in keyword_matches],
+                            ],
+                            limit=match_count,
+                        )
+                        matches = merge_chunk_matches(fused_ids, matches_by_id)
 
                     duration_ms = int((time.perf_counter() - start) * 1000)
+                    mode = "hybrid" if use_hybrid else "vector"
                     logger.debug(
-                        "[PostgreSQL] Vector search returned %s chunks for doc_id=%s in %sms",
+                        "[PostgreSQL] %s search returned %s chunks for doc_id=%s in %sms",
+                        mode,
                         len(matches),
                         doc_id,
                         duration_ms,
@@ -283,7 +381,7 @@ class SQLAlchemyService(DatabaseService):
         except Exception:
             duration_ms = int((time.perf_counter() - start) * 1000)
             logger.exception(
-                "[PostgreSQL] Vector search failed for doc_id=%s in %sms",
+                "[PostgreSQL] Chunk search failed for doc_id=%s in %sms",
                 doc_id,
                 duration_ms,
             )

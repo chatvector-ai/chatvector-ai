@@ -110,6 +110,9 @@ class Settings:
     ).lower() in ("1", "true", "yes")
     QUERY_TRANSFORMATION_STRATEGY: str = _get_query_transformation_strategy()
     RETRIEVAL_MAX_CONCURRENCY: int = max(1, int(os.getenv("RETRIEVAL_MAX_CONCURRENCY", "8")))
+    HYBRID_RETRIEVAL_ENABLED: bool = os.getenv(
+        "HYBRID_RETRIEVAL_ENABLED", "false"
+    ).lower() in ("1", "true", "yes")
     SUPABASE_IO_CONCURRENCY: int = max(1, int(os.getenv("SUPABASE_IO_CONCURRENCY", "16")))
     CHAT_BATCH_MAX_ITEMS: int = max(1, int(os.getenv("CHAT_BATCH_MAX_ITEMS", "20")))
     CHAT_MAX_DOC_IDS_PER_QUERY: int = max(1, int(os.getenv("CHAT_MAX_DOC_IDS_PER_QUERY", "10")))

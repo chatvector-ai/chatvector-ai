@@ -320,6 +320,21 @@ docker compose down -v
 docker compose up --build
 ```
 
+### Hybrid retrieval (`content_tsv`)
+
+To enable vector + PostgreSQL full-text hybrid search (issue P3B-1), apply the migration
+and set `HYBRID_RETRIEVAL_ENABLED=true` in `backend/.env`:
+
+```bash
+docker compose exec db psql -U postgres -d postgres \
+    -f /docker-entrypoint-initdb.d/004_hybrid_retrieval.sql
+```
+
+Or paste the contents of `backend/db/init/004_hybrid_retrieval.sql` into `psql`.
+The column `content_tsv` is a generated `tsvector` from `chunk_text`; existing chunks
+are backfilled automatically. Hybrid retrieval requires the SQLAlchemy/PostgreSQL
+backend (`APP_ENV=development` or `APP_ENV=test` with `DATABASE_URL`).
+
 ### Ports
 
 - **8000** — HTTP API. Expose behind a reverse proxy or load balancer.
