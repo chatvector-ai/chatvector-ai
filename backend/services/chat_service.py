@@ -127,6 +127,7 @@ async def _retrieve_chunks_for_documents(
     query_embedding: list[float],
     match_count: int,
     session_id: Optional[str] = None,
+    query_text: Optional[str] = None,
 ) -> list:
     retrieval_semaphore = _get_retrieval_semaphore()
 
@@ -137,6 +138,7 @@ async def _retrieve_chunks_for_documents(
                 query_embedding=query_embedding,
                 match_count=match_count,
                 session_id=session_id,
+                query_text=query_text,
             )
 
     per_document_chunks = await asyncio.gather(
@@ -186,6 +188,7 @@ async def answer_question_for_document(
             query_embedding=query_embedding,
             match_count=match_count,
             session_id=session_id,
+            query_text=question,
         )
         for chunk in chunks:
             key = (chunk.document_id, chunk.chunk_index)
@@ -243,6 +246,7 @@ async def answer_question_stream_for_document(
                 doc_ids=[doc_id],
                 query_embedding=query_embedding,
                 match_count=match_count,
+                query_text=question,
             )
             for chunk in chunks:
                 key = (chunk.document_id, chunk.chunk_index)
@@ -359,6 +363,7 @@ async def answer_questions_for_documents_batch(
                     query_embedding=query_embedding,
                     match_count=query["match_count"],
                     session_id=session_id,
+                    query_text=query["question"],
                 )
                 for chunk in chunks:
                     key = (chunk.document_id, chunk.chunk_index)

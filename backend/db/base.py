@@ -65,8 +65,9 @@ class DatabaseService(ABC):
         query_embedding: list[float],
         match_count: int = 5,
         session_id: Optional[str] = None,
+        query_text: Optional[str] = None,
     ) -> list[ChunkMatch]:
-        """Run vector similarity search for chunks."""
+        """Run vector similarity search for chunks (optionally hybrid with keyword search)."""
         pass
 
     @abstractmethod

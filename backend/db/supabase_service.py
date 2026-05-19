@@ -231,7 +231,9 @@ class SupabaseService(DatabaseService):
         query_embedding: list[float],
         match_count: int = 5,
         session_id: Optional[str] = None,
+        query_text: Optional[str] = None,
     ) -> list[ChunkMatch]:
+        del query_text  # hybrid retrieval is SQLAlchemy/PostgreSQL only
         # TODO(Phase 3): use session_id for context filtering once implemented
         """Find similar chunks using Supabase RPC."""
         # TODO(Phase 3): use session_id for context filtering once implemented
