@@ -316,17 +316,9 @@ class SQLAlchemyService(DatabaseService):
             async with self._retrieval_semaphore:
                 async with self.async_session() as session:
                     if not use_hybrid:
-                        result = await session.execute(
-                            select(DocumentChunk, Document.file_name)
-                            .join(Document, DocumentChunk.document_id == Document.id)
-                            .where(DocumentChunk.document_id == doc_id)
-                            .order_by(DocumentChunk.embedding.op("<=>")(query_embedding))
-                            .limit(match_count)
+                        matches = await self._find_vector_chunks(
+                            session, doc_id, query_embedding, match_count
                         )
-                        matches = [
-                            self._chunk_match_from_row(chunk, file_name)
-                            for chunk, file_name in result.all()
-                        ]
                     else:
                         vector_matches, keyword_matches = await asyncio.gather(
                             self._find_vector_chunks(
