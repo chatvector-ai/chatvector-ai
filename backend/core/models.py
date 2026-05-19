@@ -3,8 +3,8 @@ from datetime import datetime
 import uuid
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Column, Computed, DateTime, ForeignKey, Integer, String
-from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import declarative_base
 
 from core.config import get_embedding_dim
@@ -30,13 +30,6 @@ class DocumentChunk(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=False)
     chunk_text = Column(String, nullable=False)
-    content_tsv = Column(
-        TSVECTOR,
-        Computed(
-            "to_tsvector('english', coalesce(chunk_text, ''))",
-            persisted=True,
-        ),
-    )
     embedding = Column(Vector(get_embedding_dim()), nullable=False)
     chunk_index = Column(Integer, nullable=False, default=0)
     page_number = Column(Integer, nullable=True)

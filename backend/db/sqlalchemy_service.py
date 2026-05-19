@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import delete, func, select, update as sql_update
+from sqlalchemy import delete, func, select, text, update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -277,15 +277,22 @@ class SQLAlchemyService(DatabaseService):
         query_text: str,
         limit: int,
     ) -> list[ChunkMatch]:
-        ts_query = func.plainto_tsquery("english", query_text)
-        rank = func.ts_rank(DocumentChunk.content_tsv, ts_query).label("keyword_rank")
+        """Full-text search on document_chunks.content_tsv (requires migration 004)."""
+        rank = text(
+            "ts_rank(document_chunks.content_tsv, plainto_tsquery('english', :query_text))"
+        ).label("keyword_rank")
         result = await session.execute(
             select(DocumentChunk, Document.file_name, rank)
             .join(Document, DocumentChunk.document_id == Document.id)
             .where(DocumentChunk.document_id == doc_id)
-            .where(DocumentChunk.content_tsv.op("@@")(ts_query))
+            .where(
+                text(
+                    "document_chunks.content_tsv @@ plainto_tsquery('english', :query_text)"
+                )
+            )
             .order_by(rank.desc())
-            .limit(limit)
+            .limit(limit),
+            {"query_text": query_text},
         )
         rows = result.all()
         return [
