@@ -56,10 +56,13 @@ async def rerank_chunks_if_enabled(
     """
     Apply configured reranking after retrieval and before context construction.
 
-    When ENABLE_RERANKING is false, returns chunks unchanged.
+    When ENABLE_RERANKING is false, returns chunks unchanged (no top_k truncation).
     """
     if not chunks:
         return []
+
+    if not config.ENABLE_RERANKING:
+        return chunks
 
     provider = get_reranker_provider()
     request = RerankRequest(query=query, candidates=chunks, top_k=top_k)

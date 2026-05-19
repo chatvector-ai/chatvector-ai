@@ -39,7 +39,16 @@ async def test_rerank_disabled_returns_original_order():
         result = await rerank_chunks_if_enabled("beta query", chunks, top_k=2)
 
     assert [c.id for c in result] == ["a", "b"]
-    assert isinstance(get_reranker_provider(), NoopRerankerProvider)
+
+
+@pytest.mark.asyncio
+async def test_rerank_disabled_does_not_truncate_to_top_k():
+    chunks = [_chunk(f"c{i}", f"content {i}", similarity=0.1) for i in range(6)]
+    with patch.object(config, "ENABLE_RERANKING", False):
+        result = await rerank_chunks_if_enabled("query", chunks, top_k=3)
+
+    assert len(result) == 6
+    assert [c.id for c in result] == [f"c{i}" for i in range(6)]
 
 
 @pytest.mark.asyncio
