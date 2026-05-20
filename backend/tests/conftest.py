@@ -29,11 +29,6 @@ os.environ.setdefault(
 from logging_config.logging_config import setup_logging
 setup_logging()
 
-import sys
-import asyncio
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
 env_file = BACKEND_DIR / ".env"
 if not env_file.exists():
     env_file.write_text(
@@ -51,6 +46,14 @@ if not env_file.exists():
         encoding="utf-8",
     )
 
+
+@pytest.fixture(scope="session")
+def event_loop_policy():
+    import asyncio
+    import sys
+    if sys.platform == "win32":
+        return asyncio.WindowsSelectorEventLoopPolicy()
+    return asyncio.DefaultEventLoopPolicy()
 
 @pytest.fixture(scope="session", autouse=True)
 def clear_test_logs():
