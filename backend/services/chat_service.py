@@ -272,6 +272,16 @@ async def answer_question_stream_for_document(
                     seen_chunk_keys.add(key)
                     all_chunks.append(chunk)
         matching_chunks = all_chunks
+        
+        if session_id:
+            import db
+            history = await db.get_session_history(
+                session_id=session_id, limit=config.MAX_SESSION_HISTORY_MESSAGES, tenant_id=tenant_id
+            )
+            if not session_context:
+                session_context = SessionContext()
+            session_context.chat_history = history
+            
         context = build_context_from_chunks(matching_chunks, session_context=session_context)
 
         full_answer_chunks: list[str] = []
@@ -403,7 +413,18 @@ async def answer_questions_for_documents_batch(
                         seen_chunk_keys.add(key)
                         all_chunks.append(chunk)
             matching_chunks = all_chunks
-            context = build_context_from_chunks(matching_chunks, session_context=session_context)
+            
+            query_session_context = session_context
+            if session_id:
+                import db
+                history = await db.get_session_history(
+                    session_id=session_id, limit=config.MAX_SESSION_HISTORY_MESSAGES, tenant_id=tenant_id
+                )
+                from copy import deepcopy
+                query_session_context = deepcopy(session_context) if session_context else SessionContext()
+                query_session_context.chat_history = history
+                
+            context = build_context_from_chunks(matching_chunks, session_context=query_session_context)
             answer = await generate_answer(query["question"], context)
 
             sources = _build_sources(matching_chunks)

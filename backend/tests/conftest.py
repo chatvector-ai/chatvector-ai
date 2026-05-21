@@ -20,7 +20,7 @@ os.environ.setdefault("GEN_AI_KEY", "test-genai-key")
 os.environ.setdefault("LOG_LEVEL", "DEBUG")
 os.environ.setdefault(
     "DATABASE_URL",
-    "postgresql+psycopg://postgres:postgres@localhost:5432/postgres",
+    "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres",
 )
 
 # Force logging setup BEFORE any app modules are imported.
@@ -39,7 +39,7 @@ if not env_file.exists():
                 "SUPABASE_KEY=test-key-123",
                 "GEN_AI_KEY=test-genai-key",
                 "LOG_LEVEL=DEBUG",
-                "DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/postgres",
+                "DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/postgres",
             ]
         )
         + "\n",
