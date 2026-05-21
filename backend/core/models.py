@@ -36,3 +36,14 @@ class DocumentChunk(Base):
     character_offset_start = Column(Integer, nullable=False, default=0)
     character_offset_end = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(String, nullable=False, index=True)
+    tenant_id = Column(String, nullable=True, index=True)
+    role = Column(String, nullable=False)
+    content = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)

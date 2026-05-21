@@ -53,9 +53,7 @@ jobs:
           PGDATABASE: postgres
         run: |
           set -euo pipefail
-          for f in backend/db/init/001_init.sql \
-                   backend/db/init/002_dimensionless_vector.sql \
-                   backend/db/init/003_atomic_delete.sql; do
+          for f in $(ls backend/db/init/*.sql | sort); do
             psql -v ON_ERROR_STOP=1 -f "$f"
           done
 

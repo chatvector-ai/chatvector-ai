@@ -72,12 +72,19 @@ async def chat_stream(request: Request, payload: ChatRequest, auth: AuthContext 
         )
 
     logger.info(f"Chat stream request received for document {payload.doc_id}")
+
+    # Initialize or retrieve session
+    session = get_or_create_session(
+        session_id=payload.session_id, tenant_id=auth.tenant_id
+    )
+
     return StreamingResponse(
         answer_question_stream_for_document(
             question=payload.question,
             doc_id=str(payload.doc_id),
             match_count=payload.match_count,
             auth=auth,
+            session_id=session.id,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

@@ -271,3 +271,59 @@ class SupabaseService(DatabaseService):
         except Exception as e:
             logger.error(f"[Supabase] Failed to retrieve chunks: {e}")
             raise
+
+    async def store_chat_message(
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        tenant_id: Optional[str] = None,
+    ) -> str:
+        from core.clients import supabase_client
+        
+        payload = {
+            "session_id": session_id,
+            "role": role,
+            "content": content,
+        }
+        if tenant_id:
+            payload["tenant_id"] = tenant_id
+
+        result = await self._run_io(
+            lambda: supabase_client.table("chat_messages")
+            .insert(payload)
+            .execute(),
+            operation_name="store_chat_message",
+        )
+
+        msg_id = result.data[0]["id"]
+        logger.debug(f"[Supabase] Stored chat message {msg_id} for session {session_id}")
+        return msg_id
+
+    async def get_session_history(
+        self,
+        session_id: str,
+        limit: int = 20,
+        tenant_id: Optional[str] = None,
+    ) -> list[dict]:
+        from core.clients import supabase_client
+        
+        def _op():
+            query = supabase_client.table("chat_messages").select("*").eq("session_id", session_id)
+            if tenant_id:
+                query = query.eq("tenant_id", tenant_id)
+            return query.order("created_at", desc=True).limit(limit).execute()
+
+        result = await self._run_io(_op, operation_name="get_session_history")
+        
+        messages = result.data or []
+        # Return ordered ascending (chronological)
+        return [
+            {
+                "id": msg["id"],
+                "role": msg["role"],
+                "content": msg["content"],
+                "created_at": msg.get("created_at"),
+            }
+            for msg in reversed(messages)
+        ]

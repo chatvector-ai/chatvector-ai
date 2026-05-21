@@ -22,3 +22,4 @@ class Session:
 class SessionContext:
     recent_queries: list[str] = field(default_factory=list)
     active_documents: list[str] = field(default_factory=list)
+    chat_history: list[dict] = field(default_factory=list)

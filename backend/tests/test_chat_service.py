@@ -29,7 +29,8 @@ class _FakeChunk:
     document_id: Optional[str] = None
 
 
-def test_answer_question_for_document_orchestrates_flow():
+@pytest.mark.asyncio
+async def test_answer_question_for_document_orchestrates_flow():
     chunks = [
         _FakeChunk(
             id="c1",
@@ -59,12 +60,10 @@ def test_answer_question_for_document_orchestrates_flow():
     ) as mock_context, patch(
         "services.chat_service.generate_answer", new=AsyncMock(return_value="final answer")
     ) as mock_answer:
-        result = asyncio.run(
-            answer_question_for_document(
+        result = await answer_question_for_document(
                 question="What is this about?",
                 doc_id="doc-123",
                 match_count=7,
-            )
         )
 
     assert result["question"] == "What is this about?"
@@ -87,8 +86,9 @@ def test_answer_question_for_document_orchestrates_flow():
     mock_answer.assert_awaited_once_with("What is this about?", "combined context")
 
 
-def test_answer_question_for_document_passes_session_id():
-    """Verify that a non-None session_id reaches find_similar_chunks."""
+@pytest.mark.asyncio
+async def test_answer_question_for_document_passes_session_id():
+    """Verify that a non-None session_id reaches find_similar_chunks and history retrieval."""
     with patch(
         "services.chat_service.get_embeddings",
         new=AsyncMock(return_value=[[0.1, 0.2]]),
@@ -98,14 +98,14 @@ def test_answer_question_for_document_passes_session_id():
         "services.chat_service.build_context_from_chunks", return_value="combined context"
     ), patch(
         "services.chat_service.generate_answer", new=AsyncMock(return_value="final answer")
+    ), patch("db.get_session_history", new=AsyncMock(return_value=[])) as mock_history, patch(
+        "db.store_chat_message", new=AsyncMock()
     ):
-        asyncio.run(
-            answer_question_for_document(
+        await answer_question_for_document(
                 question="Q",
                 doc_id="doc-session",
                 match_count=7,
                 session_id="session-abc",
-            )
         )
 
     mock_find.assert_awaited_once_with(
@@ -114,9 +114,11 @@ def test_answer_question_for_document_passes_session_id():
         match_count=7,
         session_id="session-abc",
     )
+    mock_history.assert_awaited_once()
 
 
-def test_answer_question_soft_llm_error_matches_batch_error_shape():
+@pytest.mark.asyncio
+async def test_answer_question_soft_llm_error_matches_batch_error_shape():
     """When the LLM returns a soft-failure string, /chat should mirror batch: status + error."""
     from services.answer_service import LLM_MSG_RATE_LIMIT
 
@@ -127,8 +129,7 @@ def test_answer_question_soft_llm_error_matches_batch_error_shape():
     ), patch(
         "services.chat_service.generate_answer", new=AsyncMock(return_value=LLM_MSG_RATE_LIMIT)
     ):
-        result = asyncio.run(
-            answer_question_for_document(question="Q?", doc_id="doc-1", match_count=3)
+        result = await answer_question_for_document(question="Q?", doc_id="doc-1", match_count=3
         )
 
     assert result["status"] == "error"
@@ -137,7 +138,8 @@ def test_answer_question_soft_llm_error_matches_batch_error_shape():
     assert result["doc_id"] == "doc-1"
 
 
-def test_answer_questions_for_documents_batch_processes_queries():
+@pytest.mark.asyncio
+async def test_answer_questions_for_documents_batch_processes_queries():
     queries = [
         {"question": "Q1", "doc_ids": ["doc-a", "doc-b"], "match_count": 3},
         {"question": "Q2", "doc_ids": ["doc-c"]},
@@ -167,7 +169,7 @@ def test_answer_questions_for_documents_batch_processes_queries():
         "services.chat_service.generate_answer",
         new=AsyncMock(side_effect=lambda question, context: f"{question}:{context}"),
     ) as mock_answer:
-        result = asyncio.run(answer_questions_for_documents_batch(queries))
+        result = await answer_questions_for_documents_batch(queries)
     assert [item["status"] for item in result] == ["ok", "ok"]
     assert [item["question"] for item in result] == ["Q1", "Q2"]
     assert result[0]["doc_ids"] == ["doc-a", "doc-b"]
@@ -181,7 +183,8 @@ def test_answer_questions_for_documents_batch_processes_queries():
     assert mock_answer.await_count == 2
 
 
-def test_answer_questions_for_documents_batch_respects_retrieval_concurrency_limit():
+@pytest.mark.asyncio
+async def test_answer_questions_for_documents_batch_respects_retrieval_concurrency_limit():
     queries = [
         {"question": "Q1", "doc_ids": ["d1", "d2", "d3"]},
         {"question": "Q2", "doc_ids": ["d4", "d5", "d6"]},
@@ -221,13 +224,14 @@ def test_answer_questions_for_documents_batch_respects_retrieval_concurrency_lim
         "services.chat_service.generate_answer",
         new=AsyncMock(return_value="answer"),
     ):
-        result = asyncio.run(answer_questions_for_documents_batch(queries))
+        result = await answer_questions_for_documents_batch(queries)
 
     assert len(result) == 3
     assert max_active_calls <= 2
 
 
-def test_answer_questions_for_documents_batch_returns_partial_failures():
+@pytest.mark.asyncio
+async def test_answer_questions_for_documents_batch_returns_partial_failures():
     queries = [
         {"question": "Q1", "doc_ids": ["doc-a"]},
         {"question": "Q2", "doc_ids": ["doc-b"]},
@@ -255,7 +259,7 @@ def test_answer_questions_for_documents_batch_returns_partial_failures():
         "services.chat_service.generate_answer",
         new=AsyncMock(side_effect=fake_generate_answer),
     ):
-        result = asyncio.run(answer_questions_for_documents_batch(queries))
+        result = await answer_questions_for_documents_batch(queries)
 
     assert len(result) == 2
     assert result[0]["status"] == "ok"
@@ -265,13 +269,14 @@ def test_answer_questions_for_documents_batch_returns_partial_failures():
     assert "LLM timeout" not in result[1]["error"]["message"]
 
 
-def test_answer_questions_for_documents_batch_rejects_duplicate_doc_ids():
+@pytest.mark.asyncio
+async def test_answer_questions_for_documents_batch_rejects_duplicate_doc_ids():
     queries = [
         {"question": "Q1", "doc_ids": ["doc-a", "doc-a"]},
     ]
 
     try:
-        asyncio.run(answer_questions_for_documents_batch(queries))
+        await answer_questions_for_documents_batch(queries)
         raise AssertionError("Expected ValueError was not raised")
     except ValueError as exc:
         assert "duplicate doc IDs" in str(exc)
@@ -282,7 +287,8 @@ def test_answer_questions_for_documents_batch_rejects_duplicate_doc_ids():
 # ---------------------------------------------------------------------------
 
 
-def test_answer_question_for_document_includes_sources_with_correct_shape():
+@pytest.mark.asyncio
+async def test_answer_question_for_document_includes_sources_with_correct_shape():
     chunks = [
         _FakeChunk(
             id="c1",
@@ -311,7 +317,7 @@ def test_answer_question_for_document_includes_sources_with_correct_shape():
     ), patch(
         "services.chat_service.generate_answer", new=AsyncMock(return_value="ans")
     ):
-        result = asyncio.run(answer_question_for_document(question="Q?", doc_id="doc-1"))
+        result = await answer_question_for_document(question="Q?", doc_id="doc-1")
 
     assert "sources" in result
     assert result["status"] == "ok"
@@ -322,7 +328,8 @@ def test_answer_question_for_document_includes_sources_with_correct_shape():
     ]
 
 
-def test_answer_question_for_document_sources_none_fields_for_txt():
+@pytest.mark.asyncio
+async def test_answer_question_for_document_sources_none_fields_for_txt():
     chunks = [
         _FakeChunk(
             id="c1",
@@ -343,7 +350,7 @@ def test_answer_question_for_document_sources_none_fields_for_txt():
     ), patch(
         "services.chat_service.generate_answer", new=AsyncMock(return_value="ans")
     ):
-        result = asyncio.run(answer_question_for_document(question="Q?", doc_id="doc-txt"))
+        result = await answer_question_for_document(question="Q?", doc_id="doc-txt")
 
     assert result["status"] == "ok"
     assert result["doc_id"] == "doc-txt"
@@ -352,7 +359,8 @@ def test_answer_question_for_document_sources_none_fields_for_txt():
     ]
 
 
-def test_batch_answer_includes_sources_in_ok_responses():
+@pytest.mark.asyncio
+async def test_batch_answer_includes_sources_in_ok_responses():
     queries = [{"question": "Q1", "doc_ids": ["doc-a"]}]
 
     chunks = [
@@ -375,7 +383,7 @@ def test_batch_answer_includes_sources_in_ok_responses():
     ), patch(
         "services.chat_service.generate_answer", new=AsyncMock(return_value="answer")
     ):
-        result = asyncio.run(answer_questions_for_documents_batch(queries))
+        result = await answer_questions_for_documents_batch(queries)
 
     assert result[0]["status"] == "ok"
     assert result[0]["sources"] == [
@@ -383,7 +391,8 @@ def test_batch_answer_includes_sources_in_ok_responses():
     ]
 
 
-def test_batch_soft_llm_error_uses_same_error_codes_as_single_chat():
+@pytest.mark.asyncio
+async def test_batch_soft_llm_error_uses_same_error_codes_as_single_chat():
     from services.answer_service import LLM_MSG_MISSING_API_KEY
 
     queries = [{"question": "Q1", "doc_ids": ["doc-a"]}]
@@ -395,7 +404,7 @@ def test_batch_soft_llm_error_uses_same_error_codes_as_single_chat():
     ), patch(
         "services.chat_service.generate_answer", new=AsyncMock(return_value=LLM_MSG_MISSING_API_KEY)
     ):
-        result = asyncio.run(answer_questions_for_documents_batch(queries))
+        result = await answer_questions_for_documents_batch(queries)
 
     assert result[0]["status"] == "error"
     assert result[0]["error"]["code"] == "llm_missing_api_key"
