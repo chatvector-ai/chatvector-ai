@@ -34,6 +34,19 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.start_time = time.time()
+    
+    if config.QUEUE_BACKEND == "redis":
+        from core.clients import redis_client
+        try:
+            await redis_client.ping()
+            logger.info("Successfully connected to Redis queue backend.")
+        except Exception as e:
+            logger.error(
+                "Failed to connect to Redis at REDIS_URL. Ensure Redis is running "
+                "or set QUEUE_BACKEND=memory for local development."
+            )
+            raise e
+
     # Resolve documents that were in-flight during the previous server run before
     # any workers start, so clients polling for status get a definitive answer.
     try:

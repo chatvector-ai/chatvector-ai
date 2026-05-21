@@ -124,7 +124,10 @@ class Settings:
 
     # Queue backend selection
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    QUEUE_BACKEND: str = os.getenv("QUEUE_BACKEND", "memory").strip().lower()
+    QUEUE_BACKEND: str = os.getenv(
+        "QUEUE_BACKEND", 
+        "redis" if APP_ENV.lower() == "production" else "memory"
+    ).strip().lower()
 
     # Background ingestion queue
     QUEUE_WORKER_COUNT: int = max(1, min(5, int(os.getenv("QUEUE_WORKER_COUNT", "3"))))

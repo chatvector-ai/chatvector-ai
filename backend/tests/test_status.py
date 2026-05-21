@@ -175,20 +175,21 @@ async def test_run_health_check_with_cache_tracks_embedding_and_llm_independentl
 
 
 @pytest.mark.parametrize(
-    "db_ok, embedding_ok, llm_ok, expected",
+    "db_ok, embedding_ok, llm_ok, redis_ok, expected",
     [
-        (True, True, True, "healthy"),
-        (True, False, True, "degraded"),
-        (True, True, False, "degraded"),
-        (True, False, False, "degraded"),
-        (False, True, True, "unhealthy"),
-        (False, False, False, "unhealthy"),
-        (False, True, False, "unhealthy"),
+        (True, True, True, True, "healthy"),
+        (True, False, True, True, "degraded"),
+        (True, True, False, True, "degraded"),
+        (True, False, False, True, "degraded"),
+        (False, True, True, True, "unhealthy"),
+        (False, False, False, True, "unhealthy"),
+        (False, True, False, True, "unhealthy"),
+        (True, True, True, False, "unhealthy"),
+        (False, True, True, False, "unhealthy"),
     ],
 )
-def test_overall_status_combinations(db_ok, embedding_ok, llm_ok, expected):
-    assert _overall_status(db_ok, embedding_ok, llm_ok) == expected
-
+def test_overall_status_combinations(db_ok, embedding_ok, llm_ok, redis_ok, expected):
+    assert _overall_status(db_ok, embedding_ok, llm_ok, redis_ok) == expected
 
 # NEW TEST: failing result cached, then refreshed after TTL
 @pytest.mark.asyncio

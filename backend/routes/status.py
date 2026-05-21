@@ -308,8 +308,17 @@ async def _llm_health_check() -> dict:
     return {"status": "ok", "latency_ms": latency_ms}
 
 
-def _overall_status(db_ok: bool, embedding_ok: bool, llm_ok: bool) -> str:
-    if not db_ok:
+async def _redis_health_check() -> dict:
+    t0 = time.monotonic()
+    try:
+        await asyncio.wait_for(redis_client.ping(), timeout=2.0)
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        return {"status": "ok", "latency_ms": latency_ms}
+    except Exception as e:
+        return {"status": "error", "error": _short_error_message(e)}
+
+def _overall_status(db_ok: bool, embedding_ok: bool, llm_ok: bool, redis_ok: bool) -> str:
+    if not db_ok or not redis_ok:
         return "unhealthy"
     if embedding_ok and llm_ok:
         return "healthy"
@@ -327,17 +336,27 @@ def _build_payload(
     workers_active: int,
     embedding_health: dict,
     llm_health: dict,
+    redis_health: dict | None,
 ) -> dict:
     db_component = "connected" if db_ok else "disconnected"
     embedding_ok = embedding_health.get("status") == "ok"
     llm_ok = llm_health.get("status") == "ok"
+    
+    redis_ok = True
+    queue_component = "memory"
+    if config.QUEUE_BACKEND == "redis":
+        queue_component = "redis (connected)" if redis_health and redis_health.get("status") == "ok" else "redis (disconnected)"
+        redis_ok = redis_health.get("status") == "ok" if redis_health else False
+        
     embeddings_component = "ok" if embedding_ok else "degraded"
     llm_component = "ok" if llm_ok else "degraded"
-    return {
-        "status": _overall_status(db_ok, embedding_ok, llm_ok),
+    
+    payload = {
+        "status": _overall_status(db_ok, embedding_ok, llm_ok, redis_ok),
         "components": {
             "api": "online",
             "database": db_component,
+            "queue": queue_component,
             "embeddings": embeddings_component,
             "llm": llm_component,
         },
@@ -355,6 +374,11 @@ def _build_payload(
         "uptime": uptime_str,
         "version": version,
     }
+    
+    if config.QUEUE_BACKEND == "redis" and redis_health:
+        payload["health_checks"]["redis"] = redis_health
+        
+    return payload
 
 
 def _format_ascii(data: dict) -> str:
@@ -369,6 +393,14 @@ def _format_ascii(data: dict) -> str:
         return "║  " + s[:inner].ljust(inner) + "║"
 
     db_line = "🟢 Database: Connected" if c["database"] == "connected" else "🔴 Database: Disconnected"
+    
+    q_line = "🟢 Queue: Memory"
+    if config.QUEUE_BACKEND == "redis":
+        if "connected" in c.get("queue", ""):
+            q_line = f"🟢 Queue: Redis Connected ({hc.get('redis', {}).get('latency_ms', 0)}ms)"
+        else:
+            q_line = "🔴 Queue: Redis Disconnected"
+            
     if emb_h.get("status") == "ok":
         emb_line = f"🟢 Embeddings: OK ({emb_h['latency_ms']}ms)"
     else:
@@ -395,6 +427,7 @@ def _format_ascii(data: dict) -> str:
         "╠════════════════════════════════════════════════════╣",
         row("🟢 API Server: ONLINE"),
         row(db_line),
+        row(q_line),
         row(emb_line),
         row(llm_line),
         row(""),
@@ -426,12 +459,22 @@ def _status_fallback_health_dict(exc: BaseException, label: str) -> dict:
 @limiter.limit(config.RATE_LIMIT_STATUS)
 async def status(request: Request, auth: AuthContext = Depends(require_auth)):  # auth reserved for Phase 3 tenant scoping
     start = getattr(request.app.state, "start_time", time.time())
-    db_result, embedding_result, llm_result = await asyncio.gather(
+    
+    tasks = [
         _database_connected_and_document_count(),
         _run_health_check_with_cache("embedding", _embedding_health_check),
-        _run_health_check_with_cache("llm", _llm_health_check),
-        return_exceptions=True,
-    )
+        _run_health_check_with_cache("llm", _llm_health_check)
+    ]
+    
+    if config.QUEUE_BACKEND == "redis":
+        tasks.append(_run_health_check_with_cache("redis", _redis_health_check))
+        
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    db_result = results[0]
+    embedding_result = results[1]
+    llm_result = results[2]
+    redis_result = results[3] if config.QUEUE_BACKEND == "redis" else None
 
     if isinstance(db_result, BaseException):
         logger.exception("Database health check raised unexpectedly")
@@ -448,6 +491,13 @@ async def status(request: Request, auth: AuthContext = Depends(require_auth)):  
         llm_health = _status_fallback_health_dict(llm_result, "LLM")
     else:
         llm_health = llm_result
+        
+    redis_health = None
+    if redis_result is not None:
+        if isinstance(redis_result, BaseException):
+            redis_health = _status_fallback_health_dict(redis_result, "Redis")
+        else:
+            redis_health = redis_result
 
     memory_pct = _process_memory_percent()
     version = _read_version()
@@ -465,6 +515,7 @@ async def status(request: Request, auth: AuthContext = Depends(require_auth)):  
         workers_active=workers_active,
         embedding_health=embedding_health,
         llm_health=llm_health,
+        redis_health=redis_health,
     )
 
     if _is_browser(request):
