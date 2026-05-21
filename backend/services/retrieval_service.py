@@ -1,10 +1,11 @@
 """
-Hybrid retrieval helpers: Reciprocal Rank Fusion (RRF) and result merging.
+Retrieval orchestration helpers: Hybrid search (RRF) and optional reranking.
 """
 
 from __future__ import annotations
 
 from db.base import ChunkMatch
+from services.reranker import rerank_chunks_if_enabled
 
 # Standard RRF constant (Cormack et al.)
 RRF_K_DEFAULT = 60
@@ -46,3 +47,5 @@ def merge_chunk_matches(
         if match is not None:
             merged.append(match)
     return merged
+
+__all__ = ["rerank_chunks_if_enabled", "reciprocal_rank_fusion", "merge_chunk_matches"]

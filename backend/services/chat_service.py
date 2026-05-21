@@ -9,6 +9,7 @@ from core.session import SessionContext
 from db import find_similar_chunks
 from services.context_service import build_context_from_chunks
 from services.query_service import transform_query
+from services.retrieval_service import rerank_chunks_if_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +153,11 @@ async def _retrieve_chunks_for_documents(
     return merged_chunks
 
 
+async def _finalize_retrieved_chunks(question: str, chunks: list, match_count: int) -> list:
+    """Apply optional reranking before context assembly."""
+    return await rerank_chunks_if_enabled(question, chunks, top_k=match_count)
+
+
 def _build_sources(chunks: list) -> list[dict]:
     """Extract citation metadata from retrieved chunks."""
     return [
@@ -195,15 +201,18 @@ async def answer_question_for_document(
             if key not in seen_chunk_keys:
                 seen_chunk_keys.add(key)
                 all_chunks.append(chunk)
-    matching_chunks = all_chunks
+    matching_chunks = await _finalize_retrieved_chunks(question, all_chunks, match_count)
     if session_id:
         import db
-        history = await db.get_session_history(
-            session_id=session_id, limit=config.MAX_SESSION_HISTORY_MESSAGES, tenant_id=tenant_id
-        )
-        if not session_context:
-            session_context = SessionContext()
-        session_context.chat_history = history
+        try:
+            history = await db.get_session_history(
+                session_id=session_id, limit=config.MAX_SESSION_HISTORY_MESSAGES, tenant_id=tenant_id
+            )
+            if not session_context:
+                session_context = SessionContext()
+            session_context.chat_history = history
+        except Exception as e:
+            logger.error(f"Failed to load chat history for session {session_id}: {e}", exc_info=True)
 
     context = build_context_from_chunks(matching_chunks, session_context=session_context)
     answer = await generate_answer(question, context)
@@ -275,16 +284,19 @@ async def answer_question_stream_for_document(
                 if key not in seen_chunk_keys:
                     seen_chunk_keys.add(key)
                     all_chunks.append(chunk)
-        matching_chunks = all_chunks
+        matching_chunks = await _finalize_retrieved_chunks(question, all_chunks, match_count)
         
         if session_id:
             import db
-            history = await db.get_session_history(
-                session_id=session_id, limit=config.MAX_SESSION_HISTORY_MESSAGES, tenant_id=tenant_id
-            )
-            if not session_context:
-                session_context = SessionContext()
-            session_context.chat_history = history
+            try:
+                history = await db.get_session_history(
+                    session_id=session_id, limit=config.MAX_SESSION_HISTORY_MESSAGES, tenant_id=tenant_id
+                )
+                if not session_context:
+                    session_context = SessionContext()
+                session_context.chat_history = history
+            except Exception as e:
+                logger.error(f"Failed to load chat history for session {session_id}: {e}", exc_info=True)
             
         context = build_context_from_chunks(matching_chunks, session_context=session_context)
 
@@ -417,17 +429,22 @@ async def answer_questions_for_documents_batch(
                     if key not in seen_chunk_keys:
                         seen_chunk_keys.add(key)
                         all_chunks.append(chunk)
-            matching_chunks = all_chunks
+            matching_chunks = await _finalize_retrieved_chunks(
+                query["question"], all_chunks, query["match_count"]
+            )
             
             query_session_context = session_context
             if session_id:
                 import db
-                history = await db.get_session_history(
-                    session_id=session_id, limit=config.MAX_SESSION_HISTORY_MESSAGES, tenant_id=tenant_id
-                )
-                from copy import deepcopy
-                query_session_context = deepcopy(session_context) if session_context else SessionContext()
-                query_session_context.chat_history = history
+                try:
+                    history = await db.get_session_history(
+                        session_id=session_id, limit=config.MAX_SESSION_HISTORY_MESSAGES, tenant_id=tenant_id
+                    )
+                    from copy import deepcopy
+                    query_session_context = deepcopy(session_context) if session_context else SessionContext()
+                    query_session_context.chat_history = history
+                except Exception as e:
+                    logger.error(f"Failed to load batch chat history for session {session_id}: {e}", exc_info=True)
                 
             context = build_context_from_chunks(matching_chunks, session_context=query_session_context)
             answer = await generate_answer(query["question"], context)
