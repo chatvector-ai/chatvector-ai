@@ -1,20 +1,23 @@
-import os
 import importlib
 from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
-def test_queue_backend_default_development():
+def test_queue_backend_default_development(monkeypatch):
     """Verify memory queue is default when APP_ENV is development."""
-    with patch.dict(os.environ, {"APP_ENV": "development"}, clear=True):
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.delenv("QUEUE_BACKEND", raising=False)
+    with patch("dotenv.load_dotenv"):
         import core.config
         importlib.reload(core.config)
         config = core.config.Settings()
         assert config.QUEUE_BACKEND == "memory"
 
-def test_queue_backend_default_production():
+def test_queue_backend_default_production(monkeypatch):
     """Verify redis queue is default when APP_ENV is production."""
-    with patch.dict(os.environ, {"APP_ENV": "production"}, clear=True):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("QUEUE_BACKEND", raising=False)
+    with patch("dotenv.load_dotenv"):
         import core.config
         importlib.reload(core.config)
         config = core.config.Settings()
