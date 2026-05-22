@@ -79,3 +79,16 @@ def get_or_create_session(
 def reset_session(session_id: str) -> bool:
     """Remove a session from the store."""
     return delete_session(session_id)
+
+
+def register_session_document(
+    session_id: str,
+    doc_id: str,
+    tenant_id: Optional[str] = None,
+) -> None:
+    """Track a document as part of the session's active document set."""
+    session = get_session(session_id, tenant_id)
+    if session is None:
+        return
+    if doc_id not in session.document_ids:
+        session.document_ids.append(doc_id)
