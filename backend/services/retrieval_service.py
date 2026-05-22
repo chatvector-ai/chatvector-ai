@@ -1,14 +1,114 @@
 """
-Retrieval orchestration helpers: Hybrid search (RRF) and optional reranking.
+Retrieval orchestration helpers: Hybrid search (RRF), optional reranking,
+and scoped retrieval (session vs tenant).
 """
 
 from __future__ import annotations
+
+from enum import Enum
 
 from db.base import ChunkMatch
 from services.reranker import rerank_chunks_if_enabled
 
 # Standard RRF constant (Cormack et al.)
 RRF_K_DEFAULT = 60
+
+
+class RetrievalScope(str, Enum):
+    SESSION = "session"
+    TENANT = "tenant"
+
+
+DEFAULT_RETRIEVAL_SCOPE = RetrievalScope.SESSION
+
+
+class InvalidRetrievalScopeError(ValueError):
+    """Raised when an unsupported retrieval scope value is provided."""
+
+    def __init__(self, scope: str) -> None:
+        super().__init__(
+            f"Invalid retrieval scope: {scope!r}. Must be one of: session, tenant"
+        )
+        self.scope = scope
+
+
+def parse_retrieval_scope(value: str | None) -> RetrievalScope:
+    """Parse and validate a retrieval scope string. Defaults to session."""
+    if value is None:
+        return DEFAULT_RETRIEVAL_SCOPE
+    normalized = value.strip().lower()
+    try:
+        return RetrievalScope(normalized)
+    except ValueError as exc:
+        raise InvalidRetrievalScopeError(value) from exc
+
+
+def resolve_scoped_doc_ids(
+    scope: RetrievalScope,
+    *,
+    requested_doc_ids: list[str],
+    session_doc_ids: list[str] | None = None,
+    tenant_doc_ids: list[str] | None = None,
+) -> list[str]:
+    """
+    Determine which document IDs to search based on retrieval scope.
+
+    Session scope (default):
+      - When the session has registered documents, search only those in the
+        session set (intersected with any explicitly requested IDs).
+      - When the session has no registered documents, use requested IDs
+        unchanged for backward compatibility.
+
+    Tenant scope:
+      - Search all documents registered to the tenant.
+      - When explicit requested IDs are provided, intersect with the tenant set
+        to prevent cross-tenant leakage.
+    """
+    session_docs = session_doc_ids or []
+    tenant_docs = tenant_doc_ids or []
+
+    if scope == RetrievalScope.SESSION:
+        if session_docs:
+            if requested_doc_ids:
+                session_set = set(session_docs)
+                return [doc_id for doc_id in requested_doc_ids if doc_id in session_set]
+            return list(session_docs)
+        return list(requested_doc_ids)
+
+    # Tenant scope — search all documents registered to the tenant.
+    if tenant_docs:
+        return list(tenant_docs)
+
+    # No tenant registry entries — fall back to requested IDs (dev / single-tenant)
+    return list(requested_doc_ids)
+
+
+def filter_doc_ids_for_tenant(
+    doc_ids: list[str],
+    tenant_doc_ids: list[str] | None,
+    tenant_id: str | None,
+) -> list[str]:
+    """Remove document IDs that do not belong to the current tenant."""
+    if not tenant_id or not tenant_doc_ids:
+        return list(doc_ids)
+    tenant_set = set(tenant_doc_ids)
+    return [doc_id for doc_id in doc_ids if doc_id in tenant_set]
+
+
+def assert_tenant_isolation(
+    doc_ids: list[str],
+    tenant_doc_ids: list[str] | None,
+    tenant_id: str | None,
+) -> None:
+    """Raise ValueError if any doc_id is outside the tenant's document set."""
+    if not tenant_id or not tenant_doc_ids:
+        return
+    tenant_set = set(tenant_doc_ids)
+    leaked = [doc_id for doc_id in doc_ids if doc_id not in tenant_set]
+    if leaked:
+        raise ValueError(
+            f"Document(s) not accessible for tenant {tenant_id!r}: {sorted(leaked)}"
+        )
 
 
 def reciprocal_rank_fusion(
@@ -48,4 +148,15 @@ def merge_chunk_matches(
             merged.append(match)
     return merged
 
-__all__ = ["rerank_chunks_if_enabled", "reciprocal_rank_fusion", "merge_chunk_matches"]
+__all__ = [
+    "DEFAULT_RETRIEVAL_SCOPE",
+    "InvalidRetrievalScopeError",
+    "RetrievalScope",
+    "assert_tenant_isolation",
+    "filter_doc_ids_for_tenant",
+    "merge_chunk_matches",
+    "parse_retrieval_scope",
+    "reciprocal_rank_fusion",
+    "rerank_chunks_if_enabled",
+    "resolve_scoped_doc_ids",
+]
