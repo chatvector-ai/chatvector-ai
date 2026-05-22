@@ -1,9 +1,24 @@
 """OpenAPI / docs URLs depend on APP_ENV (see main.FastAPI configuration)."""
 
 import importlib
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+
+
+def _reload_app(monkeypatch, app_env: str):
+    """Reload config/main for the requested APP_ENV."""
+    monkeypatch.setenv("APP_ENV", app_env)
+    if app_env == "development":
+        # Prevent backend/.env QUEUE_BACKEND=redis from enabling Redis startup in dev tests.
+        monkeypatch.setenv("QUEUE_BACKEND", "memory")
+    import core.config
+    import main
+
+    importlib.reload(core.config)
+    importlib.reload(main)
+    return main
 
 
 @pytest.fixture(autouse=True)
@@ -15,40 +30,25 @@ def _restore_main_after_test(monkeypatch):
 
     importlib.reload(core.config)
     importlib.reload(main)
+
+
 def test_docs_returns_404_when_app_env_production(monkeypatch):
-    monkeypatch.setenv("APP_ENV", "production")
-    import core.config
-    import main
+    main = _reload_app(monkeypatch, "production")
 
-    importlib.reload(core.config)
-    importlib.reload(main)
-
-    from unittest.mock import patch, AsyncMock
     with patch("core.clients.redis_client.ping", new_callable=AsyncMock), TestClient(main.app) as client:
-        # /docs
         response = client.get("/docs")
         assert response.status_code == 404
 
 
 def test_docs_returns_200_when_app_env_development(monkeypatch):
-    monkeypatch.setenv("APP_ENV", "development")
-    import core.config
-    import main
-
-    importlib.reload(core.config)
-    importlib.reload(main)
+    main = _reload_app(monkeypatch, "development")
 
     with TestClient(main.app) as client:
         assert client.get("/docs").status_code == 200
 
 
 def test_global_exception_handler_masks_errors(monkeypatch):
-    monkeypatch.setenv("APP_ENV", "development")
-    import core.config
-    import main
-
-    importlib.reload(core.config)
-    importlib.reload(main)
+    main = _reload_app(monkeypatch, "development")
 
     @main.app.get("/force-error-for-test")
     def force_error():
@@ -59,8 +59,8 @@ def test_global_exception_handler_masks_errors(monkeypatch):
 
     assert response.status_code == 500
     data = response.json()
-    
+
     assert data["detail"]["code"] == "internal_error"
     assert data["detail"]["message"] == "An unexpected error occurred."
-    
+
     assert "SENSITIVE_DB_PASSWORD_LEAK" not in response.text
