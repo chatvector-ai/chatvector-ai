@@ -60,9 +60,9 @@ def resolve_scoped_doc_ids(
         unchanged for backward compatibility.
 
     Tenant scope:
-      - Search all documents registered to the tenant.
-      - When explicit requested IDs are provided, intersect with the tenant set
-        to prevent cross-tenant leakage.
+      - Search all documents registered to the tenant, ignoring any explicitly
+        requested IDs. Cross-tenant leakage is prevented because the registry
+        only contains documents registered under the authenticated tenant.
     """
     session_docs = session_doc_ids or []
     tenant_docs = tenant_doc_ids or []
