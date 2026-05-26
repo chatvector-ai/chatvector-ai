@@ -275,4 +275,4 @@ to get started.
 
 ## 📄 License
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/chatvector-ai/chatvector-ai/blob/main/LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/chatvector-ai/chatvector-ai/blob/main/LICENSE)Fix readme boilerplate
