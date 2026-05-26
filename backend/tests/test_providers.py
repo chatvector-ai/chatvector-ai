@@ -590,7 +590,7 @@ class TestOllamaGenerateParsing:
 
 
 class TestVoyageEmbedParsing:
-    """Verify VoyageEmbeddingProvider.embed() extracts response['embeddings']."""
+    """Verify VoyageEmbeddingProvider.embed() extracts data[i]["embedding"]."""
 
     async def test_returns_embeddings_list(self):
         from unittest.mock import AsyncMock, MagicMock
@@ -615,10 +615,11 @@ class TestVoyageEmbedParsing:
 
         assert result == [[0.1, 0.2], [0.3, 0.4]]
 
-    async def test_missing_api_key_raises_auth_error(self):
-        from services.providers.voyage import VoyageEmbeddingProvider
+    async def test_missing_api_key_raises_auth_error(self, monkeypatch):
+        from services.providers.voyage import VoyageEmbeddingProvider, config
         from services.providers.base import ProviderAuthError
 
+        monkeypatch.setattr(config, "VOYAGE_API_KEY", None)
         provider = VoyageEmbeddingProvider(api_key=None)
 
         with pytest.raises(ProviderAuthError, match="VOYAGE_API_KEY is not configured"):

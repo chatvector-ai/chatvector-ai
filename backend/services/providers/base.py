@@ -60,7 +60,7 @@ KNOWN_EMBEDDING_DIMS: dict[str, int] = {
     # Voyage AI
     "voyage-3-large": 1024,
     "voyage-3": 1024,
-    "voyage-3-lite": 1024,
+    "voyage-3-lite": 512,
     "voyage-code-2": 1536,
     "voyage-law-2": 1024,
     "voyage-2": 1024,
