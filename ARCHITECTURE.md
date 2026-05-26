@@ -65,11 +65,13 @@ An abstract base class defines the contract for each service type:
 - `EmbeddingProvider` — `async def embed(texts) -> list[list[float]]`
 - `LLMProvider` — `async def generate(prompt, ...) -> str`
 
-Three implementations:
+Multiple implementations:
 
 - `GeminiEmbeddingProvider` / `GeminiLLMProvider` (default)
 - `OpenAIEmbeddingProvider` / `OpenAILLMProvider`
 - `OllamaEmbeddingProvider` / `OllamaLLMProvider`
+- `VoyageEmbeddingProvider` (embedding-only)
+- `AnthropicLLMProvider` (LLM-only)
 
 Selected via environment variables (`LLM_PROVIDER`, `EMBEDDING_PROVIDER`) through factory functions in:
 

@@ -584,6 +584,136 @@ class TestOllamaGenerateParsing:
         assert result == "No response."
 
 
+# ---------------------------------------------------------------------------
+# Voyage AI embed() response parsing
+# ---------------------------------------------------------------------------
+
+
+class TestVoyageEmbedParsing:
+    """Verify VoyageEmbeddingProvider.embed() extracts response['embeddings']."""
+
+    async def test_returns_embeddings_list(self):
+        from unittest.mock import AsyncMock, MagicMock
+        from services.providers.voyage import VoyageEmbeddingProvider
+
+        provider = VoyageEmbeddingProvider(api_key="test-key")
+
+        fake_response = MagicMock()
+        fake_response.raise_for_status = MagicMock()
+        fake_response.json = MagicMock(
+            return_value={
+                "object": "list",
+                "data": [
+                    {"object": "embedding", "embedding": [0.1, 0.2], "index": 0},
+                    {"object": "embedding", "embedding": [0.3, 0.4], "index": 1},
+                ],
+            }
+        )
+        provider._client.post = AsyncMock(return_value=fake_response)
+
+        result = await provider.embed(["a", "b"])
+
+        assert result == [[0.1, 0.2], [0.3, 0.4]]
+
+    async def test_missing_api_key_raises_auth_error(self):
+        from services.providers.voyage import VoyageEmbeddingProvider
+        from services.providers.base import ProviderAuthError
+
+        provider = VoyageEmbeddingProvider(api_key=None)
+
+        with pytest.raises(ProviderAuthError, match="VOYAGE_API_KEY is not configured"):
+            await provider.embed(["test"])
+
+    async def test_batches_large_inputs(self):
+        from unittest.mock import AsyncMock, MagicMock
+        from services.providers.voyage import VoyageEmbeddingProvider
+
+        provider = VoyageEmbeddingProvider(api_key="test-key")
+        BATCH = 128
+        total = BATCH * 2 + 1
+
+        call_count = 0
+
+        async def fake_post(url, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            batch = kwargs.get("json", {}).get("input", [])
+            batch_size = len(batch)
+            resp = MagicMock()
+            resp.raise_for_status = MagicMock()
+            dim = 3
+            embeddings = [
+                {"object": "embedding", "embedding": [float(call_count)] * dim, "index": j}
+                for j in range(batch_size)
+            ]
+            resp.json = MagicMock(return_value={"object": "list", "data": embeddings})
+            return resp
+
+        provider._client.post = fake_post
+
+        texts = ["t"] * total
+        result = await provider.embed(texts)
+
+        assert call_count == 3
+        assert len(result) == total
+        assert result[0] == [1.0, 1.0, 1.0]
+        assert result[BATCH - 1] == [1.0, 1.0, 1.0]
+        assert result[BATCH] == [2.0, 2.0, 2.0]
+        assert result[-1] == [3.0, 3.0, 3.0]
+
+
+# ---------------------------------------------------------------------------
+# Voyage AI error classification
+# ---------------------------------------------------------------------------
+
+
+class TestVoyageErrorClassification:
+    """Verify Voyage error mappers classify httpx errors correctly."""
+
+    def test_http_429_is_rate_limit(self):
+        import httpx
+        from services.providers.voyage import _classify_http_error, _classify_network_error
+
+        response = httpx.Response(429, request=httpx.Request("POST", "http://test"))
+        exc = httpx.HTTPStatusError("rate limited", request=response.request, response=response)
+        result = _classify_http_error(exc)
+        assert isinstance(result, ProviderRateLimitError)
+
+    def test_http_401_is_auth(self):
+        import httpx
+        from services.providers.voyage import _classify_http_error
+
+        response = httpx.Response(401, request=httpx.Request("POST", "http://test"))
+        exc = httpx.HTTPStatusError("unauthorized", request=response.request, response=response)
+        result = _classify_http_error(exc)
+        assert isinstance(result, ProviderAuthError)
+
+    def test_http_500_is_provider_error(self):
+        import httpx
+        from services.providers.voyage import _classify_http_error
+
+        response = httpx.Response(500, request=httpx.Request("POST", "http://test"))
+        exc = httpx.HTTPStatusError("server error", request=response.request, response=response)
+        result = _classify_http_error(exc)
+        assert isinstance(result, ProviderError)
+
+    def test_timeout_is_provider_timeout(self):
+        import httpx
+        from services.providers.voyage import _classify_network_error
+
+        exc = httpx.ReadTimeout("timed out")
+        result = _classify_network_error(exc)
+        assert isinstance(result, ProviderTimeoutError)
+
+    def test_connect_error_is_connection(self):
+        import httpx
+        from services.providers.voyage import _classify_network_error
+
+        exc = httpx.ConnectError("refused")
+        result = _classify_network_error(exc)
+        assert isinstance(result, ProviderConnectionError)
+
+
 class TestEmbeddingDimResolution:
     """embedding_dim must not silently default for unknown models."""
 

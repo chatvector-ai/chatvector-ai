@@ -57,6 +57,13 @@ KNOWN_EMBEDDING_DIMS: dict[str, int] = {
     "mxbai-embed-large": 1024,
     "all-minilm": 384,
     "snowflake-arctic-embed": 1024,
+    # Voyage AI
+    "voyage-3-large": 1024,
+    "voyage-3": 1024,
+    "voyage-3-lite": 1024,
+    "voyage-code-2": 1536,
+    "voyage-law-2": 1024,
+    "voyage-2": 1024,
 }
 
 # Default embedding model per provider (must match the defaults in each
@@ -65,6 +72,7 @@ _DEFAULT_EMBEDDING_MODELS: dict[str, str] = {
     "gemini": "models/gemini-embedding-001",
     "openai": "text-embedding-3-small",
     "ollama": "nomic-embed-text",
+    "voyage": "voyage-3-large",
 }
 
 

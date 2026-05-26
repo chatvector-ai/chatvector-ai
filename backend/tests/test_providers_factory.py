@@ -58,6 +58,18 @@ class TestGetEmbeddingProvider:
         assert isinstance(provider, EmbeddingProvider)
         assert type(provider).__name__ == "OllamaEmbeddingProvider"
 
+    def test_voyage_selection(self, monkeypatch):
+        monkeypatch.setattr(providers_mod.config, "EMBEDDING_PROVIDER", "voyage")
+        provider = providers_mod.get_embedding_provider()
+        assert isinstance(provider, EmbeddingProvider)
+        assert type(provider).__name__ == "VoyageEmbeddingProvider"
+
+    def test_voyage_singleton(self, monkeypatch):
+        monkeypatch.setattr(providers_mod.config, "EMBEDDING_PROVIDER", "voyage")
+        p1 = providers_mod.get_embedding_provider()
+        p2 = providers_mod.get_embedding_provider()
+        assert p1 is p2
+
     def test_singleton_caching(self, monkeypatch):
         monkeypatch.setattr(providers_mod.config, "EMBEDDING_PROVIDER", "ollama")
         p1 = providers_mod.get_embedding_provider()

@@ -532,7 +532,7 @@ LOG_LEVEL=INFO
 
 # Provider selection (optional — defaults to gemini)
 # LLM_PROVIDER=gemini          # gemini | openai | ollama | anthropic
-# EMBEDDING_PROVIDER=gemini    # gemini | openai | ollama
+# EMBEDDING_PROVIDER=gemini    # gemini | openai | ollama | voyage
 # See backend/.env.example for all provider options
 ```
 

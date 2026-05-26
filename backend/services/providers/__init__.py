@@ -48,10 +48,16 @@ def get_embedding_provider() -> EmbeddingProvider:
         _embedding_provider = OllamaEmbeddingProvider()
         logger.info("Using Ollama embedding provider")
 
+    elif name == "voyage":
+        from services.providers.voyage import VoyageEmbeddingProvider
+
+        _embedding_provider = VoyageEmbeddingProvider()
+        logger.info("Using Voyage AI embedding provider")
+
     else:
         raise ValueError(
             f"Unknown EMBEDDING_PROVIDER={name!r}. "
-            f"Expected one of: gemini, openai, ollama."
+            f"Expected one of: gemini, openai, ollama, voyage."
         )
 
     return _embedding_provider
