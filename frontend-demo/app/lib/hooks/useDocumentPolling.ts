@@ -16,7 +16,15 @@ function mapApiStatusToUi(apiStatus: string): PolledDocumentStatus {
   return "processing";
 }
 
-/** Returns all pipeline stages that come strictly before `currentStage`. */
+/** Format a duration in milliseconds to a human-readable string. */
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.round(seconds % 60);
+  return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+}
 function stagesBefore(currentStage: string): string[] {
   const idx = PIPELINE_STAGES.indexOf(currentStage as never);
   if (idx <= 0) return [];
@@ -65,6 +73,7 @@ export function useDocumentPolling(
   completedStages: string[];
   chunks: { total: number; processed: number } | undefined;
   awaitingProcessing: boolean;
+  processingTime: string | undefined;
 } {
   const [polledUiStatus, setPolledUiStatus] = useState<
     PolledDocumentStatus | undefined
@@ -75,6 +84,7 @@ export function useDocumentPolling(
     { total: number; processed: number } | undefined
   >(undefined);
   const [awaitingProcessing, setAwaitingProcessing] = useState(false);
+  const [processingTime, setProcessingTime] = useState<string | undefined>(undefined);
 
   // A toggle for environments/situations where SSE fails
   const [useFallbackPolling, setUseFallbackPolling] = useState(false);
@@ -94,6 +104,7 @@ export function useDocumentPolling(
       setChunks(undefined);
       setAwaitingProcessing(false);
       setUseFallbackPolling(false);
+      setProcessingTime(undefined);
     }
   }, [docKey]);
 
@@ -138,6 +149,15 @@ export function useDocumentPolling(
 
           const ui = mapApiStatusToUi(payload.status);
           setPolledUiStatus(ui);
+
+          // Compute processing duration when ingestion completes
+          if (ui === "ready" && payload.created_at && payload.updated_at) {
+            const created = new Date(payload.created_at).getTime();
+            const updated = new Date(payload.updated_at).getTime();
+            if (!isNaN(created) && !isNaN(updated) && updated > created) {
+              setProcessingTime(formatDuration(updated - created));
+            }
+          }
 
           if (payload.status === "completed" || payload.status === "failed") {
             eventSource?.close();
@@ -195,6 +215,15 @@ export function useDocumentPolling(
 
           const ui = mapApiStatusToUi(payload.status);
           setPolledUiStatus(ui);
+
+          // Compute processing duration when ingestion completes
+          if (ui === "ready" && payload.created_at && payload.updated_at) {
+            const created = new Date(payload.created_at).getTime();
+            const updated = new Date(payload.updated_at).getTime();
+            if (!isNaN(created) && !isNaN(updated) && updated > created) {
+              setProcessingTime(formatDuration(updated - created));
+            }
+          }
           
           if (payload.status === "completed" || payload.status === "failed") {
               if (interval) clearInterval(interval);
@@ -232,5 +261,6 @@ export function useDocumentPolling(
     completedStages,
     chunks,
     awaitingProcessing: enabled && awaitingProcessing,
+    processingTime,
   };
 }

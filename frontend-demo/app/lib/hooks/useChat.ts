@@ -72,6 +72,7 @@ export function useChat(sessionId: string | null) {
         status: "ready",
         stage: "completed",
         chunks: poll.chunks,
+        processingTime: poll.processingTime,
       };
     });
     setMessages((prev) => [

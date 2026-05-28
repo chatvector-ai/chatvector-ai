@@ -15,6 +15,7 @@ export type UploadModalAttachment = {
   status: "processing" | "ready" | "failed";
   stage?: string;
   chunks?: { total: number; processed: number };
+  processingTime?: string;
 };
 
 type Props = {
@@ -307,6 +308,9 @@ export default function UploadModal({
                       <br />
                       Successful
                     </p>
+                    {attachment?.processingTime && (
+                      <p className="text-xs text-muted">Processed in {attachment.processingTime}</p>
+                    )}
                   </>
                 ) : (
                   <>
