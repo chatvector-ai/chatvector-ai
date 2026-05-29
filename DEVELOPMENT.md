@@ -176,6 +176,26 @@ worker pool. Poll `GET /documents/{id}/status` for progress.
 queued → extracting → chunking → embedding → storing → completed
                                                       ↘ failed
 ```
+### Status updates: poll vs stream
+
+There are two ways to track ingestion progress after upload:
+
+**Poll:** `GET /documents/{document_id}/status`
+Standard JSON response. Works with any HTTP client and is the recommended
+fallback for simple integrations.
+
+**Stream:** `GET /documents/{document_id}/status/stream`
+Server-Sent Events (SSE). Requires `ENABLE_STREAMING=true` in
+`backend/.env` (see `backend/.env.example`). The event name is `status`;
+the payload shape matches the poll endpoint — same `status`, `chunks`,
+`error`, `timestamps`, and `queue_position` (when queued) fields.
+
+**Frontend demo behavior:** the demo client (`frontend-demo/app/lib/hooks/useDocumentPolling.ts`)
+tries the SSE stream first and falls back to polling automatically if the
+stream fails or streaming is disabled.
+
+> **Note:** The stream endpoint works by polling the database on a ~1 second
+> interval and emitting SSE events — it is not a push-from-worker channel yet.
 
 **Key config:**
 
