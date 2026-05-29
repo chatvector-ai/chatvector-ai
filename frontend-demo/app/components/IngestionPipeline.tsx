@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, AlertCircle } from "lucide-react";
+import {
+  formatChunkProgress,
+  shouldShowChunkProgress,
+} from "../lib/chunkProgress";
 import { PIPELINE_STAGES, PIPELINE_STAGE_LABELS } from "../lib/stageLabels";
 
 /** ms between each incremental stage completion when fast-forwarding. */
@@ -114,8 +118,9 @@ function StageRow({
   isLast: boolean;
   chunks?: { total: number; processed: number };
 }) {
-  const showChunks =
-    stageKey === "embedding" && state === "active" && chunks?.total;
+  const showChunks = shouldShowChunkProgress({ stageKey, state, chunks });
+  const chunkProgressLabel =
+    showChunks && chunks ? formatChunkProgress(chunks) : null;
 
   return (
     <li className="flex items-start gap-3">
@@ -172,9 +177,9 @@ function StageRow({
         >
           {label}
         </span>
-        {showChunks && (
+        {chunkProgressLabel && (
           <p className="absolute top-full -mt-3 text-xs text-muted">
-            {chunks!.total} chunk{chunks!.total !== 1 ? "s" : ""}
+            {chunkProgressLabel}
           </p>
         )}
       </div>

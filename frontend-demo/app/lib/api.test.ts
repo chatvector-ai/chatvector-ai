@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { sendMessage, ChatError } from "./api";
+import { sendMessage, ChatError, getDocumentStatus } from "./api";
 
 const MOCK_RESPONSE = {
   question: "What is RAG?",
@@ -88,6 +88,55 @@ describe("sendMessage", () => {
     await expect(sendMessage("q", "doc-123")).rejects.toThrow(ChatError);
     await expect(sendMessage("q", "doc-123")).rejects.toMatchObject({
       code: "unexpected",
+    });
+  });
+});
+
+describe("getDocumentStatus", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("returns numeric chunk progress from polling responses", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: "embedding",
+          stage: "embedding",
+          chunks: { processed: 0, total: 24 },
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(getDocumentStatus("/documents/doc-123/status")).resolves.toEqual({
+      status: "embedding",
+      stage: "embedding",
+      chunks: { processed: 0, total: 24 },
+    });
+  });
+
+  it("drops malformed chunk progress instead of passing it to the UI", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: "embedding",
+          stage: "embedding",
+          chunks: { processed: "0", total: "24" },
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(getDocumentStatus("/documents/doc-123/status")).resolves.toEqual({
+      status: "embedding",
+      stage: "embedding",
     });
   });
 });
