@@ -22,16 +22,50 @@ export type ChatResponse = {
   chunks: number;
   answer: string;
   sources: ChatSource[];
+  status?: "ok" | "error";
+  error?: { code: ChatErrorCode; message: string };
+};
+
+export type ChatErrorCode =
+  | "llm_missing_api_key"
+  | "llm_invalid_api_key"
+  | "llm_rate_limited"
+  | "llm_timeout_or_connection"
+  | "llm_unexpected";
+
+const CHAT_ERROR_MESSAGES: Record<ChatErrorCode, string> = {
+  llm_missing_api_key:
+    "No API key is configured. Check your `LLM_API_KEY` environment variable.",
+  llm_invalid_api_key:
+    "The configured API key was rejected. Verify your `LLM_API_KEY` is correct.",
+  llm_rate_limited:
+    "The LLM provider is rate limiting requests. Try again in a moment.",
+  llm_timeout_or_connection:
+    "The LLM provider timed out. Check your network and try again.",
+  llm_unexpected: "An unexpected error occurred with the LLM provider.",
 };
 
 export class ChatError extends Error {
   constructor(
-    public readonly code: "no_document" | "backend_unreachable" | "unexpected",
+    public readonly code:
+      | "no_document"
+      | "backend_unreachable"
+      | "unexpected"
+      | ChatErrorCode,
     message: string
   ) {
     super(message);
     this.name = "ChatError";
   }
+}
+
+function isChatErrorCode(code: unknown): code is ChatErrorCode {
+  return typeof code === "string" && code in CHAT_ERROR_MESSAGES;
+}
+
+function toSoftLlmChatError(error?: ChatResponse["error"]): ChatError {
+  const code = isChatErrorCode(error?.code) ? error.code : "llm_unexpected";
+  return new ChatError(code, CHAT_ERROR_MESSAGES[code]);
 }
 
 export async function sendMessage(
@@ -84,7 +118,12 @@ export async function sendMessage(
     );
   }
 
-  return (await res.json()) as ChatResponse;
+  const response = (await res.json()) as ChatResponse;
+  if (response.status === "error") {
+    throw toSoftLlmChatError(response.error);
+  }
+
+  return response;
 }
 
 export async function deleteDocument(

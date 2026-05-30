@@ -49,6 +49,65 @@ describe("sendMessage", () => {
     );
   });
 
+  it.each([
+    [
+      "llm_missing_api_key",
+      "No API key is configured. Check your `LLM_API_KEY` environment variable.",
+    ],
+    [
+      "llm_invalid_api_key",
+      "The configured API key was rejected. Verify your `LLM_API_KEY` is correct.",
+    ],
+    [
+      "llm_rate_limited",
+      "The LLM provider is rate limiting requests. Try again in a moment.",
+    ],
+    [
+      "llm_timeout_or_connection",
+      "The LLM provider timed out. Check your network and try again.",
+    ],
+    [
+      "llm_unexpected",
+      "An unexpected error occurred with the LLM provider.",
+    ],
+  ])("throws a helpful message for %s soft failures", async (code, message) => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ...MOCK_RESPONSE,
+          status: "error",
+          error: { code, message: "Backend provider error." },
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(sendMessage("q", "doc-123")).rejects.toMatchObject({
+      name: "ChatError",
+      code,
+      message,
+    });
+  });
+
+  it("falls back to the generic LLM message for unknown soft failure codes", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ...MOCK_RESPONSE,
+          status: "error",
+          error: { code: "llm_error", message: "Provider failed." },
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(sendMessage("q", "doc-123")).rejects.toMatchObject({
+      name: "ChatError",
+      code: "llm_unexpected",
+      message: "An unexpected error occurred with the LLM provider.",
+    });
+  });
+
   it("throws no_document on 404", async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(null, { status: 404 })
