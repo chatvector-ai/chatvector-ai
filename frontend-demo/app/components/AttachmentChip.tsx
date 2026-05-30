@@ -9,6 +9,7 @@ type Props = {
   stage?: string;
   chunks?: { total: number; processed: number };
   awaitingProcessing?: boolean;
+  processingTime?: string;
   onRemove: () => void;
 };
 
@@ -54,6 +55,7 @@ export default function AttachmentChip({
   stage,
   chunks,
   awaitingProcessing = false,
+  processingTime,
   onRemove,
 }: Props) {
   const label = chipLabel(
@@ -74,6 +76,11 @@ export default function AttachmentChip({
       >
         {label}
       </span>
+      {status === "ready" && processingTime && (
+        <span className="shrink-0 text-[10px] text-subtle" title={`Processed in ${processingTime}`}>
+          {processingTime}
+        </span>
+      )}
       <button
         type="button"
         onClick={onRemove}

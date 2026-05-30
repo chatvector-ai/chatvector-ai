@@ -72,6 +72,7 @@ export function useChat(sessionId: string | null) {
         status: "ready",
         stage: "completed",
         chunks: poll.chunks,
+        processingTime: poll.processingTime,
       };
     });
     setMessages((prev) => [
@@ -82,7 +83,7 @@ export function useChat(sessionId: string | null) {
         text: `Document "${name}" is ready. You can ask questions about it.`,
       },
     ]);
-  }, [poll.status, poll.chunks, attachment]);
+  }, [poll.status, poll.chunks, poll.processingTime, attachment]);
 
   useEffect(() => {
     if (poll.status !== "failed" || !attachment || attachment.status !== "processing") {

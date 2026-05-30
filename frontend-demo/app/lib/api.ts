@@ -118,6 +118,8 @@ export type DocumentStatusPayload = {
   stage?: string;
   error?: { stage?: string };
   chunks?: { total: number; processed: number } | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 function parseChunks(raw: unknown): { total: number; processed: number } | undefined {
@@ -146,11 +148,15 @@ export async function getDocumentStatus(
     errorRaw != null && typeof errorRaw === "object"
       ? { stage: (errorRaw as Record<string, unknown>).stage as string | undefined }
       : undefined;
+  const createdAt = data?.created_at as string | null | undefined;
+  const updatedAt = data?.updated_at as string | null | undefined;
   return {
     status,
     ...(stage !== undefined ? { stage } : {}),
     ...(error !== undefined ? { error } : {}),
     ...(chunks !== undefined ? { chunks } : {}),
+    ...(createdAt !== undefined ? { created_at: createdAt } : {}),
+    ...(updatedAt !== undefined ? { updated_at: updatedAt } : {}),
   };
 }
 
