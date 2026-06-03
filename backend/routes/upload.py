@@ -9,6 +9,7 @@ from middleware.rate_limit import limiter
 import db
 from services.ingestion_pipeline import IngestionPipeline, UploadPipelineError, _sanitize_filename
 from services.queue_service import QueueFull, QueueJob, ingestion_queue
+from services.tenant_registry import register_tenant_document
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -54,6 +55,7 @@ async def upload(request: Request, file: UploadFile = File(...), auth: AuthConte
 
         # Persist the document record so the status endpoint works immediately
         doc_id = await db.create_document(safe_filename, tenant_id=tenant_id)
+        register_tenant_document(tenant_id, doc_id)
         await db.update_document_status(doc_id=doc_id, status="queued", tenant_id=tenant_id)
 
         job = QueueJob(

@@ -9,7 +9,14 @@ from core.session import SessionContext
 from db import find_similar_chunks
 from services.context_service import build_context_from_chunks
 from services.query_service import transform_query
-from services.retrieval_service import rerank_chunks_if_enabled
+from services.retrieval_service import (
+    filter_doc_ids_for_tenant,
+    parse_retrieval_scope,
+    rerank_chunks_if_enabled,
+    resolve_scoped_doc_ids,
+)
+from services.session_service import get_session
+from services.tenant_registry import get_tenant_document_ids
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +130,34 @@ def _normalize_doc_ids(doc_ids: list[str], *, query_index: int) -> list[str]:
     return normalized
 
 
+def _resolve_retrieval_doc_ids(
+    *,
+    scope: str | None,
+    requested_doc_ids: list[str],
+    session_id: Optional[str] = None,
+    tenant_id: Optional[str] = None,
+) -> list[str]:
+    """Apply retrieval scope rules and tenant isolation checks."""
+    retrieval_scope = parse_retrieval_scope(scope)
+
+    session_doc_ids: list[str] = []
+    if session_id:
+        session = get_session(session_id, tenant_id)
+        if session:
+            session_doc_ids = list(session.document_ids)
+
+    tenant_doc_ids = get_tenant_document_ids(tenant_id)
+
+    doc_ids = resolve_scoped_doc_ids(
+        retrieval_scope,
+        requested_doc_ids=requested_doc_ids,
+        session_doc_ids=session_doc_ids,
+        tenant_doc_ids=tenant_doc_ids,
+    )
+    doc_ids = filter_doc_ids_for_tenant(doc_ids, tenant_doc_ids, tenant_id)
+    return doc_ids
+
+
 async def _retrieve_chunks_for_documents(
     doc_ids: list[str],
     query_embedding: list[float],
@@ -177,12 +212,33 @@ async def answer_question_for_document(
     auth: Optional[AuthContext] = None,
     session_id: Optional[str] = None,
     session_context: Optional[SessionContext] = None,
+    scope: Optional[str] = None,
 ) -> dict:
     """
     Orchestrate the chat flow for a single question/document pair.
     """
-    logger.info(f"Starting chat for document {doc_id} (session={session_id})")
-    tenant_id = get_current_tenant(auth) if auth else None  # noqa: F841 — reserved for Phase 3 tenant scoping
+    logger.info(f"Starting chat for document {doc_id} (session={session_id}, scope={scope or 'session'})")
+    tenant_id = get_current_tenant(auth) if auth else None
+
+    doc_ids = _resolve_retrieval_doc_ids(
+        scope=scope,
+        requested_doc_ids=[doc_id],
+        session_id=session_id,
+        tenant_id=tenant_id,
+    )
+    if not doc_ids:
+        return {
+            "question": question,
+            "doc_id": doc_id,
+            "chunks": 0,
+            "answer": "",
+            "sources": [],
+            "status": "error",
+            "error": {
+                "code": "no_documents_in_scope",
+                "message": "No documents available for retrieval in the requested scope.",
+            },
+        }
 
     transformed_queries = await transform_query(question)
     query_embeddings = await get_embeddings(transformed_queries)
@@ -190,7 +246,7 @@ async def answer_question_for_document(
     seen_chunk_keys: set = set()
     for query_embedding in query_embeddings:
         chunks = await _retrieve_chunks_for_documents(
-            doc_ids=[doc_id],
+            doc_ids=doc_ids,
             query_embedding=query_embedding,
             match_count=match_count,
             session_id=session_id,
@@ -259,22 +315,37 @@ async def answer_question_stream_for_document(
     auth: Optional[AuthContext] = None,
     session_id: Optional[str] = None,
     session_context: Optional[SessionContext] = None,
+    scope: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
     """
     Orchestrate the chat flow for a single question/document pair, yielding
     a server-sent events (SSE) stream.
     """
-    logger.info(f"Starting chat stream for document {doc_id}")
-    tenant_id = get_current_tenant(auth) if auth else None  # noqa: F841 — reserved for Phase 3 tenant scoping
+    logger.info(f"Starting chat stream for document {doc_id} (scope={scope or 'session'})")
+    tenant_id = get_current_tenant(auth) if auth else None
 
     try:
+        doc_ids = _resolve_retrieval_doc_ids(
+            scope=scope,
+            requested_doc_ids=[doc_id],
+            session_id=session_id,
+            tenant_id=tenant_id,
+        )
+        if not doc_ids:
+            yield (
+                'event: error\ndata: '
+                + json.dumps("No documents available for retrieval in the requested scope.")
+                + "\n\n"
+            )
+            return
+
         transformed_queries = await transform_query(question)
         query_embeddings = await get_embeddings(transformed_queries)
         all_chunks: list = []
         seen_chunk_keys: set = set()
         for query_embedding in query_embeddings:
             chunks = await _retrieve_chunks_for_documents(
-                doc_ids=[doc_id],
+                doc_ids=doc_ids,
                 query_embedding=query_embedding,
                 match_count=match_count,
                 query_text=question,
@@ -333,6 +404,7 @@ async def answer_questions_for_documents_batch(
     queries: list[dict],
     auth: Optional[AuthContext] = None,
     session_context: Optional[SessionContext] = None,
+    scope: Optional[str] = None,
 ) -> list[dict]:
     """
     Process multiple question/document retrieval requests in one call.
@@ -375,6 +447,7 @@ async def answer_questions_for_documents_batch(
                 "doc_ids": doc_ids,
                 "match_count": match_count,
                 "session_id": query.get("session_id"),
+                "scope": query.get("scope", scope),
             }
         )
 
@@ -414,11 +487,31 @@ async def answer_questions_for_documents_batch(
     ) -> dict:
         try:
             session_id = query.get("session_id")
+            query_scope = query.get("scope")
+            doc_ids = _resolve_retrieval_doc_ids(
+                scope=query_scope,
+                requested_doc_ids=query["doc_ids"],
+                session_id=session_id,
+                tenant_id=tenant_id,
+            )
+            if not doc_ids:
+                return {
+                    "status": "error",
+                    "question": query["question"],
+                    "doc_ids": query["doc_ids"],
+                    "chunks": 0,
+                    "error": {
+                        "code": "no_documents_in_scope",
+                        "message": "No documents available for retrieval in the requested scope.",
+                    },
+                    "session_id": session_id,
+                }
+
             all_chunks: list = []
             seen_chunk_keys: set = set()
             for query_embedding in query_embeddings:
                 chunks = await _retrieve_chunks_for_documents(
-                    doc_ids=query["doc_ids"],
+                    doc_ids=doc_ids,
                     query_embedding=query_embedding,
                     match_count=query["match_count"],
                     session_id=session_id,

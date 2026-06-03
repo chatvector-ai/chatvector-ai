@@ -2,8 +2,11 @@ import asyncio
 from fastapi import HTTPException
 from unittest.mock import ANY, AsyncMock, patch
 
+import pytest
+from pydantic import ValidationError
+
 from request_utils import make_test_request
-from routes.chat import ChatBatchItem, ChatBatchRequest, ChatRequest, chat, chat_batch
+from routes.chat import ChatBatchItem, ChatBatchRequest, ChatRequest, chat, chat_batch, chat_stream
 
 _DOC_ID_1 = "00000000-0000-0000-0000-000000000001"
 _DOC_ID_2 = "00000000-0000-0000-0000-000000000002"
@@ -25,7 +28,7 @@ def test_chat_route_delegates_to_chat_service():
 
     assert result == payload
     mock_chat.assert_awaited_once_with(
-        question="q", doc_id=_DOC_ID_1, match_count=5, auth=ANY, session_id=ANY
+        question="q", doc_id=_DOC_ID_1, match_count=5, auth=ANY, session_id=ANY, scope="session"
     )
 
 def test_chat_batch_route_delegates_to_chat_service():
@@ -49,6 +52,7 @@ def test_chat_batch_route_delegates_to_chat_service():
     mock_batch.assert_awaited_once_with(
         [{"question": "q", "doc_ids": [_DOC_ID_1], "match_count": 5, "session_id": ANY}],
         auth=ANY,
+        scope="session",
     )
 
 
@@ -95,8 +99,11 @@ def test_chat_batch_route_returns_422_for_value_error():
             assert exc.status_code == 422
             assert exc.detail["code"] == "invalid_batch_request"
 
-import pytest
-from routes.chat import chat_stream
+
+def test_chat_route_rejects_invalid_scope():
+    with pytest.raises(ValidationError, match="scope"):
+        ChatRequest(question="q", doc_id=_DOC_ID_1, scope="global")  # type: ignore[arg-type]
+
 
 @pytest.mark.asyncio
 async def test_chat_stream_route_disabled():

@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -15,10 +15,13 @@ from services.chat_service import (
     answer_question_stream_for_document,
     answer_questions_for_documents_batch,
 )
-from services.session_service import get_or_create_session
+from services.session_service import get_or_create_session, register_session_document
+from services.tenant_registry import register_tenant_document
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+RetrievalScopeParam = Literal["session", "tenant"]
 
 
 class ChatBatchItem(BaseModel):
@@ -26,11 +29,13 @@ class ChatBatchItem(BaseModel):
     doc_ids: list[UUID] = Field(..., min_length=1)
     match_count: int = Field(default=5, ge=1, le=20)
     session_id: Optional[str] = None
+    scope: RetrievalScopeParam = "session"
 
 
 class ChatBatchRequest(BaseModel):
     queries: list[ChatBatchItem] = Field(..., min_length=1, max_length=20)
     session_id: Optional[str] = None
+    scope: RetrievalScopeParam = "session"
 
 
 class ChatRequest(BaseModel):
@@ -38,6 +43,7 @@ class ChatRequest(BaseModel):
     doc_id: UUID
     match_count: int = Field(default=5, ge=1, le=20)
     session_id: Optional[str] = None
+    scope: RetrievalScopeParam = "session"
 
 
 @router.post("/chat")
@@ -49,13 +55,17 @@ async def chat(request: Request, payload: ChatRequest, auth: AuthContext = Depen
     session = get_or_create_session(
         session_id=payload.session_id, tenant_id=auth.tenant_id
     )
+    doc_id_str = str(payload.doc_id)
+    register_session_document(session.id, doc_id_str, auth.tenant_id)
+    register_tenant_document(auth.tenant_id, doc_id_str)
 
     return await answer_question_for_document(
         question=payload.question,
-        doc_id=str(payload.doc_id),
+        doc_id=doc_id_str,
         match_count=payload.match_count,
         auth=auth,
         session_id=session.id,
+        scope=payload.scope,
     )
 
 
@@ -77,14 +87,18 @@ async def chat_stream(request: Request, payload: ChatRequest, auth: AuthContext 
     session = get_or_create_session(
         session_id=payload.session_id, tenant_id=auth.tenant_id
     )
+    doc_id_str = str(payload.doc_id)
+    register_session_document(session.id, doc_id_str, auth.tenant_id)
+    register_tenant_document(auth.tenant_id, doc_id_str)
 
     return StreamingResponse(
         answer_question_stream_for_document(
             question=payload.question,
-            doc_id=str(payload.doc_id),
+            doc_id=doc_id_str,
             match_count=payload.match_count,
             auth=auth,
             session_id=session.id,
+            scope=payload.scope,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
@@ -104,16 +118,25 @@ async def chat_batch(request: Request, payload: ChatBatchRequest, auth: AuthCont
         processed_queries = []
         for q in payload.queries:
             q_dict = q.model_dump(mode="json")
+            # Only keep per-item scope when explicitly provided by the caller.
+            # When unset, let the batch-level `scope` take effect in the service.
+            if "scope" not in q.model_fields_set:
+                q_dict.pop("scope", None)
             q_session = get_or_create_session(
                 session_id=q.session_id or batch_session_id,
                 tenant_id=auth.tenant_id,
             )
             q_dict["session_id"] = q_session.id
+            for doc_id in q.doc_ids:
+                doc_id_str = str(doc_id)
+                register_session_document(q_session.id, doc_id_str, auth.tenant_id)
+                register_tenant_document(auth.tenant_id, doc_id_str)
             processed_queries.append(q_dict)
 
         results = await answer_questions_for_documents_batch(
             processed_queries,
             auth=auth,
+            scope=payload.scope,
         )
     except ValueError as e:
         raise HTTPException(
