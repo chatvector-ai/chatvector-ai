@@ -16,6 +16,7 @@ export type UploadModalAttachment = {
   stage?: string;
   chunks?: { total: number; processed: number };
   processingTime?: string;
+  errorMessage?: string;
 };
 
 type Props = {
@@ -263,11 +264,12 @@ export default function UploadModal({
                 <IngestionPipeline
                   currentStage={showUploading ? "uploading" : attachment?.stage}
                   failed={showServerFailed}
-                  chunks={attachment?.chunks}
+                 chunks={attachment?.chunks}
+                  errorMessage={attachment?.errorMessage}
                   onDisplayedStageChange={(s) => {
-                    if (s === "completed") setPipelineVisuallyComplete(true);
-                  }}
-                />
+                  if (s === "completed") setPipelineVisuallyComplete(true);
+                }}
+              />
                 {showServerFailed && (
                   <button
                     type="button"

@@ -155,7 +155,7 @@ export type AttachmentState = {
 export type DocumentStatusPayload = {
   status: string;
   stage?: string;
-  error?: { stage?: string };
+  error?: { stage?: string; message?: string};
   chunks?: { total: number; processed: number } | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -185,7 +185,9 @@ export async function getDocumentStatus(
   const errorRaw = data?.error;
   const error =
     errorRaw != null && typeof errorRaw === "object"
-      ? { stage: (errorRaw as Record<string, unknown>).stage as string | undefined }
+      ? { stage: (errorRaw as Record<string, unknown>).stage as string | undefined,
+        message: (errorRaw as Record<string, unknown>).message as string | undefined
+       }
       : undefined;
   const createdAt = data?.created_at as string | null | undefined;
   const updatedAt = data?.updated_at as string | null | undefined;
