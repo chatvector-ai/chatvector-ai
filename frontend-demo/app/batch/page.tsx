@@ -165,7 +165,7 @@ export default function BatchPage() {
               type="button"
               onClick={handleSubmit}
               disabled={!canSubmit}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-accent px-5 py-2.5 font-medium text-surface transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {inflight && <Loader2 size={16} className="animate-spin" />}
               {inflight ? "Querying..." : "Run batch query"}
