@@ -1,0 +1,249 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Layers, Loader2, FileText, AlertCircle, CheckCircle2 } from "lucide-react";
+import {
+  sendBatchMessage,
+  ChatError,
+  type BatchResultItem,
+  type ChatSource,
+} from "../lib/api";
+import { getUploadedDocuments, type StoredDocument } from "../lib/documentStore";
+
+function deduplicatedSources(sources: ChatSource[]): ChatSource[] {
+  const seen = new Set<string>();
+  return sources.filter((s) => {
+    const key = `${s.file_name}::${s.page_number ?? "null"}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export default function BatchPage() {
+  const [documents, setDocuments] = useState<StoredDocument[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [question, setQuestion] = useState("");
+  const [inflight, setInflight] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<BatchResultItem[] | null>(null);
+  const [summary, setSummary] = useState<{
+    count: number;
+    success: number;
+    failure: number;
+  } | null>(null);
+
+  useEffect(() => {
+    setDocuments(getUploadedDocuments());
+  }, []);
+
+  const nameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const doc of documents) map.set(doc.documentId, doc.fileName);
+    return map;
+  }, [documents]);
+
+  const toggle = (documentId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(documentId)) next.delete(documentId);
+      else next.add(documentId);
+      return next;
+    });
+  };
+
+  const canSubmit = question.trim().length > 0 && selected.size > 0 && !inflight;
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setError(null);
+    setResults(null);
+    setSummary(null);
+    setInflight(true);
+    try {
+      const docIds = documents
+        .map((d) => d.documentId)
+        .filter((id) => selected.has(id));
+      const response = await sendBatchMessage(question.trim(), docIds);
+      setResults(response.results);
+      setSummary({
+        count: response.count,
+        success: response.success_count,
+        failure: response.failure_count,
+      });
+    } catch (e) {
+      setError(
+        e instanceof ChatError ? e.message : "Something went wrong. Please try again."
+      );
+    } finally {
+      setInflight(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto w-full max-w-4xl px-4 py-10 text-foreground">
+      <div className="mb-8">
+        <div className="flex items-center gap-2 text-accent">
+          <Layers size={20} />
+          <span className="text-sm font-medium uppercase tracking-wide">
+            Batch Query
+          </span>
+        </div>
+        <h1 className="mt-2 text-3xl font-bold">Ask one question across many documents</h1>
+        <p className="mt-2 max-w-2xl text-muted">
+          Select documents you&apos;ve uploaded in the chat, enter a single
+          question, and ChatVector retrieves and answers from each one in
+          parallel — one answer card per document.
+        </p>
+      </div>
+
+      {documents.length === 0 ? (
+        <div className="rounded-xl border border-border bg-surface p-8 text-center">
+          <FileText className="mx-auto mb-3 text-muted" size={28} />
+          <p className="text-foreground">No documents yet.</p>
+          <p className="mt-1 text-sm text-muted">
+            Upload a document on the chat page first — it&apos;ll show up here
+            automatically.
+          </p>
+          <Link
+            href="/chat"
+            className="mt-4 inline-block rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Go to chat
+          </Link>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-6">
+          <div>
+            <label
+              htmlFor="batch-question"
+              className="mb-2 block text-sm font-medium"
+            >
+              Question
+            </label>
+            <textarea
+              id="batch-question"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              rows={3}
+              placeholder="e.g. What are the key takeaways?"
+              className="w-full resize-y rounded-lg border border-border bg-surface px-4 py-3 text-base text-foreground outline-none focus:border-accent"
+            />
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-medium">
+              Documents{" "}
+              <span className="font-normal text-muted">
+                ({selected.size} selected)
+              </span>
+            </p>
+            <ul className="flex flex-col gap-2">
+              {documents.map((doc) => (
+                <li key={doc.documentId}>
+                  <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3 transition-colors hover:border-accent">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(doc.documentId)}
+                      onChange={() => toggle(doc.documentId)}
+                      className="h-4 w-4 accent-[color:var(--accent)]"
+                    />
+                    <FileText size={16} className="shrink-0 text-muted" />
+                    <span className="truncate text-sm">{doc.fileName}</span>
+                    <span className="ml-auto truncate font-mono text-xs text-muted">
+                      {doc.documentId.slice(0, 8)}
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {inflight && <Loader2 size={16} className="animate-spin" />}
+              {inflight ? "Querying..." : "Run batch query"}
+            </button>
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-500">
+              <AlertCircle size={16} className="shrink-0" />
+              {error}
+            </div>
+          )}
+
+          {summary && (
+            <div className="flex flex-wrap gap-4 rounded-lg border border-border bg-surface px-4 py-3 text-sm">
+              <span>
+                <strong>{summary.count}</strong> total
+              </span>
+              <span className="text-green-500">
+                <strong>{summary.success}</strong> succeeded
+              </span>
+              <span className={summary.failure > 0 ? "text-red-500" : "text-muted"}>
+                <strong>{summary.failure}</strong> failed
+              </span>
+            </div>
+          )}
+
+          {results && (
+            <div className="grid gap-4 md:grid-cols-2">
+              {results.map((result, i) => {
+                const docId = result.doc_ids[0];
+                const name = (docId && nameById.get(docId)) || docId || "Unknown document";
+                const isError = result.status === "error";
+                return (
+                  <div
+                    key={`${docId ?? "doc"}-${i}`}
+                    className={`flex flex-col gap-3 rounded-xl border p-4 ${
+                      isError ? "border-red-500/40 bg-red-500/5" : "border-border bg-surface"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {isError ? (
+                        <AlertCircle size={16} className="shrink-0 text-red-500" />
+                      ) : (
+                        <CheckCircle2 size={16} className="shrink-0 text-green-500" />
+                      )}
+                      <span className="truncate text-sm font-medium" title={name}>
+                        {name}
+                      </span>
+                    </div>
+
+                    {isError ? (
+                      <p className="text-sm text-red-500">
+                        {result.error?.message ?? "This query failed."}
+                      </p>
+                    ) : (
+                      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+                        {result.answer || "No answer was generated."}
+                      </p>
+                    )}
+
+                    {result.sources && result.sources.length > 0 && (
+                      <div className="mt-auto flex flex-col gap-1 border-t border-border pt-2">
+                        {deduplicatedSources(result.sources).map((s, j) => (
+                          <span key={j} className="text-xs text-muted">
+                            {s.file_name}
+                            {s.page_number != null ? ` · p.${s.page_number}` : ""}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
