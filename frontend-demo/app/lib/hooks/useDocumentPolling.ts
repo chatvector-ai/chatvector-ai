@@ -139,7 +139,7 @@ export function useDocumentPolling(
           setStage(rawStage);
           setCompletedStages(stagesBefore(rawStage));
           if (payload.status === "failed") {
-           setErrorMessage(payload.error?.message ?? undefined);
+           setErrorMessage(payload.error?.message);
           }
 
           const c = payload.chunks;
@@ -208,7 +208,7 @@ export function useDocumentPolling(
           setStage(rawStage);
           setCompletedStages(stagesBefore(rawStage));
           if (payload.status === "failed") {
-           setErrorMessage(payload.error?.message ?? undefined);
+           setErrorMessage(payload.error?.message);
           }
           
 

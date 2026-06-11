@@ -155,7 +155,7 @@ export type AttachmentState = {
 export type DocumentStatusPayload = {
   status: string;
   stage?: string;
-  error?: { stage?: string; message?: string};
+  error?: { stage?: string; message?: string };
   chunks?: { total: number; processed: number } | null;
   created_at?: string | null;
   updated_at?: string | null;

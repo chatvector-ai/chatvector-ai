@@ -264,7 +264,7 @@ export default function UploadModal({
                 <IngestionPipeline
                   currentStage={showUploading ? "uploading" : attachment?.stage}
                   failed={showServerFailed}
-                 chunks={attachment?.chunks}
+                  chunks={attachment?.chunks}
                   errorMessage={attachment?.errorMessage}
                   onDisplayedStageChange={(s) => {
                   if (s === "completed") setPipelineVisuallyComplete(true);
