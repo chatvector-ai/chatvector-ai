@@ -9,6 +9,7 @@ export type UploadAcceptedPayload = {
   fileName: string;
   documentId: string;
   statusEndpoint: string;
+  queuePosition?: number;
 };
 
 export type UploadModalAttachment = {
@@ -78,8 +79,14 @@ export default function UploadModal({
       if (onBeforeUpload) {
         await onBeforeUpload();
       }
-      const { documentId, statusEndpoint } = await uploadDocument(file);
-      onUploadAccepted({ fileName: file.name, documentId, statusEndpoint });
+      const { documentId, statusEndpoint, queuePosition } =
+        await uploadDocument(file);
+      onUploadAccepted({
+        fileName: file.name,
+        documentId,
+        statusEndpoint,
+        queuePosition,
+      });
       setAwaitingProcessing(true);
     } catch (err) {
       setUploadHttpFailed(true);

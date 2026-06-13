@@ -60,6 +60,7 @@ export default function ChatInput({
             stage={poll.stage}
             chunks={poll.chunks}
             awaitingProcessing={poll.awaitingProcessing}
+            queuePosition={attachment.queue_position}
             processingTime={poll.processingTime}
             onRemove={() => void handleRemoveAttachment()}
           />
