@@ -267,9 +267,9 @@ export default function UploadModal({
                   chunks={attachment?.chunks}
                   errorMessage={attachment?.errorMessage}
                   onDisplayedStageChange={(s) => {
-                  if (s === "completed") setPipelineVisuallyComplete(true);
-                }}
-              />
+                    if (s === "completed") setPipelineVisuallyComplete(true);
+                  }}
+                />
                 {showServerFailed && (
                   <button
                     type="button"
@@ -330,12 +330,14 @@ export default function UploadModal({
                     >
                       {lastFile?.name ?? "Document"}
                     </p>
-                    <Loader2
-                      size={28}
-                      className="animate-spin text-muted"
-                      strokeWidth={2}
-                      aria-hidden
-                    />
+                    {!showServerFailed && (
+                      <Loader2
+                        size={28}
+                        className="animate-spin text-muted"
+                        strokeWidth={2}
+                        aria-hidden
+                      />
+                    )} 
                   </>
                 )}
               </div>

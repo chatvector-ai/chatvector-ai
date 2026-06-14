@@ -185,8 +185,8 @@ function StageRow({
             {chunkProgressLabel}
           </p>
         )}
-          {state === "failed" && errorMessage && (
-           <p className="absolute top-full -mt-3 text-xs text-red-400/80">
+        {state === "failed" && errorMessage && (
+          <p className="absolute top-full -mt-3 text-xs text-red-400/80">
             {errorMessage.slice(0, 80)}
           </p>
         )}
