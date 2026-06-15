@@ -32,9 +32,14 @@ function read(): StoredDocument[] {
   }
 }
 
+
 function write(documents: StoredDocument[]): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(documents));
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(documents));
+  } catch (e) {
+    console.warn("Failed to persist uploaded documents to localStorage", e);
+  }
 }
 
 export function getUploadedDocuments(): StoredDocument[] {
