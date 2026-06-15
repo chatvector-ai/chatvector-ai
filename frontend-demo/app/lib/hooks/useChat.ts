@@ -207,6 +207,7 @@ export function useChat(sessionId: string | null) {
     fileName: string;
     documentId: string;
     statusEndpoint: string;
+    queuePosition?: number;
   }) => {
     setRemoveError(null);
     saveUploadedDocument({
@@ -218,6 +219,7 @@ export function useChat(sessionId: string | null) {
       documentId: payload.documentId,
       statusEndpoint: payload.statusEndpoint,
       status: "processing",
+      queue_position: payload.queuePosition,
     });
   };
 

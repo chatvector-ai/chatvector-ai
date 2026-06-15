@@ -90,6 +90,7 @@ export default function ChatPage() {
                     stage: poll.stage,
                     chunks: poll.chunks,
                     processingTime: poll.processingTime,
+                    errorMessage: poll.errorMessage,
                   }
                 : null
             }

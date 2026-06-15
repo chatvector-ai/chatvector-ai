@@ -150,12 +150,13 @@ export type AttachmentState = {
   status: "processing" | "ready" | "failed";
   stage?: string;
   chunks?: { total: number; processed: number };
+  queue_position?: number;
 };
 
 export type DocumentStatusPayload = {
   status: string;
   stage?: string;
-  error?: { stage?: string };
+  error?: { stage?: string; message?: string };
   chunks?: { total: number; processed: number } | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -185,7 +186,9 @@ export async function getDocumentStatus(
   const errorRaw = data?.error;
   const error =
     errorRaw != null && typeof errorRaw === "object"
-      ? { stage: (errorRaw as Record<string, unknown>).stage as string | undefined }
+      ? { stage: (errorRaw as Record<string, unknown>).stage as string | undefined,
+        message: (errorRaw as Record<string, unknown>).message as string | undefined
+       }
       : undefined;
   const createdAt = data?.created_at as string | null | undefined;
   const updatedAt = data?.updated_at as string | null | undefined;
@@ -281,7 +284,7 @@ export async function sendBatchMessage(
 
 export async function uploadDocument(
   file: File
-): Promise<{ documentId: string; statusEndpoint: string }> {
+): Promise<{ documentId: string; statusEndpoint: string; queuePosition?: number }> {
   const sessionId = getSessionId();
   const formData = new FormData();
   formData.append("file", file);
@@ -315,8 +318,10 @@ export async function uploadDocument(
   const data = await res.json();
   const documentId = data?.document_id as string | undefined;
   const statusEndpoint = data?.status_endpoint as string | undefined;
+  const queuePosition =
+    typeof data?.queue_position === "number" ? data.queue_position : undefined;
   if (!documentId || !statusEndpoint) {
     throw new Error("Invalid upload response from server.");
   }
-  return { documentId, statusEndpoint };
+  return { documentId, statusEndpoint, queuePosition };
 }

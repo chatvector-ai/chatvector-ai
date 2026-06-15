@@ -74,6 +74,7 @@ export function useDocumentPolling(
   chunks: { total: number; processed: number } | undefined;
   awaitingProcessing: boolean;
   processingTime: string | undefined;
+  errorMessage: string | undefined;
 } {
   const [polledUiStatus, setPolledUiStatus] = useState<
     PolledDocumentStatus | undefined
@@ -85,6 +86,7 @@ export function useDocumentPolling(
   >(undefined);
   const [awaitingProcessing, setAwaitingProcessing] = useState(false);
   const [processingTime, setProcessingTime] = useState<string | undefined>(undefined);
+  const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
 
   // A toggle for environments/situations where SSE fails
   const [useFallbackPolling, setUseFallbackPolling] = useState(false);
@@ -105,6 +107,7 @@ export function useDocumentPolling(
       setAwaitingProcessing(false);
       setUseFallbackPolling(false);
       setProcessingTime(undefined);
+      setErrorMessage(undefined);
     }
   }, [docKey]);
 
@@ -135,6 +138,9 @@ export function useDocumentPolling(
           const rawStage = resolveDisplayStage(payload);
           setStage(rawStage);
           setCompletedStages(stagesBefore(rawStage));
+          if (payload.status === "failed") {
+           setErrorMessage(payload.error?.message);
+          }
 
           const c = payload.chunks;
           if (
@@ -201,6 +207,10 @@ export function useDocumentPolling(
           const rawStage = resolveDisplayStage(payload);
           setStage(rawStage);
           setCompletedStages(stagesBefore(rawStage));
+          if (payload.status === "failed") {
+           setErrorMessage(payload.error?.message);
+          }
+          
 
           const c = payload.chunks;
           if (
@@ -262,5 +272,6 @@ export function useDocumentPolling(
     chunks,
     awaitingProcessing: enabled && awaitingProcessing,
     processingTime,
+    errorMessage, 
   };
 }

@@ -9,6 +9,7 @@ type Props = {
   stage?: string;
   chunks?: { total: number; processed: number };
   awaitingProcessing?: boolean;
+  queuePosition?: number;
   processingTime?: string;
   onRemove: () => void;
 };
@@ -55,6 +56,7 @@ export default function AttachmentChip({
   stage,
   chunks,
   awaitingProcessing = false,
+  queuePosition,
   processingTime,
   onRemove,
 }: Props) {
@@ -67,28 +69,44 @@ export default function AttachmentChip({
   );
   const tone = iconAndTextClass(status);
 
+  // Surface the upload queue position only while the document waits its turn.
+  // Once polling reports active progress (awaitingProcessing flips false) the
+  // stage label takes over, and position 1 needs no indicator.
+  const showQueuePosition =
+    status === "processing" &&
+    awaitingProcessing &&
+    typeof queuePosition === "number" &&
+    queuePosition > 1;
+
   return (
-    <div className="flex w-fit max-w-full items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2">
-      <FileText size={14} className={`shrink-0 ${tone}`} />
-      <span className="shrink-0 text-xs text-muted">Active document:</span>
-      <span
-        className={`min-w-0 max-w-[min(100%,14rem)] truncate text-xs font-medium sm:max-w-[18rem] ${tone}`}
-      >
-        {label}
-      </span>
-      {status === "ready" && processingTime && (
-        <span className="shrink-0 text-[10px] text-subtle" title={`Processed in ${processingTime}`}>
-          {processingTime}
+    <div className="flex w-fit max-w-full flex-col gap-0.5 rounded-lg border border-border bg-surface px-3 py-2">
+      <div className="flex items-center gap-2">
+        <FileText size={14} className={`shrink-0 ${tone}`} />
+        <span className="shrink-0 text-xs text-muted">Active document:</span>
+        <span
+          className={`min-w-0 max-w-[min(100%,14rem)] truncate text-xs font-medium sm:max-w-[18rem] ${tone}`}
+        >
+          {label}
+        </span>
+        {status === "ready" && processingTime && (
+          <span className="shrink-0 text-[10px] text-subtle" title={`Processed in ${processingTime}`}>
+            {processingTime}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onRemove}
+          className="shrink-0 rounded-md p-1 text-muted transition hover:bg-background hover:text-foreground"
+          aria-label="Remove attachment"
+        >
+          <X size={16} />
+        </button>
+      </div>
+      {showQueuePosition && (
+        <span className="text-[10px] text-subtle">
+          Position {queuePosition} in queue
         </span>
       )}
-      <button
-        type="button"
-        onClick={onRemove}
-        className="shrink-0 rounded-md p-1 text-muted transition hover:bg-background hover:text-foreground"
-        aria-label="Remove attachment"
-      >
-        <X size={16} />
-      </button>
     </div>
   );
 }

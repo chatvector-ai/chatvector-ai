@@ -21,6 +21,7 @@ type Props = {
   /** Chunk info surfaced during embedding stage. */
   chunks?: { total: number; processed: number };
   /** Fires each time the animated displayed stage advances, including the final "completed" tick. */
+  errorMessage?: string;
   onDisplayedStageChange?: (stage: string | undefined) => void;
 };
 
@@ -111,12 +112,14 @@ function StageRow({
   state,
   isLast,
   chunks,
+  errorMessage,
 }: {
   stageKey: string;
   label: string;
   state: StageState;
   isLast: boolean;
   chunks?: { total: number; processed: number };
+  errorMessage?: string;
 }) {
   const showChunks = shouldShowChunkProgress({ stageKey, state, chunks });
   const chunkProgressLabel =
@@ -182,6 +185,11 @@ function StageRow({
             {chunkProgressLabel}
           </p>
         )}
+        {state === "failed" && errorMessage && (
+          <p className="absolute top-full -mt-3 text-xs text-red-400/80">
+            {errorMessage.slice(0, 80)}
+          </p>
+        )}
       </div>
     </li>
   );
@@ -191,6 +199,7 @@ export default function IngestionPipeline({
   currentStage,
   failed = false,
   chunks,
+  errorMessage,
   onDisplayedStageChange,
 }: Props) {
   const { displayedStage, displayedCompleted } = useAnimatedStage(currentStage, failed);
@@ -217,6 +226,7 @@ export default function IngestionPipeline({
             state={state}
             isLast={isLast}
             chunks={chunks}
+            errorMessage={state === "failed" ? errorMessage : undefined}  
           />
         );
       })}

@@ -9,6 +9,7 @@ export type UploadAcceptedPayload = {
   fileName: string;
   documentId: string;
   statusEndpoint: string;
+  queuePosition?: number;
 };
 
 export type UploadModalAttachment = {
@@ -16,6 +17,7 @@ export type UploadModalAttachment = {
   stage?: string;
   chunks?: { total: number; processed: number };
   processingTime?: string;
+  errorMessage?: string;
 };
 
 type Props = {
@@ -78,8 +80,14 @@ export default function UploadModal({
       if (onBeforeUpload) {
         await onBeforeUpload();
       }
-      const { documentId, statusEndpoint } = await uploadDocument(file);
-      onUploadAccepted({ fileName: file.name, documentId, statusEndpoint });
+      const { documentId, statusEndpoint, queuePosition } =
+        await uploadDocument(file);
+      onUploadAccepted({
+        fileName: file.name,
+        documentId,
+        statusEndpoint,
+        queuePosition,
+      });
       setAwaitingProcessing(true);
     } catch (err) {
       setUploadHttpFailed(true);
@@ -264,6 +272,7 @@ export default function UploadModal({
                   currentStage={showUploading ? "uploading" : attachment?.stage}
                   failed={showServerFailed}
                   chunks={attachment?.chunks}
+                  errorMessage={attachment?.errorMessage}
                   onDisplayedStageChange={(s) => {
                     if (s === "completed") setPipelineVisuallyComplete(true);
                   }}
@@ -328,12 +337,14 @@ export default function UploadModal({
                     >
                       {lastFile?.name ?? "Document"}
                     </p>
-                    <Loader2
-                      size={28}
-                      className="animate-spin text-muted"
-                      strokeWidth={2}
-                      aria-hidden
-                    />
+                    {!showServerFailed && (
+                      <Loader2
+                        size={28}
+                        className="animate-spin text-muted"
+                        strokeWidth={2}
+                        aria-hidden
+                      />
+                    )} 
                   </>
                 )}
               </div>
