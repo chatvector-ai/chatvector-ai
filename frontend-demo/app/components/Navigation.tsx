@@ -13,6 +13,7 @@ const MAIN_NAV_LINKS = [
   { label: "About", href: "/about" },
   { label: "Chat", href: "/chat" },
   { label: "Batch", href: "/batch" },
+  { label: "Status", href: "/status" },
   { label: "Contributors", href: "/contributors" },
 ] as const;
 
