@@ -22,6 +22,16 @@ This guide will walk you through the process step-by-step.
 2. Ask for help in - [Discussions](https://github.com/chatvector-ai/chatvector-ai/discussions/landing)
 3. We'll help you find the perfect first contribution
 
+### Frontend demo contributions
+
+If you're looking to contribute to the UI or user experience:
+- Frontend work lives in `frontend-demo/` (a Next.js application).
+- Good filters on the issues tab: `good first issue`, `frontend-demo`, `Frontend`, `beginner-friendly`.
+- **Typical verify steps for frontend PRs:**
+  - Run `npm run build` and `npm run lint` in `frontend-demo/`.
+  - Manual check in the browser when UI behavior changes.
+- For setup details, see [frontend-demo/README.md](frontend-demo/README.md) and [DEVELOPMENT.md → Frontend](DEVELOPMENT.md#frontend).
+
    ***
 
 ## 📝 Branch and Commit Naming Convention
