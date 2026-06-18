@@ -202,6 +202,86 @@ export async function getDocumentStatus(
   };
 }
 
+export type BatchResultItem = {
+  status: "ok" | "error";
+  question: string;
+  doc_ids: string[];
+  chunks?: number;
+  answer?: string;
+  sources?: ChatSource[];
+  error?: { code: string; message: string };
+};
+
+export type BatchChatResponse = {
+  count: number;
+  success_count: number;
+  failure_count: number;
+  results: BatchResultItem[];
+};
+
+/**
+ * Query the same question against several documents in one request via
+ * `POST /chat/batch`. Each document becomes its own query item, so the response
+ * contains one result per document (in the same order as `docIds`).
+ */
+export async function sendBatchMessage(
+  question: string,
+  docIds: string[],
+  matchCount = 5,
+  sessionIdOverride?: string | null
+): Promise<BatchChatResponse> {
+  const sessionId =
+    sessionIdOverride !== undefined ? sessionIdOverride : getSessionId();
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (sessionId !== null) {
+    headers["X-Session-Id"] = sessionId;
+  }
+
+  const body: Record<string, unknown> = {
+    queries: docIds.map((docId) => ({
+      question,
+      doc_ids: [docId],
+      match_count: matchCount,
+    })),
+  };
+  if (sessionId !== null) {
+    body.session_id = sessionId;
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/chat/batch`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ChatError(
+      "backend_unreachable",
+      "Cannot reach the server. Check your connection."
+    );
+  }
+
+  if (res.status === 429) {
+    throw new ChatError(
+      "unexpected",
+      "Too many requests — please wait a moment and try again."
+    );
+  }
+
+  if (!res.ok) {
+    throw new ChatError(
+      "unexpected",
+      `Server error (${res.status}). Please try again.`
+    );
+  }
+
+  return (await res.json()) as BatchChatResponse;
+}
+
 export async function uploadDocument(
   file: File
 ): Promise<{ documentId: string; statusEndpoint: string; queuePosition?: number }> {

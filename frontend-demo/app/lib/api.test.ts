@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { sendMessage, ChatError, getDocumentStatus } from "./api";
+import { sendMessage, sendBatchMessage, ChatError, getDocumentStatus } from "./api";
 
 const MOCK_RESPONSE = {
   question: "What is RAG?",
@@ -146,6 +146,82 @@ describe("sendMessage", () => {
 
     await expect(sendMessage("q", "doc-123")).rejects.toThrow(ChatError);
     await expect(sendMessage("q", "doc-123")).rejects.toMatchObject({
+      code: "unexpected",
+    });
+  });
+});
+
+describe("sendBatchMessage", () => {
+  const originalFetch = globalThis.fetch;
+
+  const BATCH_RESPONSE = {
+    count: 2,
+    success_count: 1,
+    failure_count: 1,
+    results: [
+      {
+        status: "ok",
+        question: "Summary?",
+        doc_ids: ["doc-1"],
+        chunks: 2,
+        answer: "First summary.",
+        sources: [{ file_name: "a.pdf", page_number: 1, chunk_index: 0 }],
+      },
+      {
+        status: "error",
+        question: "Summary?",
+        doc_ids: ["doc-2"],
+        chunks: 0,
+        error: { code: "query_processing_failed", message: "boom" },
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("sends one query item per document and returns parsed results", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify(BATCH_RESPONSE), { status: 200 })
+    );
+
+    const result = await sendBatchMessage("Summary?", ["doc-1", "doc-2"]);
+
+    expect(result).toEqual(BATCH_RESPONSE);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/chat/batch"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          queries: [
+            { question: "Summary?", doc_ids: ["doc-1"], match_count: 5 },
+            { question: "Summary?", doc_ids: ["doc-2"], match_count: 5 },
+          ],
+          session_id: "test-session-id",
+        }),
+      })
+    );
+  });
+
+  it("throws backend_unreachable on network failure", async () => {
+    vi.mocked(globalThis.fetch).mockRejectedValue(new TypeError("fetch failed"));
+
+    await expect(sendBatchMessage("q", ["doc-1"])).rejects.toMatchObject({
+      name: "ChatError",
+      code: "backend_unreachable",
+    });
+  });
+
+  it("throws unexpected on a 500 response", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(null, { status: 500 }));
+
+    await expect(sendBatchMessage("q", ["doc-1"])).rejects.toMatchObject({
+      name: "ChatError",
       code: "unexpected",
     });
   });

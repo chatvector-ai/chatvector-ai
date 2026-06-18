@@ -9,6 +9,10 @@ import {
   type Message,
 } from "../api";
 import { useDocumentPolling } from "./useDocumentPolling";
+import {
+  saveUploadedDocument,
+  removeUploadedDocument,
+} from "../documentStore";
 
 const welcomeMessages: Message[] = [
   {
@@ -186,6 +190,7 @@ export function useChat(sessionId: string | null) {
     if (!attachment) return;
     const out = await deleteDocument(attachment.documentId);
     if (out === "gone") {
+      removeUploadedDocument(attachment.documentId);
       setAttachment(null);
       setRemoveError(null);
       return;
@@ -205,6 +210,10 @@ export function useChat(sessionId: string | null) {
     queuePosition?: number;
   }) => {
     setRemoveError(null);
+    saveUploadedDocument({
+      documentId: payload.documentId,
+      fileName: payload.fileName,
+    });
     setAttachment({
       fileName: payload.fileName,
       documentId: payload.documentId,
@@ -220,6 +229,7 @@ export function useChat(sessionId: string | null) {
     try {
       const out = await deleteDocument(attachment.documentId);
       if (out === "gone") {
+        removeUploadedDocument(attachment.documentId);
         setAttachment(null);
         return;
       }
