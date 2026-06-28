@@ -507,12 +507,16 @@ async def test_batch_includes_latency_and_model_per_query():
         {"question": "Q2", "doc_ids": ["doc-b"]},
     ]
 
-    call_count = 0
+    # Map question → deterministic (latency, model) so we can verify each result
+    # received its own values regardless of asyncio.gather execution order.
+    per_question = {
+        "Q1": (100, "model-q1"),
+        "Q2": (200, "model-q2"),
+    }
 
     async def fake_generate(question: str, context: str) -> tuple[str, int, str]:
-        nonlocal call_count
-        call_count += 1
-        return f"answer-{call_count}", call_count * 100, f"model-{call_count}"
+        latency, model = per_question[question]
+        return f"answer-{question}", latency, model
 
     with patch(
         "services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1], [0.2]])
@@ -526,7 +530,76 @@ async def test_batch_includes_latency_and_model_per_query():
         result = await answer_questions_for_documents_batch(queries)
 
     assert len(result) == 2
-    for item in result:
-        assert "latency_ms" in item
-        assert "model" in item
-        assert item["latency_ms"] > 0
+    by_question = {item["question"]: item for item in result}
+    assert by_question["Q1"]["latency_ms"] == 100
+    assert by_question["Q1"]["model"] == "model-q1"
+    assert by_question["Q2"]["latency_ms"] == 200
+    assert by_question["Q2"]["model"] == "model-q2"
+    # Values are distinct — each result reflects its own LLM call, not a shared total.
+    assert by_question["Q1"]["latency_ms"] != by_question["Q2"]["latency_ms"]
+
+
+@pytest.mark.asyncio
+async def test_latency_and_model_present_in_no_documents_in_scope_error():
+    """latency_ms and model must be present even when retrieval scope returns no docs."""
+    import services.session_service as session_svc
+    from core.auth import AuthContext
+
+    session = session_svc.create_session(tenant_id="tenant-x")
+    session_svc.register_session_document(session.id, "doc-allowed", "tenant-x")
+
+    try:
+        result = await answer_question_for_document(
+            question="Q?",
+            doc_id="doc-not-in-scope",
+            session_id=session.id,
+            auth=AuthContext(tenant_id="tenant-x"),
+            scope="session",
+        )
+    finally:
+        session_svc._SESSIONS.pop(session.id, None)
+
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "no_documents_in_scope"
+    assert "latency_ms" in result
+    assert "model" in result
+    assert result["latency_ms"] == 0
+    assert result["model"] == ""
+
+
+@pytest.mark.asyncio
+async def test_batch_latency_and_model_present_in_no_documents_in_scope_error():
+    """Batch no_documents_in_scope results must include latency_ms and model."""
+    import services.session_service as session_svc
+    from core.auth import AuthContext
+
+    session = session_svc.create_session(tenant_id="tenant-y")
+    session_svc.register_session_document(session.id, "doc-allowed", "tenant-y")
+
+    queries = [
+        {
+            "question": "Q?",
+            "doc_ids": ["doc-not-in-scope"],
+            "match_count": 5,
+            "session_id": session.id,
+            "scope": "session",
+        }
+    ]
+
+    try:
+        with patch(
+            "services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])
+        ):
+            result = await answer_questions_for_documents_batch(
+                queries,
+                auth=AuthContext(tenant_id="tenant-y"),
+            )
+    finally:
+        session_svc._SESSIONS.pop(session.id, None)
+
+    assert result[0]["status"] == "error"
+    assert result[0]["error"]["code"] == "no_documents_in_scope"
+    assert "latency_ms" in result[0]
+    assert "model" in result[0]
+    assert result[0]["latency_ms"] == 0
+    assert result[0]["model"] == ""
