@@ -236,6 +236,8 @@ async def answer_question_for_document(
             "chunks": 0,
             "answer": "",
             "sources": [],
+            "latency_ms": 0,
+            "model": "",
             "status": "error",
             "error": {
                 "code": "no_documents_in_scope",
@@ -509,6 +511,8 @@ async def answer_questions_for_documents_batch(
                         "code": "no_documents_in_scope",
                         "message": "No documents available for retrieval in the requested scope.",
                     },
+                    "latency_ms": 0,
+                    "model": "",
                     "session_id": session_id,
                 }
 
