@@ -70,6 +70,33 @@ def _get_embedding_provider() -> str:
     return provider
 
 
+VALID_PERSONAS = {"default", "concise", "conversational", "academic", "technical"}
+
+
+def _get_persona() -> str:
+    persona = os.getenv("PROMPT_PERSONA", "default").strip().lower()
+    if persona not in VALID_PERSONAS:
+        valid_personas_str = ", ".join(sorted(VALID_PERSONAS))
+        logger.warning(
+            "Invalid PROMPT_PERSONA=%r. Expected one of: %s. Falling back to 'default'.",
+            persona,
+            valid_personas_str,
+        )
+        persona = "default"
+    return persona
+
+
+def _get_system_prompt_path(persona: str) -> str:
+    custom_path = os.getenv("SYSTEM_PROMPT_PATH")
+    if custom_path:
+        return custom_path
+
+    if persona == "default":
+        return str(ROOT_DIR / "prompts" / "default_system.txt")
+    
+    return str(ROOT_DIR / "prompts" / "personas" / f"{persona}.txt")
+
+
 class Settings:
     APP_ENV: str = os.getenv("APP_ENV", "production")
     IS_PROD = APP_ENV.lower() == "production"
@@ -165,10 +192,9 @@ class Settings:
         "RATE_LIMIT_DOCUMENT_DELETE", "60/hour"
     )
 
-    SYSTEM_PROMPT_PATH: str = os.getenv(
-        "SYSTEM_PROMPT_PATH",
-        str(ROOT_DIR / "prompts" / "default_system.txt"),
-    )
+    PROMPT_PERSONA: str = _get_persona()
+    SYSTEM_PROMPT_PATH: str = _get_system_prompt_path(PROMPT_PERSONA)
+    
     LLM_TEMPERATURE: float = max(
         0.0,
         min(2.0, float(os.getenv("LLM_TEMPERATURE", "0.2"))),

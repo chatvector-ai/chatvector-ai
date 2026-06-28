@@ -28,6 +28,48 @@ def test_load_system_prompt_missing_file_raises_clear_file_not_found(tmp_path, m
     assert "SYSTEM_PROMPT_PATH" in msg
 
 
+def test_persona_loading_resolves_correct_path(monkeypatch):
+    """Verify that a valid PROMPT_PERSONA resolves to the correct prompt file."""
+    import core.config
+    import importlib
+    
+    # Temporarily remove SYSTEM_PROMPT_PATH so persona logic can trigger
+    monkeypatch.delenv("SYSTEM_PROMPT_PATH", raising=False)
+    monkeypatch.setenv("PROMPT_PERSONA", "concise")
+    
+    importlib.reload(core.config)
+    
+    assert "personas" in core.config.config.SYSTEM_PROMPT_PATH
+    assert core.config.config.SYSTEM_PROMPT_PATH.endswith("concise.txt")
+
+
+def test_custom_prompt_overrides_persona(monkeypatch):
+    """Verify that explicit SYSTEM_PROMPT_PATH takes precedence over PROMPT_PERSONA."""
+    import core.config
+    import importlib
+    
+    monkeypatch.setenv("SYSTEM_PROMPT_PATH", "/tmp/custom.txt")
+    monkeypatch.setenv("PROMPT_PERSONA", "concise")
+    
+    importlib.reload(core.config)
+    
+    assert core.config.config.SYSTEM_PROMPT_PATH == "/tmp/custom.txt"
+
+
+def test_invalid_persona_falls_back_to_default(monkeypatch):
+    """Verify that an invalid PROMPT_PERSONA falls back to default."""
+    import core.config
+    import importlib
+    
+    monkeypatch.delenv("SYSTEM_PROMPT_PATH", raising=False)
+    monkeypatch.setenv("PROMPT_PERSONA", "hacker")
+    
+    importlib.reload(core.config)
+    
+    assert "default_system.txt" in core.config.config.SYSTEM_PROMPT_PATH
+    assert core.config.config.PROMPT_PERSONA == "default"
+
+
 @pytest.mark.asyncio
 async def test_generate_answer_passes_temperature_and_max_tokens_to_provider(
     monkeypatch,
