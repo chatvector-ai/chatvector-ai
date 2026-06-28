@@ -94,7 +94,10 @@ async def test_generate_answer_passes_temperature_and_max_tokens_to_provider(
     finally:
         providers_mod._llm_provider = None
 
-    assert result == "mocked answer"
+    answer, latency_ms, model_name = result
+    assert answer == "mocked answer"
+    assert latency_ms >= 0
+    assert model_name == ""
     assert captured["prompt"] == "CONTEXT:\nsome context\n\nQUESTION:\nWhat?"
     assert captured["system_instruction"] == answer_service._SYSTEM_PROMPT
     assert captured["temperature"] == 0.7

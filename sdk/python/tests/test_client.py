@@ -149,6 +149,8 @@ class ChatVectorClientTests(unittest.TestCase):
         self.assertEqual(len(result.sources), 1)
         self.assertEqual(result.sources[0].file_name, "guide.pdf")
         self.assertEqual(result.sources[0].score, 0.95)
+        self.assertEqual(result.latency_ms, 0)
+        self.assertEqual(result.model, "")
 
     def test_batch_chat_returns_typed_batch_response(self) -> None:
         """Batch chat should accept dataclass queries and parse typed results."""
@@ -204,6 +206,66 @@ class ChatVectorClientTests(unittest.TestCase):
         self.assertEqual(batch.failure_count, 1)
         self.assertEqual(batch.results[0].answer, "Summary")
         self.assertEqual(batch.results[1].error, {"code": "query_processing_failed", "message": "boom"})
+        self.assertEqual(batch.results[0].latency_ms, 0)
+        self.assertEqual(batch.results[0].model, "")
+
+    def test_chat_response_parses_latency_and_model(self) -> None:
+        """ChatResponse.from_dict must populate latency_ms and model when present."""
+        response = make_response(
+            200,
+            method="POST",
+            url="https://api.chatvector.test/chat",
+            json_data={
+                "question": "Q?",
+                "chunks": 1,
+                "answer": "A.",
+                "sources": [],
+                "latency_ms": 312,
+                "model": "gemini-2.5-flash",
+            },
+        )
+
+        with patch.object(self.client._client, "request", return_value=response):
+            result = self.client.chat("Q?", "doc-123")
+
+        self.assertIsInstance(result, ChatResponse)
+        self.assertEqual(result.latency_ms, 312)
+        self.assertGreater(result.latency_ms, 0)
+        self.assertEqual(result.model, "gemini-2.5-flash")
+
+    def test_batch_result_parses_latency_and_model(self) -> None:
+        """BatchChatResult.from_dict must populate latency_ms and model when present."""
+        response = make_response(
+            200,
+            method="POST",
+            url="https://api.chatvector.test/chat/batch",
+            json_data={
+                "count": 1,
+                "success_count": 1,
+                "failure_count": 0,
+                "results": [
+                    {
+                        "status": "ok",
+                        "question": "Q?",
+                        "doc_ids": ["doc-123"],
+                        "chunks": 2,
+                        "answer": "A.",
+                        "sources": [],
+                        "latency_ms": 789,
+                        "model": "gpt-4o-mini",
+                    }
+                ],
+            },
+        )
+
+        with patch.object(self.client._client, "request", return_value=response):
+            batch = self.client.batch_chat(
+                [BatchChatQuery(question="Q?", doc_ids=["doc-123"])]
+            )
+
+        self.assertEqual(batch.results[0].latency_ms, 789)
+        self.assertGreater(batch.results[0].latency_ms, 0)
+        self.assertEqual(batch.results[0].model, "gpt-4o-mini")
 
     def test_wait_for_ready_polls_until_document_is_completed(self) -> None:
         """The polling helper should stop once the document is completed."""

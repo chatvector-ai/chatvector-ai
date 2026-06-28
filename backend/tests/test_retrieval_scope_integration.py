@@ -41,7 +41,7 @@ async def test_session_scope_searches_registered_session_document():
     ) as mock_find, patch(
         "services.chat_service.build_context_from_chunks", return_value="ctx"
     ), patch(
-        "services.chat_service.generate_answer", new=AsyncMock(return_value="answer")
+        "services.chat_service.generate_answer", new=AsyncMock(return_value=("answer", 0, "m"))
     ):
         result = await answer_question_for_document(
             question="Q?",
@@ -95,7 +95,7 @@ async def test_tenant_scope_searches_all_tenant_documents():
     ) as mock_find, patch(
         "services.chat_service.build_context_from_chunks", return_value="ctx"
     ), patch(
-        "services.chat_service.generate_answer", new=AsyncMock(return_value="answer")
+        "services.chat_service.generate_answer", new=AsyncMock(return_value=("answer", 0, "m"))
     ):
         result = await answer_question_for_document(
             question="Q?",
@@ -123,7 +123,7 @@ async def test_tenant_scope_prevents_cross_tenant_document_access():
     ) as mock_find, patch(
         "services.chat_service.build_context_from_chunks", return_value="ctx"
     ), patch(
-        "services.chat_service.generate_answer", new=AsyncMock(return_value="answer")
+        "services.chat_service.generate_answer", new=AsyncMock(return_value=("answer", 0, "m"))
     ):
         result = await answer_question_for_document(
             question="Q?",
@@ -148,7 +148,7 @@ async def test_session_scope_backward_compatible_without_session_documents():
     ) as mock_find, patch(
         "services.chat_service.build_context_from_chunks", return_value="ctx"
     ), patch(
-        "services.chat_service.generate_answer", new=AsyncMock(return_value="answer")
+        "services.chat_service.generate_answer", new=AsyncMock(return_value=("answer", 0, "m"))
     ):
         result = await answer_question_for_document(
             question="Q?",
@@ -190,7 +190,7 @@ async def test_batch_level_scope_applied_when_items_omit_scope():
     ) as mock_find, patch(
         "services.chat_service.build_context_from_chunks", return_value="ctx"
     ), patch(
-        "services.chat_service.generate_answer", new=AsyncMock(return_value="answer")
+        "services.chat_service.generate_answer", new=AsyncMock(return_value=("answer", 0, "m"))
     ):
         results = await answer_questions_for_documents_batch(
             queries,

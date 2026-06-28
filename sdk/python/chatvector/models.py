@@ -136,6 +136,8 @@ class ChatResponse:
     chunks: int
     answer: str
     sources: list[ChatSource] = field(default_factory=list)
+    latency_ms: int = 0
+    model: str = ""
     raw: JSONDict = field(default_factory=dict, repr=False)
 
     @classmethod
@@ -149,6 +151,8 @@ class ChatResponse:
             chunks=int(payload.get("chunks", 0)),
             answer=str(payload.get("answer", "")),
             sources=sources,
+            latency_ms=int(payload.get("latency_ms") or 0),
+            model=str(payload.get("model") or ""),
             raw=raw,
         )
 
@@ -159,6 +163,8 @@ class ChatResponse:
             "chunks": self.chunks,
             "answer": self.answer,
             "sources": [source.to_dict() for source in self.sources],
+            "latency_ms": self.latency_ms,
+            "model": self.model,
         }
 
 
@@ -190,6 +196,8 @@ class BatchChatResult:
     answer: str | None = None
     sources: list[ChatSource] = field(default_factory=list)
     error: JSONDict | None = None
+    latency_ms: int = 0
+    model: str = ""
     raw: JSONDict = field(default_factory=dict, repr=False)
 
     @classmethod
@@ -205,6 +213,8 @@ class BatchChatResult:
             answer=_optional_str(payload.get("answer")),
             sources=_parse_sources(payload.get("sources")),
             error=dict(error) if isinstance(error, Mapping) else None,
+            latency_ms=int(payload.get("latency_ms") or 0),
+            model=str(payload.get("model") or ""),
             raw=raw,
         )
 
@@ -215,6 +225,8 @@ class BatchChatResult:
             "question": self.question,
             "doc_ids": list(self.doc_ids),
             "chunks": self.chunks,
+            "latency_ms": self.latency_ms,
+            "model": self.model,
         }
         if self.answer is not None:
             payload["answer"] = self.answer

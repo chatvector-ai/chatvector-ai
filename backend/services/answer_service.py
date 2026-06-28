@@ -1,6 +1,7 @@
 """LLM answer generation for RAG chat — delegates to the configured provider."""
 
 import logging
+import time
 from pathlib import Path
 from typing import AsyncGenerator
 
@@ -80,9 +81,14 @@ def _api_key_present() -> bool:
     return key is not None and str(key).strip() != ""
 
 
-async def generate_answer(question: str, context: str) -> str:
+async def generate_answer(question: str, context: str) -> tuple[str, int, str]:
     """
     Generate an answer using the configured LLM provider.
+
+    Returns a 3-tuple of (answer, latency_ms, model_name).
+    ``latency_ms`` measures LLM generation wall time only (not embedding or
+    retrieval).  On provider errors the answer is a soft-error string,
+    latency_ms is 0, and model_name is the empty string.
 
     Error classification is provider-agnostic: providers raise common
     exceptions (ProviderRateLimitError, etc.) and this function maps
@@ -96,18 +102,20 @@ async def generate_answer(question: str, context: str) -> str:
             config.LLM_PROVIDER,
             extra={"error_type": "MissingAPIKey"},
         )
-        return _msg_missing_api_key()
+        return _msg_missing_api_key(), 0, ""
 
     try:
         provider = get_llm_provider()
+        t0 = time.perf_counter()
         answer = await provider.generate(
             contents,
             system_instruction=_get_system_prompt(),
             temperature=config.LLM_TEMPERATURE,
             max_output_tokens=config.LLM_MAX_OUTPUT_TOKENS,
         )
+        latency_ms = int((time.perf_counter() - t0) * 1000)
         logger.info("Answer generated successfully")
-        return answer
+        return answer, latency_ms, getattr(provider, "model_name", "")
 
     except ProviderRateLimitError as e:
         logger.error(
@@ -116,7 +124,7 @@ async def generate_answer(question: str, context: str) -> str:
             e,
             extra={"error_type": type(e).__name__},
         )
-        return _msg_rate_limit()
+        return _msg_rate_limit(), 0, ""
 
     except ProviderAuthError as e:
         logger.error(
@@ -125,7 +133,7 @@ async def generate_answer(question: str, context: str) -> str:
             e,
             extra={"error_type": type(e).__name__},
         )
-        return _msg_invalid_api_key()
+        return _msg_invalid_api_key(), 0, ""
 
     except ProviderTimeoutError as e:
         logger.error(
@@ -135,7 +143,7 @@ async def generate_answer(question: str, context: str) -> str:
             exc_info=True,
             extra={"error_type": type(e).__name__},
         )
-        return _msg_timeout_or_connection()
+        return _msg_timeout_or_connection(), 0, ""
 
     except ProviderConnectionError as e:
         logger.error(
@@ -145,7 +153,7 @@ async def generate_answer(question: str, context: str) -> str:
             exc_info=True,
             extra={"error_type": type(e).__name__},
         )
-        return _msg_timeout_or_connection()
+        return _msg_timeout_or_connection(), 0, ""
 
     except Exception as e:
         logger.error(
@@ -155,7 +163,7 @@ async def generate_answer(question: str, context: str) -> str:
             exc_info=True,
             extra={"error_type": type(e).__name__},
         )
-        return _msg_unexpected()
+        return _msg_unexpected(), 0, ""
 
 async def generate_answer_stream(question: str, context: str) -> AsyncGenerator[str, None]:
     """

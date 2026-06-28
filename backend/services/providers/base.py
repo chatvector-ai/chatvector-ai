@@ -124,6 +124,12 @@ class EmbeddingProvider(ABC):
 class LLMProvider(ABC):
     """Common interface for LLM text-generation implementations."""
 
+    @property
+    def model_name(self) -> str:
+        """Return the model identifier used by this provider instance."""
+        model: str | None = getattr(self, "_model", None)
+        return model or ""
+
     @abstractmethod
     async def generate(
         self,

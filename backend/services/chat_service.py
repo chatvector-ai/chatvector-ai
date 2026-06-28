@@ -71,9 +71,11 @@ async def get_embedding(text: str) -> list[float]:
     return await _get_embedding(text)
 
 
-async def generate_answer(question: str, context: str) -> str:
+async def generate_answer(question: str, context: str) -> tuple[str, int, str]:
     """
     Lazily import answer dependency to keep module import side-effect free.
+
+    Returns (answer, latency_ms, model_name).
     """
     from services.answer_service import generate_answer as _generate_answer
 
@@ -234,6 +236,8 @@ async def answer_question_for_document(
             "chunks": 0,
             "answer": "",
             "sources": [],
+            "latency_ms": 0,
+            "model": "",
             "status": "error",
             "error": {
                 "code": "no_documents_in_scope",
@@ -272,13 +276,15 @@ async def answer_question_for_document(
             logger.error(f"Failed to load chat history for session {session_id}: {e}", exc_info=True)
 
     context = build_context_from_chunks(matching_chunks, session_context=session_context)
-    answer = await generate_answer(question, context)
+    answer, latency_ms, model_name = await generate_answer(question, context)
     base: dict = {
         "question": question,
         "doc_id": doc_id,
         "chunks": len(matching_chunks),
         "answer": answer,
         "sources": _build_sources(matching_chunks),
+        "latency_ms": latency_ms,
+        "model": model_name,
     }
     llm_err = _structured_error_from_llm_answer(answer)
     if llm_err is not None:
@@ -505,6 +511,8 @@ async def answer_questions_for_documents_batch(
                         "code": "no_documents_in_scope",
                         "message": "No documents available for retrieval in the requested scope.",
                     },
+                    "latency_ms": 0,
+                    "model": "",
                     "session_id": session_id,
                 }
 
@@ -541,7 +549,7 @@ async def answer_questions_for_documents_batch(
                     logger.error(f"Failed to load batch chat history for session {session_id}: {e}", exc_info=True)
                 
             context = build_context_from_chunks(matching_chunks, session_context=query_session_context)
-            answer = await generate_answer(query["question"], context)
+            answer, latency_ms, model_name = await generate_answer(query["question"], context)
 
             sources = _build_sources(matching_chunks)
             llm_err = _structured_error_from_llm_answer(answer)
@@ -554,6 +562,8 @@ async def answer_questions_for_documents_batch(
                     "answer": answer,
                     "sources": sources,
                     "error": llm_err,
+                    "latency_ms": latency_ms,
+                    "model": model_name,
                     "session_id": session_id,
                 }
 
@@ -576,6 +586,8 @@ async def answer_questions_for_documents_batch(
                 "chunks": len(matching_chunks),
                 "answer": answer,
                 "sources": sources,
+                "latency_ms": latency_ms,
+                "model": model_name,
                 "session_id": session_id,
             }
         except Exception:
