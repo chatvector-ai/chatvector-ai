@@ -200,6 +200,7 @@ def _build_sources(chunks: list) -> list[dict]:
             "file_name": chunk.file_name,
             "page_number": chunk.page_number,
             "chunk_index": chunk.chunk_index,
+            "score": chunk.similarity,
         }
         for chunk in chunks
     ]

@@ -135,6 +135,7 @@ class ChatVectorClientTests(unittest.TestCase):
                         "file_name": "guide.pdf",
                         "page_number": 1,
                         "chunk_index": 0,
+                        "score": 0.95,
                     }
                 ],
             },
@@ -147,6 +148,7 @@ class ChatVectorClientTests(unittest.TestCase):
         self.assertEqual(result.answer, "It is an onboarding guide.")
         self.assertEqual(len(result.sources), 1)
         self.assertEqual(result.sources[0].file_name, "guide.pdf")
+        self.assertEqual(result.sources[0].score, 0.95)
 
     def test_batch_chat_returns_typed_batch_response(self) -> None:
         """Batch chat should accept dataclass queries and parse typed results."""
@@ -170,6 +172,7 @@ class ChatVectorClientTests(unittest.TestCase):
                                 "file_name": "guide.pdf",
                                 "page_number": 2,
                                 "chunk_index": 1,
+                                "score": 0.85,
                             }
                         ],
                     },
