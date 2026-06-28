@@ -155,9 +155,9 @@ An async in-memory `asyncio.Queue` decouples upload from processing.
 Documents left in any in-progress state are bulk-updated to `failed`
 before workers start accepting new jobs.
 
-> **Note:** The default queue is in-memory. A Redis-backed queue is
-> implemented (`QUEUE_BACKEND=redis`) and will become the production
-> default in Phase 3 for job durability and multi-instance support.
+> **Note:** The default queue is in-memory for local development. In production
+> (`APP_ENV=production`), the Redis-backed queue is the default for job durability
+> and multi-instance support. Set `QUEUE_BACKEND=memory` explicitly to override.
 
 ---
 
@@ -415,8 +415,8 @@ responses. Security headers on every response.
 The current architecture supports these extensions without major refactors:
 
 - ~~Pluggable LLM & embedding providers~~ (done — see LLM & Embedding Providers)
-- ~~Redis-backed queue~~ (implemented — `QUEUE_BACKEND=redis`; in-memory remains default until Phase 3)
-- **Authentication & multi-tenancy** — Phase 3
-- **Streaming LLM responses** — Server-Sent Events, Phase 3
+- ~~Redis-backed queue~~ (done — production default when `APP_ENV=production`; in-memory for local dev)
+- ~~Streaming LLM responses~~ (done — SSE at `/chat/stream`)
+- **Authentication & multi-tenancy** — Phase 3 in progress (plumbing scaffolded; API-key enforcement not yet active)
 - **Specialized pipelines** — legal, academic, code document handling
 - **Read replicas** — supported by existing DB abstraction layer

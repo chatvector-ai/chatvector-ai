@@ -213,9 +213,9 @@ Inspect the dead-letter queue at any time:
 curl http://localhost:8000/queue/stats
 ```
 
-> **Note:** The current default queue is in-memory and does not persist across
-> restarts. A Redis-backed queue is implemented and available (`QUEUE_BACKEND=redis`);
-> it will become the production default in Phase 3.
+> **Note:** The default queue is in-memory for local development. In production
+> (`APP_ENV=production`), the Redis-backed queue is the default. Set
+> `QUEUE_BACKEND=redis` explicitly in development to test Redis locally.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for full queue and pipeline details.
 
@@ -362,10 +362,9 @@ backend (`APP_ENV=development` or `APP_ENV=test` with `DATABASE_URL`).
 
 ### Queue persistence
 
-The default in-memory queue does not persist across restarts. For production
-deployments requiring durability, set `QUEUE_BACKEND=redis` and provide
-`REDIS_URL`. Redis queue support is implemented; it will become the default
-in Phase 3.
+The default in-memory queue does not persist across restarts. In production
+(`APP_ENV=production`), Redis is the default queue backend. For local development
+with Redis, set `QUEUE_BACKEND=redis` and provide `REDIS_URL`.
 
 ---
 

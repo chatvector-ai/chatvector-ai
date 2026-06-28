@@ -42,7 +42,7 @@ Phase 2 expanded flexibility, retrieval quality, and usability while maintaining
 - Production Docker Compose and GitHub Actions CI pipeline
 - Security hardening (headers, CORS, upload validation, error handling)
 - Python client SDK with typed models and retry handling
-- Redis-backed ingestion queue (implemented, not yet default in production)
+- Redis-backed ingestion queue (promoted to the production default during Phase 3A; the in-memory queue remains available for local development)
 
 **Frontend Demo**
 
@@ -83,48 +83,65 @@ Transform ChatVector into a **multi-tenant, session-aware document intelligence 
 
 **Core Principle:** Simple by default, powerful when explicitly enabled.
 
+> **Current status:** Most Phase 3B backend quality and provider work has shipped. Phase 3A session, streaming, and queue foundations are in place. Authentication and tenant-aware plumbing are scaffolded, but production API-key validation and strict tenant enforcement remain active Phase 3 work. The project should not yet be described as a fully secure, multi-tenant API.
+
 ---
 
 ### Phase 3A — Core Platform Foundation
 
-This phase introduces the primary architectural shift. All Phase 3B and 3C work depends on this foundation.
+This phase introduces the primary architectural shift. Phase 3B and 3C work builds on this foundation.
 
-#### 1. API Authentication & Multi-Tenancy
+#### ✅ Completed
 
-- API key (`Bearer <API_KEY>`) required for all endpoints
-- Each API key maps 1:1 to a tenant — implicit and strict
-- All resources (documents, sessions, queries, ingestion jobs) automatically scoped to tenant
-- Per-tenant rate limiting replaces per-IP limiting
-- No user accounts or auth flows — API-level only
-- No tenant overrides accepted in request bodies
-
-#### 2. Session-Based Chat (Document-Scoped)
+**Session-based chat (document-scoped)**
 
 - Sessions provide conversation memory and document query scope
 - Auto-created if no `session_id` is provided — zero config required
-- Sessions bound to a specific set of documents at creation
+- Sessions bound to documents as they are queried
 - Full message history persisted per session (user and assistant turns)
-- Optional `external_user_id` field for developer-side user mapping
-- Explicit session management endpoints: create, list, delete
+- Explicit session management endpoints: create, list, get, delete
+- Frontend anonymous sessions and session sidebar
 
-#### 3. Context Injection Strategy
+**Context injection for answer generation**
 
-- Conversation history is used to improve query rewriting and expansion
+- Recent conversation history loaded into the LLM context window
 - Retrieval operates on a clean, transformed query — not raw history
-- LLM receives: top-k retrieved chunks + a small recent message window
+- LLM receives: top-k retrieved chunks + a bounded recent message window
 - Prevents token explosion and retrieval quality degradation over long sessions
 
-#### 4. Streaming LLM Responses
+**Streaming LLM responses**
 
-- SSE endpoint at `/chat/stream` for token-by-token streaming
-- Final structured event includes citations and source metadata
-- Session message persisted after stream completes
+- SSE endpoint at `/chat/stream` for provider token streaming
+- Session messages persisted after stream completes
+- Ingestion progress over SSE with persistent pipeline UI in the frontend demo
 
-#### 5. Redis Queue as Production Default
+**Redis queue as production default**
 
-- Redis-backed ingestion queue promoted to default in production environments
+- Redis-backed ingestion queue promoted to default in production environments (`APP_ENV=production`)
 - In-memory queue retained as development fallback
 - Documentation and configuration aligned
+
+#### ⏳ Remaining
+
+**API authentication & multi-tenancy**
+
+Routes depend on `require_auth`, but enforcement is not yet complete:
+
+- Bearer API-key parsing and validation (`Authorization: Bearer <API_KEY>`)
+- Secure API-key storage, lookup, and API key → tenant resolution
+- Rejection of missing or invalid keys
+- Strict tenant scoping on documents, sessions, chunks, ingestion jobs, and delete operations
+- Per-tenant rate limiting (replacing per-IP limiting)
+- API-key lifecycle tooling (generation, rotation, revocation, expiration)
+- Optional `external_user_id` field for developer-side user mapping
+
+**Context injection — query transformation**
+
+- Conversation history is not yet passed into query rewriting/expansion (history informs answer generation only)
+
+**Streaming contract**
+
+- Structured final SSE event with citations, `latency_ms`, and `model` metadata
 
 ---
 
@@ -132,24 +149,25 @@ This phase introduces the primary architectural shift. All Phase 3B and 3C work 
 
 Build on the platform foundation to improve response quality and expand developer reach.
 
-#### 6. Configurable Response Personas
+#### ✅ Completed
 
-- Predefined system prompt styles: `default`, `conversational`, `academic`, `technical`, `concise`
-- Configured via `PROMPT_PERSONA` environment variable
-- Clear precedence: custom prompt path > persona > default system prompt
-- No pipeline changes required — prompt engineering only
+**Hybrid retrieval**
 
-#### 7. Additional Provider Support
+- PostgreSQL full-text search combined with vector similarity
+- Reciprocal Rank Fusion (RRF) for result merging
+- Configurable via `HYBRID_RETRIEVAL_ENABLED`
 
-- Claude (LLM-only — Anthropic has no embeddings API)
-- Voyage AI (embeddings — includes domain-tuned models)
-- Explicit support and documentation for mixed-provider setups (e.g. Claude + Voyage)
+**Retrieval reranking**
 
-#### 8. Scoped Retrieval with Optional Tenant-Wide Querying
+- Reranker abstraction with a deterministic similarity + lexical-overlap baseline
+- Configurable via `ENABLE_RERANKING` and `RERANKER_PROVIDER`
+- External cross-encoder or hosted reranking providers remain future enhancements
+
+**Scoped retrieval**
 
 - Default behavior: retrieval scoped to session documents
 - Optional `scope: "tenant"` parameter enables search across all tenant documents
-- Opt-in only — clearly documented with cost and latency implications
+- Supported on `/chat`, `/chat/stream`, and `/chat/batch`
 
 ```json
 {
@@ -158,12 +176,51 @@ Build on the platform foundation to improve response quality and expand develope
 }
 ```
 
-#### 9. Node.js / TypeScript SDK
+**Configurable response personas**
 
-- First-class SDK for backend developers
+- Predefined system prompt styles: `default`, `concise`, `conversational`, `academic`, `technical`
+- Configured via `PROMPT_PERSONA` environment variable
+- Clear precedence: custom prompt path > persona > default system prompt
+
+**Additional provider support**
+
+- Anthropic Claude (LLM — non-streaming and streaming generation)
+- Voyage AI (embeddings — includes domain-tuned models)
+- Mixed-provider configurations (e.g. Claude + Voyage, OpenAI LLM + Voyage embeddings)
+
+**Response and citation metadata**
+
+- Relevance scores on source citations
+- `latency_ms` and `model` fields on non-streaming `/chat` and `/chat/batch` responses
+
+**Frontend demo improvements**
+
+- Live system status page
+- Batch query demo
+
+#### ⏳ Remaining
+
+**Node.js / TypeScript SDK**
+
+- First-class SDK for backend developers — planned, not yet implemented
 - Typed API client, retry with backoff, `waitForReady()` polling helper
 - Session-aware chat support
 - Published to npm
+
+**Python SDK parity**
+
+The Python SDK supports core synchronous workflows (upload, status polling, `wait_for_ready`, non-streaming chat, batch chat, typed responses, structured errors, relevance scores, model/latency metadata, queue position). It does not yet cover:
+
+- Session management methods
+- Streaming chat
+- Ingestion SSE
+- Retrieval scope options
+- Async client
+
+**Inspection and observability tooling**
+
+- Query transformation visualization (opt-in debug metadata)
+- Full retrieval inspection panel (component scores, rerank ordering)
 
 ---
 
@@ -198,24 +255,30 @@ Focus on documentation, discoverability, and real-world integration patterns.
 These are valuable extensions deferred until the Phase 3 platform foundation is stable.
 
 **Retrieval Quality**
-- Hybrid search (PostgreSQL full-text + vector search — BM25 + pgvector)
-- Reranking layer (cross-encoder or API-based, e.g. Cohere Rerank)
+
+- External cross-encoder or API-based reranking providers (e.g. Cohere Rerank, Jina)
+- Retrieval evaluation and benchmarking datasets
+- Advanced retrieval observability (component score traces, faithfulness evaluation)
 
 **Scalability & Performance**
+
 - Embedding and query result caching
 - Webhook-based ingestion callbacks
 - Advanced rate limiting and usage tracking
 
 **Data & Document Management**
+
 - Document versioning
 - Retrieval feedback signals (thumbs up/down on answers)
 - Multi-format document ingestion (e.g. Docling — DOCX, PPTX, HTML, images)
 
 **Advanced Retrieval**
+
 - Knowledge graph and GraphRAG approaches
 - Domain-specific pipelines (legal, academic, code-aware)
 
 **Ecosystem**
+
 - React SDK
 - Community showcase and integrations gallery
 
@@ -238,12 +301,14 @@ ChatVector is intentionally **not** building the following:
 
 ## Phase 3 Success Criteria
 
-By the end of Phase 3, ChatVector should be:
+Progress toward the Phase 3 north star:
 
-- ✅ A secure, multi-tenant RAG API accessed via API key
-- ✅ Capable of stateful document conversations with session memory
-- ✅ Streaming-first with modern chatbot UX
-- ✅ Provider-flexible — mix and match LLMs and embedding models
-- ✅ Simple to use by default, powerful when advanced features are enabled
-- ✅ Supported by SDKs in Python and Node.js
-- ✅ Backed by real example applications and comprehensive documentation
+- ✅ Stateful document conversations with persisted session memory
+- ✅ Streaming chat and ingestion progress (SSE)
+- ✅ Hybrid retrieval, baseline reranking, and configurable retrieval scopes
+- ✅ Provider flexibility across Gemini, OpenAI, Ollama, Claude, and Voyage embeddings
+- ✅ Response personas, citation relevance scores, and response metadata (`latency_ms`, `model`)
+- ⚠️ Authentication plumbing exists; production API-key enforcement is still in progress
+- ⚠️ Python SDK exists but needs parity with sessions, streaming, and retrieval scopes
+- ⏳ Node.js/TypeScript SDK planned
+- ⏳ Documentation, examples, and inspection tooling in progress

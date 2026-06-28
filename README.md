@@ -85,9 +85,9 @@ ChatVector is designed for:
 
 ## 🚀 Current Status
 
-### Phase 2 & 2.5 — Complete | Phase 3 — In Progress
+### Phases 1–2.5 Complete | Phase 3 In Progress
 
-Phases 2 and 2.5 are complete. The core RAG backend and frontend demo are fully functional and hardened. Phase 3 is now underway, adding authentication, multi-tenancy, sessions, and streaming.
+Phases 1, 2, and 2.5 are complete. Phase 3 is actively underway — most backend quality and provider work has shipped, but production API-key enforcement is still in progress. See [ROADMAP.md](ROADMAP.md) for the full breakdown.
 
 **What's working today:**
 
@@ -95,31 +95,40 @@ Phases 2 and 2.5 are complete. The core RAG backend and frontend demo are fully 
 - ✅ PDF and text document ingestion
 - ✅ Configurable chunking strategies (fixed, paragraph, semantic)
 - ✅ Vector embeddings + semantic search via pgvector
-- ✅ LLM-powered answers with source citations
+- ✅ Hybrid retrieval (PostgreSQL full-text + vector, RRF fusion)
+- ✅ Baseline retrieval reranking (similarity + lexical overlap)
+- ✅ Session-scoped and tenant-wide retrieval modes
+- ✅ LLM-powered answers with source citations and relevance scores
 - ✅ Query transformations (rewrite, expand, stepback)
-- ✅ Configurable system prompt and LLM parameters
+- ✅ Configurable response personas and system prompt
+- ✅ Session-based chat with persisted conversation history
+- ✅ SSE streaming chat (`/chat/stream`)
 - ✅ Background ingestion queue with rate limiting, retry, and DLQ
 - ✅ Redis-backed ingestion queue (production default; in-memory fallback for local dev)
 - ✅ Structured logging with request ID tracing
-- ✅ Health checks with TTL caching on /status
+- ✅ Health checks with TTL caching on `/status`
 - ✅ Per-IP rate limiting on all public endpoints
-- ✅ UUID validation on all document ID inputs
 - ✅ Security headers, CORS hardening, input validation
 - ✅ Production Compose config + GitHub Actions CI
-- ✅ Pluggable LLM & embedding providers (Gemini, OpenAI, Ollama)
-- ✅ Python client SDK
+- ✅ Pluggable LLM providers (Gemini, OpenAI, Ollama, Anthropic Claude)
+- ✅ Pluggable embedding providers (Gemini, OpenAI, Ollama, Voyage AI)
+- ✅ Mixed-provider configurations (e.g. Claude + Voyage)
+- ✅ Response metadata: `latency_ms` and `model` on chat responses
+- ✅ Python client SDK (core synchronous workflows)
 
 **Frontend Demo**
-- ✅ Document upload with live pipeline stage display
+- ✅ Document upload with live pipeline stage display and SSE progress
 - ✅ Real-time ingestion status polling
-- ✅ Full RAG chat with source citations
+- ✅ Full RAG chat with source citations and session sidebar
+- ✅ SSE streaming chat, batch query demo, and live system status page
 - ✅ Responsive design with dark developer aesthetic
 
-**In progress / Phase 3:**
-- 🚧 Authentication & multi-tenancy (API key per tenant)
-- 🚧 Session-based chat with conversation memory
-- 🚧 Streaming LLM responses (SSE)
-- 🚧 Redis queue promoted to production default
+**Active Phase 3 work:**
+- 🚧 Production API-key authentication and strict tenant enforcement (plumbing scaffolded; validation not yet active)
+- 🚧 Per-tenant rate limiting
+- 🚧 Python SDK parity (sessions, streaming, retrieval scopes)
+- 🚧 Node.js/TypeScript SDK (planned)
+- 🚧 Query transformation debug metadata and retrieval inspection tooling
 
 ---
 
@@ -134,10 +143,13 @@ Phases 2 and 2.5 are complete. The core RAG backend and frontend demo are fully 
 
 ### AI & Retrieval Layer
 
-- **Pluggable providers** — Gemini (default), OpenAI, or Ollama for both LLM and embeddings
+- **Pluggable providers** — Gemini, OpenAI, Ollama, Anthropic Claude (LLM), and Voyage AI (embeddings); mix and match independently
+- **Hybrid retrieval** — vector similarity + PostgreSQL full-text search with RRF fusion
+- **Baseline reranking** — deterministic similarity + lexical overlap reranker
+- **Retrieval scopes** — session-scoped (default) or tenant-wide search
 - **Configurable chunking** — fixed, paragraph, or semantic strategies
 - **Query transformations** — rewrite, expand, or stepback before retrieval
-- **Prompt configuration** — externalized system prompt and LLM parameters
+- **Response personas** — `default`, `concise`, `conversational`, `academic`, `technical`
 
 ### Data Layer
 
@@ -235,6 +247,9 @@ make dev
 ---
 
 ### Python SDK
+
+A synchronous Python client is available today. A Node.js/TypeScript SDK is planned for Phase 3.
+
 ```bash
 pip install ./sdk/python
 ```
@@ -245,10 +260,12 @@ with ChatVectorClient("http://localhost:8000") as client:
     doc = client.upload_document("report.pdf")
     client.wait_for_ready(doc.document_id, timeout=90)
     answer = client.chat("What are the key findings?", doc.document_id)
-    print(answer.answer)
+    print(answer.answer, answer.latency_ms, answer.model)
     for source in answer.sources:
-        print(source.file_name, source.page_number)
+        print(source.file_name, source.page_number, source.score)
 ```
+
+Session management, streaming chat, and retrieval scope options are not yet exposed in the SDK. See [sdk/python/README.md](sdk/python/README.md) for details.
 
 ---
 

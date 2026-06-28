@@ -2,7 +2,17 @@ import Link from "next/link";
 import { DocLayout } from "@/app/components/DocLayout";
 import { DocPageHeader } from "@/app/components/DocPageHeader";
 
-const phases = [
+type Phase = {
+  number: string;
+  title: string;
+  status: string;
+  statusStyles: string;
+  description: string;
+  completedItems?: string[];
+  remainingItems?: string[];
+};
+
+const phases: Phase[] = [
   {
     number: "Phase 1",
     title: "Stabilize & Optimize Core Engine",
@@ -14,18 +24,44 @@ const phases = [
   {
     number: "Phase 2",
     title: "Enhance Developer Experience",
-    status: "Current",
-    statusStyles: "bg-blue text-white",
+    status: "Complete",
+    statusStyles: "bg-accent text-background",
     description:
-      "Active work areas focusing on a Redis-backed durable ingestion queue, improved observability, advanced chunking strategies, and wiring up the document upload UI.",
+      "Expanded flexibility and developer experience: advanced chunking, query transformations, pluggable providers, Python SDK, production Docker Compose, CI, and the frontend demo.",
+  },
+  {
+    number: "Phase 2.5",
+    title: "Hardening & Consistency",
+    status: "Complete",
+    statusStyles: "bg-accent text-background",
+    description:
+      "Stabilization pass ahead of Phase 3: unified API error contracts, provider timeout standardization, embedding validation, logging safety, and expanded test coverage.",
   },
   {
     number: "Phase 3",
-    title: "Scale & Specialize",
-    status: "Later",
-    statusStyles: "border border-border bg-surface text-foreground/80",
+    title: "Platform Evolution",
+    status: "In Progress",
+    statusStyles: "bg-blue text-white",
     description:
-      "Long-term vision for a production-ready document intelligence platform. Future goals include authentication, multi-tenancy, specialized pipelines, and ecosystem growth.",
+      "Transform ChatVector into a session-aware document intelligence backend. Most Phase 3B quality and provider work has shipped. Authentication and tenant-aware plumbing are scaffolded, but production API-key validation and strict tenant enforcement remain active work.",
+    completedItems: [
+      "Session-based chat with persisted history and explicit session endpoints",
+      "SSE streaming chat and ingestion progress",
+      "Redis ingestion queue as production default",
+      "Hybrid retrieval (full-text + vector, RRF) and baseline reranking",
+      "Session-scoped and tenant-wide retrieval modes",
+      "Anthropic Claude and Voyage AI provider support",
+      "Configurable response personas",
+      "Citation relevance scores and response metadata (latency_ms, model)",
+      "Live system status page and batch query demo",
+    ],
+    remainingItems: [
+      "Production API-key authentication and strict tenant enforcement",
+      "Per-tenant rate limiting and API-key lifecycle tooling",
+      "Python SDK parity (sessions, streaming, retrieval scopes)",
+      "Node.js/TypeScript SDK",
+      "Query transformation visualization and retrieval inspection tooling",
+    ],
   },
 ];
 
@@ -35,7 +71,7 @@ export default function RoadmapPage() {
       <DocPageHeader
         kicker="future outlook"
         title="Roadmap"
-        description="Phased delivery from stabilizing the core engine through developer experience and long-term scale."
+        description="Phased delivery from stabilizing the core engine through platform evolution and ecosystem growth."
       />
 
       <h2 className="sr-only">Development phases</h2>
@@ -63,6 +99,32 @@ export default function RoadmapPage() {
             <p className="text-[1rem] leading-[1.8] text-foreground/90">
               {phase.description}
             </p>
+
+            {phase.completedItems && phase.completedItems.length > 0 && (
+              <div className="mt-6">
+                <h4 className="mb-2 text-sm font-semibold uppercase tracking-wide text-accent/80">
+                  Shipped
+                </h4>
+                <ul className="list-inside list-disc space-y-1 text-[0.95rem] leading-relaxed text-foreground/85">
+                  {phase.completedItems.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {phase.remainingItems && phase.remainingItems.length > 0 && (
+              <div className="mt-6">
+                <h4 className="mb-2 text-sm font-semibold uppercase tracking-wide text-foreground/70">
+                  Remaining
+                </h4>
+                <ul className="list-inside list-disc space-y-1 text-[0.95rem] leading-relaxed text-foreground/85">
+                  {phase.remainingItems.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
         ))}
       </div>
