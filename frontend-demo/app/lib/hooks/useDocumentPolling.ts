@@ -75,6 +75,12 @@ export function useDocumentPolling(
   awaitingProcessing: boolean;
   processingTime: string | undefined;
   errorMessage: string | undefined;
+  /**
+   * Latest queue position observed from SSE/poll responses. Stays defined
+   * after the document leaves the queued state so callers can fall back to
+   * the upload-time value when the live one is not yet known.
+   */
+  queuePosition: number | undefined;
 } {
   const [polledUiStatus, setPolledUiStatus] = useState<
     PolledDocumentStatus | undefined
@@ -87,6 +93,7 @@ export function useDocumentPolling(
   const [awaitingProcessing, setAwaitingProcessing] = useState(false);
   const [processingTime, setProcessingTime] = useState<string | undefined>(undefined);
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
+  const [queuePosition, setQueuePosition] = useState<number | undefined>(undefined);
 
   // A toggle for environments/situations where SSE fails
   const [useFallbackPolling, setUseFallbackPolling] = useState(false);
@@ -108,6 +115,7 @@ export function useDocumentPolling(
       setUseFallbackPolling(false);
       setProcessingTime(undefined);
       setErrorMessage(undefined);
+      setQueuePosition(undefined);
     }
   }, [docKey]);
 
@@ -151,6 +159,20 @@ export function useDocumentPolling(
             setChunks({ total: c.total, processed: c.processed });
           } else {
             setChunks(undefined);
+          }
+
+          // Keep the live queue position fresh while the backend reports one.
+          // We only update when the field is present so older payloads (or a
+          // brief gap while the document transitions out of "queued") leave
+          // the previously-known value intact — the AttachmentChip gates its
+          // own display on `awaitingProcessing`, so a stale-but-defined value
+          // here is harmless once processing actually begins.
+          if (
+            typeof payload.queue_position === "number" &&
+            Number.isInteger(payload.queue_position) &&
+            payload.queue_position >= 1
+          ) {
+            setQueuePosition(payload.queue_position);
           }
 
           const ui = mapApiStatusToUi(payload.status);
@@ -223,6 +245,16 @@ export function useDocumentPolling(
             setChunks(undefined);
           }
 
+          // Mirror the SSE path: refresh queue position when the polling
+          // response reports a valid value.
+          if (
+            typeof payload.queue_position === "number" &&
+            Number.isInteger(payload.queue_position) &&
+            payload.queue_position >= 1
+          ) {
+            setQueuePosition(payload.queue_position);
+          }
+
           const ui = mapApiStatusToUi(payload.status);
           setPolledUiStatus(ui);
 
@@ -272,6 +304,7 @@ export function useDocumentPolling(
     chunks,
     awaitingProcessing: enabled && awaitingProcessing,
     processingTime,
-    errorMessage, 
+    errorMessage,
+    queuePosition,
   };
 }

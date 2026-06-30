@@ -60,7 +60,13 @@ export default function ChatInput({
             stage={poll.stage}
             chunks={poll.chunks}
             awaitingProcessing={poll.awaitingProcessing}
-            queuePosition={attachment.queue_position}
+            // Prefer the live queue position reported by the polling/SSE
+            // stream once it arrives; fall back to the upload-time value so
+            // the chip still shows the position between upload acceptance
+            // and the first status event.
+            queuePosition={
+              poll.queuePosition ?? attachment.queue_position
+            }
             processingTime={poll.processingTime}
             onRemove={() => void handleRemoveAttachment()}
           />

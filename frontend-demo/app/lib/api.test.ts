@@ -274,4 +274,94 @@ describe("getDocumentStatus", () => {
       stage: "embedding",
     });
   });
+
+  it("parses queue_position from queued status responses", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: "queued",
+          stage: "queued",
+          queue_position: 3,
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(getDocumentStatus("/documents/doc-123/status")).resolves.toEqual({
+      status: "queued",
+      stage: "queued",
+      queue_position: 3,
+    });
+  });
+
+  it("drops queue_position when absent so non-queued responses stay clean", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: "embedding",
+          stage: "embedding",
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(getDocumentStatus("/documents/doc-123/status")).resolves.toEqual({
+      status: "embedding",
+      stage: "embedding",
+    });
+  });
+
+  it("drops malformed queue_position values", async () => {
+    for (const bad of [0, -1, 1.5, "3", null, true]) {
+      vi.mocked(globalThis.fetch).mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            status: "queued",
+            stage: "queued",
+            queue_position: bad,
+          }),
+          { status: 200 }
+        )
+      );
+
+      const result = await getDocumentStatus("/documents/doc-123/status");
+      expect(result.queue_position).toBeUndefined();
+    }
+  });
+
+  it("surfaces a queue_position that drops from 3 to 1 across polls", async () => {
+    // First poll: upload returned position 3, still queued.
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          status: "queued",
+          stage: "queued",
+          queue_position: 3,
+        }),
+        { status: 200 }
+      )
+    );
+    await expect(getDocumentStatus("/documents/doc-123/status")).resolves.toEqual({
+      status: "queued",
+      stage: "queued",
+      queue_position: 3,
+    });
+
+    // Second poll: queue has advanced, position is now 1.
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          status: "queued",
+          stage: "queued",
+          queue_position: 1,
+        }),
+        { status: 200 }
+      )
+    );
+    await expect(getDocumentStatus("/documents/doc-123/status")).resolves.toEqual({
+      status: "queued",
+      stage: "queued",
+      queue_position: 1,
+    });
+  });
 });

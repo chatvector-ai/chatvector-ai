@@ -160,6 +160,12 @@ export type DocumentStatusPayload = {
   chunks?: { total: number; processed: number } | null;
   created_at?: string | null;
   updated_at?: string | null;
+  /**
+   * Live queue position reported by the backend while the document is still
+   * waiting in the ingestion queue (status === "queued"). Numbered 1 = next to
+   * be processed. Optional because non-queued responses omit the field.
+   */
+  queue_position?: number;
 };
 
 function parseChunks(raw: unknown): { total: number; processed: number } | undefined {
@@ -169,6 +175,17 @@ function parseChunks(raw: unknown): { total: number; processed: number } | undef
   const processed = o.processed;
   if (typeof total !== "number" || typeof processed !== "number") return undefined;
   return { total, processed };
+}
+
+/**
+ * Extract a queue position from a status payload. Only positive integers
+ * count — non-numeric, negative, or zero values are dropped so the UI never
+ * shows a phantom "Position 0" indicator.
+ */
+function parseQueuePosition(raw: unknown): number | undefined {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
+  if (!Number.isInteger(raw) || raw < 1) return undefined;
+  return raw;
 }
 
 export async function getDocumentStatus(
@@ -192,6 +209,7 @@ export async function getDocumentStatus(
       : undefined;
   const createdAt = data?.created_at as string | null | undefined;
   const updatedAt = data?.updated_at as string | null | undefined;
+  const queuePosition = parseQueuePosition(data?.queue_position);
   return {
     status,
     ...(stage !== undefined ? { stage } : {}),
@@ -199,6 +217,7 @@ export async function getDocumentStatus(
     ...(chunks !== undefined ? { chunks } : {}),
     ...(createdAt !== undefined ? { created_at: createdAt } : {}),
     ...(updatedAt !== undefined ? { updated_at: updatedAt } : {}),
+    ...(queuePosition !== undefined ? { queue_position: queuePosition } : {}),
   };
 }
 
