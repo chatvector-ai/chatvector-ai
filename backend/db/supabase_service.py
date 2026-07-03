@@ -46,21 +46,21 @@ class SupabaseService(DatabaseService):
                 raise
 
     async def create_document(self, filename: str, tenant_id: Optional[str] = None) -> str:
+        payload: dict = {
+            "file_name": filename,
+            "status": "uploaded",
+            "chunks": {"total": 0, "processed": 0},
+        }
+        if tenant_id is not None:
+            payload["tenant_id"] = tenant_id
+
         result = await self._run_io(
-            lambda: supabase_client.table("documents")
-            .insert(
-                {
-                    "file_name": filename,
-                    "status": "uploaded",
-                    "chunks": {"total": 0, "processed": 0},
-                }
-            )
-            .execute(),
+            lambda: supabase_client.table("documents").insert(payload).execute(),
             operation_name="create_document",
         )
 
         doc_id = result.data[0]["id"]
-        logger.info(f"[Supabase] Created document {doc_id}")
+        logger.info(f"[Supabase] Created document {doc_id} (tenant={tenant_id})")
         return doc_id
 
     async def store_chunks_with_embeddings(
@@ -92,10 +92,15 @@ class SupabaseService(DatabaseService):
         return chunk_ids
 
     async def get_document(self, doc_id: str, tenant_id: Optional[str] = None) -> dict | None:
-        result = await self._run_io(
-            lambda: supabase_client.table("documents").select("*").eq("id", doc_id).execute(),
-            operation_name="get_document",
-        )
+        _tenant = tenant_id
+
+        def _op():
+            q = supabase_client.table("documents").select("*").eq("id", doc_id)
+            if _tenant is not None:
+                q = q.eq("tenant_id", _tenant)
+            return q.execute()
+
+        result = await self._run_io(_op, operation_name="get_document")
         if result.data:
             return result.data[0]
         return None
@@ -145,30 +150,40 @@ class SupabaseService(DatabaseService):
         chunks: dict | None = None,
         tenant_id: Optional[str] = None,
     ) -> None:
-        payload: dict = {
+        update_payload: dict = {
             "status": status,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         if error is not None:
-            payload["error"] = error
+            update_payload["error"] = error
         if chunks is not None:
-            payload["chunks"] = chunks
+            update_payload["chunks"] = chunks
 
-        await self._run_io(
-            lambda: supabase_client.table("documents").update(payload).eq("id", doc_id).execute(),
-            operation_name="update_document_status",
-        )
+        _tenant = tenant_id
+
+        def _op():
+            q = supabase_client.table("documents").update(update_payload).eq("id", doc_id)
+            if _tenant is not None:
+                q = q.eq("tenant_id", _tenant)
+            return q.execute()
+
+        await self._run_io(_op, operation_name="update_document_status")
         logger.debug(f"[Supabase] Updated status for {doc_id} -> {status}")
 
     async def get_document_status(self, doc_id: str, tenant_id: Optional[str] = None) -> dict | None:
-        result = await self._run_io(
-            lambda: supabase_client.table("documents")
-            .select("id,status,chunks,error,created_at,updated_at")
-            .eq("id", doc_id)
-            .limit(1)
-            .execute(),
-            operation_name="get_document_status",
-        )
+        _tenant = tenant_id
+
+        def _op():
+            q = (
+                supabase_client.table("documents")
+                .select("id,status,chunks,error,created_at,updated_at")
+                .eq("id", doc_id)
+            )
+            if _tenant is not None:
+                q = q.eq("tenant_id", _tenant)
+            return q.limit(1).execute()
+
+        result = await self._run_io(_op, operation_name="get_document_status")
 
         if not result.data:
             return None
@@ -191,7 +206,21 @@ class SupabaseService(DatabaseService):
         logger.info(f"[Supabase] Deleted chunks for failed upload document {doc_id}")
 
     async def delete_document(self, document_id: str, tenant_id: Optional[str] = None) -> None:
-        """Atomically delete a document and its chunks using RPC."""
+        """Atomically delete a document and its chunks using RPC.
+
+        When tenant_id is provided, ownership is verified before deletion so that
+        a tenant cannot delete another tenant's document.
+        """
+        if tenant_id is not None:
+            existing = await self.get_document(document_id, tenant_id=tenant_id)
+            if existing is None:
+                logger.warning(
+                    "[Supabase] delete_document: doc %s not found for tenant %s — skipping",
+                    document_id,
+                    tenant_id,
+                )
+                return
+
         try:
             await self._run_io(
                 lambda: supabase_client.rpc(

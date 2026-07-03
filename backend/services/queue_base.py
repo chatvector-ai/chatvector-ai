@@ -48,6 +48,7 @@ class DLQEntry:
     content_type: str
     attempt: int
     error: str
+    tenant_id: Optional[str] = None
     failed_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )

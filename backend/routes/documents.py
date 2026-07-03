@@ -53,7 +53,7 @@ async def get_document_status(request: Request, document_id: UUID, auth: AuthCon
 
 @router.get("/documents/{document_id}/status/stream")
 @limiter.limit(config.RATE_LIMIT_DOCUMENT_STATUS)
-async def get_document_status_stream(request: Request, document_id: UUID, auth: dict = Depends(require_auth)):
+async def get_document_status_stream(request: Request, document_id: UUID, auth: AuthContext = Depends(require_auth)):
     if not config.ENABLE_STREAMING:
         raise HTTPException(
             status_code=400,
@@ -63,6 +63,8 @@ async def get_document_status_stream(request: Request, document_id: UUID, auth: 
             },
         )
 
+    tenant_id = get_current_tenant(auth)
+
     async def event_generator():
         MAX_POLL_SECONDS = 300
         elapsed = 0
@@ -70,7 +72,7 @@ async def get_document_status_stream(request: Request, document_id: UUID, auth: 
             if await request.is_disconnected():
                 break
 
-            status_payload = await db.get_document_status(str(document_id))
+            status_payload = await db.get_document_status(str(document_id), tenant_id=tenant_id)
             if not status_payload:
                 yield f"event: error\ndata: {json.dumps({'message': 'Document not found.'})}\n\n"
                 break

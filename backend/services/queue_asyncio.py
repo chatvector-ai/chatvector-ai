@@ -236,6 +236,7 @@ class AsyncioIngestionQueue(BaseIngestionQueue):
                     content_type=job.content_type,
                     attempt=job.attempt,
                     error=str(exc),
+                    tenant_id=job.tenant_id,
                 ))
                 return
 
@@ -273,4 +274,5 @@ class AsyncioIngestionQueue(BaseIngestionQueue):
                     content_type=job.content_type,
                     attempt=job.attempt,
                     error=str(exc),
+                    tenant_id=job.tenant_id,
                 ))

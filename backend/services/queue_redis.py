@@ -107,6 +107,7 @@ async def _async_execute_job(
                 content_type=content_type,
                 attempt=attempt,
                 error=error_msg,
+                tenant_id=tenant_id,
             ), conn=_redis_conn)
             return
 
@@ -130,6 +131,7 @@ async def _async_execute_job(
                 content_type=content_type,
                 attempt=attempt,
                 error=error_msg,
+                tenant_id=tenant_id,
             ), conn=_redis_conn)
             return
 
@@ -163,6 +165,7 @@ async def _async_execute_job(
                     content_type=content_type,
                     attempt=attempt,
                     error=str(exc),
+                    tenant_id=tenant_id,
                 ), conn=_redis_conn)
                 return
 
@@ -204,6 +207,7 @@ async def _async_execute_job(
                     content_type=content_type,
                     attempt=attempt,
                     error=str(exc),
+                    tenant_id=tenant_id,
                 ), conn=_redis_conn)
 
 
@@ -221,15 +225,17 @@ def _push_dlq_entry(
     """Persist a DLQ entry as JSON in a Redis list."""
     try:
         _conn = conn or redis_lib.Redis.from_url(config.REDIS_URL)
-        payload = json.dumps({
+        data: dict = {
             "doc_id": entry.doc_id,
             "file_name": entry.file_name,
             "content_type": entry.content_type,
             "attempt": entry.attempt,
             "error": entry.error,
             "failed_at": entry.failed_at.isoformat(),
-        })
-        _conn.rpush(DLQ_REDIS_KEY, payload)
+        }
+        if entry.tenant_id is not None:
+            data["tenant_id"] = entry.tenant_id
+        _conn.rpush(DLQ_REDIS_KEY, json.dumps(data))
     except Exception:
         logger.exception("Failed to push DLQ entry for %s", entry.doc_id)
 
@@ -388,6 +394,7 @@ class RedisIngestionQueue(BaseIngestionQueue):
                     content_type=data["content_type"],
                     attempt=data["attempt"],
                     error=data["error"],
+                    tenant_id=data.get("tenant_id"),
                     failed_at=datetime.fromisoformat(data["failed_at"]),
                 ))
             except (json.JSONDecodeError, KeyError) as exc:
