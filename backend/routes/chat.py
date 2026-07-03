@@ -2,6 +2,7 @@ import logging
 from typing import Literal, Optional
 from uuid import UUID
 
+import db
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
@@ -22,6 +23,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 RetrievalScopeParam = Literal["session", "tenant"]
+
+
+async def _assert_document_owned(doc_id: str, tenant_id: Optional[str]) -> None:
+    """Raise 404 if the document does not exist or belongs to a different tenant."""
+    doc = await db.get_document(doc_id, tenant_id=tenant_id)
+    if doc is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "document_not_found",
+                "message": "Document not found.",
+                "document_id": doc_id,
+            },
+        )
 
 
 class ChatBatchItem(BaseModel):
@@ -51,11 +66,13 @@ class ChatRequest(BaseModel):
 async def chat(request: Request, payload: ChatRequest, auth: AuthContext = Depends(require_auth)):
     logger.info(f"Chat request received for document {payload.doc_id}")
 
+    doc_id_str = str(payload.doc_id)
+    await _assert_document_owned(doc_id_str, auth.tenant_id)
+
     # Initialize or retrieve session
     session = get_or_create_session(
         session_id=payload.session_id, tenant_id=auth.tenant_id
     )
-    doc_id_str = str(payload.doc_id)
     register_session_document(session.id, doc_id_str, auth.tenant_id)
     register_tenant_document(auth.tenant_id, doc_id_str)
 
@@ -83,11 +100,13 @@ async def chat_stream(request: Request, payload: ChatRequest, auth: AuthContext 
 
     logger.info(f"Chat stream request received for document {payload.doc_id}")
 
+    doc_id_str = str(payload.doc_id)
+    await _assert_document_owned(doc_id_str, auth.tenant_id)
+
     # Initialize or retrieve session
     session = get_or_create_session(
         session_id=payload.session_id, tenant_id=auth.tenant_id
     )
-    doc_id_str = str(payload.doc_id)
     register_session_document(session.id, doc_id_str, auth.tenant_id)
     register_tenant_document(auth.tenant_id, doc_id_str)
 
@@ -129,6 +148,7 @@ async def chat_batch(request: Request, payload: ChatBatchRequest, auth: AuthCont
             q_dict["session_id"] = q_session.id
             for doc_id in q.doc_ids:
                 doc_id_str = str(doc_id)
+                await _assert_document_owned(doc_id_str, auth.tenant_id)
                 register_session_document(q_session.id, doc_id_str, auth.tenant_id)
                 register_tenant_document(auth.tenant_id, doc_id_str)
             processed_queries.append(q_dict)
