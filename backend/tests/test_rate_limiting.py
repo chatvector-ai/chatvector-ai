@@ -81,9 +81,9 @@ def test_post_upload_returns_429_after_limit_exceeded(client):
 
 def test_post_chat_returns_429_after_limit_exceeded(client):
     payload = {"question": "hello", "doc_id": _CHAT_DOC_ID, "match_count": 5}
-    with patch(
-        "routes.chat.answer_question_for_document",
-        new=AsyncMock(return_value={"answer": "ok", "chunks": 0}),
+    with (
+        patch("routes.chat.answer_question_for_document", new=AsyncMock(return_value={"answer": "ok", "chunks": 0})),
+        patch("routes.chat.db.get_document", new=AsyncMock(return_value={"id": _CHAT_DOC_ID})),
     ):
         for _ in range(_CHAT_WINDOW):
             assert client.post("/chat", json=payload).status_code == 200
@@ -110,9 +110,9 @@ def test_429_response_has_standard_error_shape(client):
 
 def test_429_includes_retry_after_header(client):
     payload = {"question": "q", "doc_id": _CHAT_DOC_ID, "match_count": 5}
-    with patch(
-        "routes.chat.answer_question_for_document",
-        new=AsyncMock(return_value={"answer": "a", "chunks": 0}),
+    with (
+        patch("routes.chat.answer_question_for_document", new=AsyncMock(return_value={"answer": "a", "chunks": 0})),
+        patch("routes.chat.db.get_document", new=AsyncMock(return_value={"id": _CHAT_DOC_ID})),
     ):
         for _ in range(_CHAT_WINDOW):
             client.post("/chat", json=payload)

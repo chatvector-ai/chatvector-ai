@@ -18,7 +18,8 @@ async def test_chat_route_stores_history_on_success():
 
     with patch(
         "routes.chat.answer_question_for_document", new=AsyncMock(return_value=payload)
-    ), patch("routes.chat.get_or_create_session") as mock_get_session:
+    ), patch("routes.chat.get_or_create_session") as mock_get_session, \
+       patch("routes.chat.db.get_document", new=AsyncMock(return_value={"id": _DOC_ID_1})):
         # Mock the session to return an object with id="test-session"
         class MockSession:
             id = "test-session"
