@@ -463,16 +463,20 @@ def test_dlq_entry_no_tenant_id():
 
 @pytest.mark.asyncio
 async def test_dev_bypass_returns_dev_tenant(monkeypatch):
-    """In development/test mode require_auth returns DEV_TENANT_ID without a key."""
+    """In development/test mode require_auth returns DEV_TENANT_ID without a key.
+
+    APP_ENV=test is already set by the conftest / Docker environment, so this
+    test just verifies that DEV_TENANT_ID is honoured.
+    """
     monkeypatch.setenv("DEV_TENANT_ID", "my-dev-tenant")
-
-    from core import config as _config_module
-    from core.config import Settings
-
-    monkeypatch.setattr(_config_module, "config", Settings())
 
     from core.auth import require_auth
     from starlette.requests import Request
+    import core.config as _cfg_mod
+
+    # Patch APP_ENV on the live config object so require_auth's internal
+    # 'from core.config import config' picks up the test value.
+    monkeypatch.setattr(_cfg_mod.config, "APP_ENV", "test")
 
     request = Request(
         {
@@ -498,16 +502,11 @@ async def test_dev_bypass_returns_dev_tenant(monkeypatch):
 async def test_production_missing_auth_header_returns_401(monkeypatch):
     """In production mode a missing Authorization header yields 401."""
     from fastapi import HTTPException
-
-    from core import config as _config_module
-    from core.config import Settings
-
-    prod_settings = Settings()
-    prod_settings.APP_ENV = "production"
-    monkeypatch.setattr(_config_module, "config", prod_settings)
-
     from core.auth import require_auth
     from starlette.requests import Request
+    import core.config as _cfg_mod
+
+    monkeypatch.setattr(_cfg_mod.config, "APP_ENV", "production")
 
     request = Request(
         {
