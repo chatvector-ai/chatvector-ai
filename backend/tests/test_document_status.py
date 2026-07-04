@@ -80,7 +80,7 @@ async def test_get_document_status_stream_emits_status_and_closes_on_completed()
         {"document_id": "doc-1", "status": "completed", "chunks": {"total": 5, "processed": 5}, "error": None},
     ]
 
-    async def mock_get_document_status(doc_id):
+    async def mock_get_document_status(doc_id, **kwargs):
         if payloads:
             return payloads.pop(0)
         return None

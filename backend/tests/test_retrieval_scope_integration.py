@@ -163,6 +163,7 @@ async def test_session_scope_backward_compatible_without_session_documents():
         match_count=5,
         session_id=None,
         query_text="Q?",
+        tenant_id=None,
     )
 
 

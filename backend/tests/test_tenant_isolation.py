@@ -464,17 +464,12 @@ def test_dlq_entry_no_tenant_id():
 @pytest.mark.asyncio
 async def test_dev_bypass_returns_dev_tenant(monkeypatch):
     """In development/test mode require_auth returns DEV_TENANT_ID without a key."""
-    monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("DEV_TENANT_ID", "my-dev-tenant")
 
     from core import config as _config_module
-    from core.config import Config
-    import importlib
+    from core.config import Settings
 
-    # Reload config so DEV_TENANT_ID is picked up
-    monkeypatch.setattr(
-        _config_module, "config", Config()
-    )
+    monkeypatch.setattr(_config_module, "config", Settings())
 
     from core.auth import require_auth
     from starlette.requests import Request
@@ -504,12 +499,12 @@ async def test_production_missing_auth_header_returns_401(monkeypatch):
     """In production mode a missing Authorization header yields 401."""
     from fastapi import HTTPException
 
-    monkeypatch.setenv("APP_ENV", "production")
-
     from core import config as _config_module
-    from core.config import Config
+    from core.config import Settings
 
-    monkeypatch.setattr(_config_module, "config", Config())
+    prod_settings = Settings()
+    prod_settings.APP_ENV = "production"
+    monkeypatch.setattr(_config_module, "config", prod_settings)
 
     from core.auth import require_auth
     from starlette.requests import Request

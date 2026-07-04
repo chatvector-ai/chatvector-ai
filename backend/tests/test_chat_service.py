@@ -86,6 +86,7 @@ async def test_answer_question_for_document_orchestrates_flow():
         match_count=7,
         session_id=None,
         query_text="What is this about?",
+        tenant_id=None,
     )
     mock_context.assert_called_once_with(chunks, session_context=None)
     mock_answer.assert_awaited_once_with("What is this about?", "combined context")
@@ -120,6 +121,7 @@ async def test_answer_question_for_document_passes_session_id():
         match_count=7,
         session_id="session-abc",
         query_text="Q",
+        tenant_id=None,
     )
     mock_history.assert_awaited_once()
 
