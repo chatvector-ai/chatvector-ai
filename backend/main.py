@@ -71,6 +71,18 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed to reset stale documents on startup — continuing anyway")
 
+    # ── Authentication bypass warning ────────────────────────────────────────
+    if config.APP_ENV.lower() in ("development", "test"):
+        import os as _os
+        dev_tenant = _os.getenv("DEV_TENANT_ID", "dev")
+        logger.warning(
+            "⚠️  Authentication bypass is ACTIVE (APP_ENV=%s). "
+            "All requests are treated as tenant=%r without API-key validation. "
+            "Set APP_ENV=production to enable real authentication.",
+            config.APP_ENV,
+            dev_tenant,
+        )
+
     await ingestion_queue.start()
     logger.info("Application startup complete.")
     yield

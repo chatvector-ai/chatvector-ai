@@ -340,6 +340,59 @@ docker compose down -v
 docker compose up --build
 ```
 
+### API-key authentication and tenant isolation (`005` + `006`)
+
+Issue #335 adds multi-tenant API-key authentication. Fresh Docker installations apply
+`005_api_keys.sql` and `006_tenant_fk_and_backfill.sql` automatically on first start.
+
+**Upgrading an existing installation:**
+
+```bash
+# Apply the schema migrations
+docker compose exec db psql -U postgres -d postgres \
+    -f /docker-entrypoint-initdb.d/005_api_keys.sql
+docker compose exec db psql -U postgres -d postgres \
+    -f /docker-entrypoint-initdb.d/006_tenant_fk_and_backfill.sql
+```
+
+After applying `005`, any pre-existing documents have `tenant_id=NULL` and are not
+accessible by any authenticated tenant until backfilled.
+
+**Backfill pre-existing documents** (choose one option):
+
+```sql
+-- Option A: assign all unowned documents to a known tenant
+UPDATE documents SET tenant_id = '<your-tenant-id>' WHERE tenant_id IS NULL;
+
+-- Option B: delete orphaned documents (irreversible)
+DELETE FROM documents WHERE tenant_id IS NULL;
+```
+
+After backfilling, apply `006` to add the foreign key from `documents.tenant_id → tenants.id`.
+The FK is guarded by a `DO … IF NOT EXISTS` block so it is safe to re-run.
+
+**Bootstrap a tenant and API key** (run once per environment):
+
+```bash
+cd backend
+python -m backend.cli create-tenant-key --tenant "My Org" --tenant-id my-org
+```
+
+The raw API key (`cv_live_…`) is displayed **once** and is never stored.
+Record it immediately. Use it as `Authorization: Bearer <raw-key>` in all requests.
+
+**Rollback:**
+
+```sql
+ALTER TABLE documents DROP CONSTRAINT IF EXISTS fk_documents_tenant_id;
+-- then optionally: ALTER TABLE documents ALTER COLUMN tenant_id DROP NOT NULL;
+```
+
+> **Note on duplicate 004 prefixes:** The init directory contains both
+> `004_chat_history.sql` and `004_hybrid_retrieval.sql`. PostgreSQL applies files
+> alphabetically, so chat history always precedes hybrid retrieval. Do not add
+> additional `004_*` files; use `007_*` for the next migration.
+
 ### Hybrid retrieval (`content_tsv`)
 
 To enable vector + PostgreSQL full-text hybrid search (issue P3B-1), apply the migration
@@ -554,6 +607,26 @@ LOG_LEVEL=INFO
 # EMBEDDING_PROVIDER=gemini    # gemini | openai | ollama | voyage
 # See backend/.env.example for all provider options
 ```
+
+### Authentication variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `APP_ENV` | `development` | `development`/`test` bypass auth; `production` enforces Bearer key |
+| `DEV_TENANT_ID` | `dev` | Tenant ID attributed to all requests when auth bypass is active |
+
+> **Warning:** A startup log message (`⚠️ Authentication bypass is ACTIVE`) is
+> printed whenever `APP_ENV` is not `production`. If you see this message on a
+> shared or public server, set `APP_ENV=production` immediately.
+
+To generate a tenant and API key for a new environment:
+
+```bash
+cd backend
+python -m backend.cli create-tenant-key --tenant "My Org" --tenant-id my-org
+```
+
+Set the printed `cv_live_…` key in all API clients as the Bearer token.
 
 See `backend/.env.example` for the full list including chunking
 strategy, rate limits, LLM timeouts, prompt configuration, and
