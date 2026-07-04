@@ -302,14 +302,17 @@ class SQLAlchemyService(DatabaseService):
         doc_id: str,
         query_embedding: list[float],
         limit: int,
+        tenant_id: Optional[str] = None,
     ) -> list[ChunkMatch]:
-        result = await session.execute(
+        stmt = (
             select(DocumentChunk, Document.file_name)
             .join(Document, DocumentChunk.document_id == Document.id)
             .where(DocumentChunk.document_id == doc_id)
-            .order_by(DocumentChunk.embedding.op("<=>")(query_embedding))
-            .limit(limit)
         )
+        if tenant_id is not None:
+            stmt = stmt.where(Document.tenant_id == tenant_id)
+        stmt = stmt.order_by(DocumentChunk.embedding.op("<=>")(query_embedding)).limit(limit)
+        result = await session.execute(stmt)
         return [
             self._chunk_match_from_row(chunk, file_name)
             for chunk, file_name in result.all()
@@ -321,20 +324,23 @@ class SQLAlchemyService(DatabaseService):
         doc_id: str,
         query_text: str,
         limit: int,
+        tenant_id: Optional[str] = None,
     ) -> list[ChunkMatch]:
         """Full-text search on document_chunks.content_tsv (requires migration 004)."""
         content_tsv = literal_column("document_chunks.content_tsv", type_=TSVECTOR())
         ts_query = func.plainto_tsquery(_FTS_LANGUAGE, query_text)
         rank = func.ts_rank(content_tsv, ts_query).label("keyword_rank")
         try:
-            result = await session.execute(
+            stmt = (
                 select(DocumentChunk, Document.file_name, rank)
                 .join(Document, DocumentChunk.document_id == Document.id)
                 .where(DocumentChunk.document_id == doc_id)
                 .where(content_tsv.op("@@")(ts_query))
-                .order_by(rank.desc())
-                .limit(limit)
             )
+            if tenant_id is not None:
+                stmt = stmt.where(Document.tenant_id == tenant_id)
+            stmt = stmt.order_by(rank.desc()).limit(limit)
+            result = await session.execute(stmt)
         except ProgrammingError as exc:
             if _is_missing_content_tsv_error(exc):
                 logger.warning(
@@ -356,10 +362,15 @@ class SQLAlchemyService(DatabaseService):
         match_count: int = 5,
         session_id: Optional[str] = None,
         query_text: Optional[str] = None,
+        tenant_id: Optional[str] = None,
     ) -> list[ChunkMatch]:
-        # TODO(Phase 3): use session_id for context filtering once implemented
-        """Find chunks via vector search; optionally fuse with PostgreSQL full-text search."""
-        del session_id  # reserved for Phase 3 session-scoped retrieval
+        """Find chunks via vector search; optionally fuse with PostgreSQL full-text search.
+
+        When tenant_id is supplied, both vector and keyword queries add a
+        ``Document.tenant_id`` filter so chunks from another tenant cannot be
+        returned even if the caller supplies a valid doc_id.
+        """
+        del session_id  # reserved for future session-scoped retrieval
         start = time.perf_counter()
         use_hybrid = (
             config.HYBRID_RETRIEVAL_ENABLED
@@ -373,14 +384,17 @@ class SQLAlchemyService(DatabaseService):
                 async with self.async_session() as session:
                     if not use_hybrid:
                         matches = await self._find_vector_chunks(
-                            session, doc_id, query_embedding, match_count
+                            session, doc_id, query_embedding, match_count,
+                            tenant_id=tenant_id,
                         )
                     else:
                         vector_matches = await self._find_vector_chunks(
-                            session, doc_id, query_embedding, candidate_limit
+                            session, doc_id, query_embedding, candidate_limit,
+                            tenant_id=tenant_id,
                         )
                         keyword_matches = await self._find_keyword_chunks(
-                            session, doc_id, query_text.strip(), candidate_limit
+                            session, doc_id, query_text.strip(), candidate_limit,
+                            tenant_id=tenant_id,
                         )
                         matches_by_id: dict[str, ChunkMatch] = {}
                         for match in vector_matches + keyword_matches:
@@ -413,6 +427,16 @@ class SQLAlchemyService(DatabaseService):
                 duration_ms,
             )
             raise
+
+    async def list_tenant_documents(self, tenant_id: str) -> list[str]:
+        """Return document IDs belonging to tenant_id, ordered by creation time."""
+        async with self.async_session() as session:
+            rows = await session.execute(
+                select(Document.id)
+                .where(Document.tenant_id == tenant_id)
+                .order_by(Document.created_at)
+            )
+            return [str(row[0]) for row in rows]
 
     async def store_chat_message(
         self,

@@ -132,14 +132,19 @@ def _normalize_doc_ids(doc_ids: list[str], *, query_index: int) -> list[str]:
     return normalized
 
 
-def _resolve_retrieval_doc_ids(
+async def _resolve_retrieval_doc_ids(
     *,
     scope: str | None,
     requested_doc_ids: list[str],
     session_id: Optional[str] = None,
     tenant_id: Optional[str] = None,
 ) -> list[str]:
-    """Apply retrieval scope rules and tenant isolation checks."""
+    """Apply retrieval scope rules and tenant isolation checks.
+
+    Falls back to the database when the in-memory tenant registry is empty
+    (e.g. after a server restart) so that tenant-scope retrieval continues
+    to work correctly across process restarts.
+    """
     retrieval_scope = parse_retrieval_scope(scope)
 
     session_doc_ids: list[str] = []
@@ -148,7 +153,7 @@ def _resolve_retrieval_doc_ids(
         if session:
             session_doc_ids = list(session.document_ids)
 
-    tenant_doc_ids = get_tenant_document_ids(tenant_id)
+    tenant_doc_ids = await get_tenant_document_ids(tenant_id)
 
     doc_ids = resolve_scoped_doc_ids(
         retrieval_scope,
@@ -166,6 +171,7 @@ async def _retrieve_chunks_for_documents(
     match_count: int,
     session_id: Optional[str] = None,
     query_text: Optional[str] = None,
+    tenant_id: Optional[str] = None,
 ) -> list:
     retrieval_semaphore = _get_retrieval_semaphore()
 
@@ -177,6 +183,7 @@ async def _retrieve_chunks_for_documents(
                 match_count=match_count,
                 session_id=session_id,
                 query_text=query_text,
+                tenant_id=tenant_id,
             )
 
     per_document_chunks = await asyncio.gather(
@@ -223,7 +230,7 @@ async def answer_question_for_document(
     logger.info(f"Starting chat for document {doc_id} (session={session_id}, scope={scope or 'session'})")
     tenant_id = get_current_tenant(auth) if auth else None
 
-    doc_ids = _resolve_retrieval_doc_ids(
+    doc_ids = await _resolve_retrieval_doc_ids(
         scope=scope,
         requested_doc_ids=[doc_id],
         session_id=session_id,
@@ -256,6 +263,7 @@ async def answer_question_for_document(
             match_count=match_count,
             session_id=session_id,
             query_text=question,
+            tenant_id=tenant_id,
         )
         for chunk in chunks:
             key = (chunk.document_id, chunk.chunk_index)
@@ -332,7 +340,7 @@ async def answer_question_stream_for_document(
     tenant_id = get_current_tenant(auth) if auth else None
 
     try:
-        doc_ids = _resolve_retrieval_doc_ids(
+        doc_ids = await _resolve_retrieval_doc_ids(
             scope=scope,
             requested_doc_ids=[doc_id],
             session_id=session_id,
@@ -356,6 +364,7 @@ async def answer_question_stream_for_document(
                 query_embedding=query_embedding,
                 match_count=match_count,
                 query_text=question,
+                tenant_id=tenant_id,
             )
             for chunk in chunks:
                 key = (chunk.document_id, chunk.chunk_index)
@@ -495,7 +504,7 @@ async def answer_questions_for_documents_batch(
         try:
             session_id = query.get("session_id")
             query_scope = query.get("scope")
-            doc_ids = _resolve_retrieval_doc_ids(
+            doc_ids = await _resolve_retrieval_doc_ids(
                 scope=query_scope,
                 requested_doc_ids=query["doc_ids"],
                 session_id=session_id,
@@ -525,6 +534,7 @@ async def answer_questions_for_documents_batch(
                     match_count=query["match_count"],
                     session_id=session_id,
                     query_text=query["question"],
+                    tenant_id=tenant_id,
                 )
                 for chunk in chunks:
                     key = (chunk.document_id, chunk.chunk_index)

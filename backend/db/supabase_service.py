@@ -261,11 +261,20 @@ class SupabaseService(DatabaseService):
         match_count: int = 5,
         session_id: Optional[str] = None,
         query_text: Optional[str] = None,
+        tenant_id: Optional[str] = None,
     ) -> list[ChunkMatch]:
+        """Find similar chunks using Supabase RPC.
+
+        Hybrid retrieval (query_text) is not supported on Supabase — only
+        vector search is performed.  Tenant isolation is enforced upstream by
+        the route-level ownership pre-check; the Supabase `match_chunks` RPC
+        filters only by document ID and does not support a tenant_id parameter.
+        Cross-tenant access is therefore prevented by the pre-check, not this
+        method.  When tenant_id is provided and the doc does not belong to the
+        tenant, the pre-check already returned 404 before this is reached.
+        """
         del query_text  # hybrid retrieval is SQLAlchemy/PostgreSQL only
-        # TODO(Phase 3): use session_id for context filtering once implemented
-        """Find similar chunks using Supabase RPC."""
-        # TODO(Phase 3): use session_id for context filtering once implemented
+        del session_id  # reserved for future session-scoped retrieval
         try:
             result = await self._run_io(
                 lambda: supabase_client.rpc(
@@ -302,6 +311,21 @@ class SupabaseService(DatabaseService):
         except Exception as e:
             logger.error(f"[Supabase] Failed to retrieve chunks: {e}")
             raise
+
+    async def list_tenant_documents(self, tenant_id: str) -> list[str]:
+        """Return document IDs belonging to tenant_id."""
+        _tid = tenant_id
+
+        def _op():
+            return (
+                supabase_client.table("documents")
+                .select("id")
+                .eq("tenant_id", _tid)
+                .execute()
+            )
+
+        result = await self._run_io(_op, operation_name="list_tenant_documents")
+        return [row["id"] for row in (result.data or [])]
 
     async def store_chat_message(
         self,

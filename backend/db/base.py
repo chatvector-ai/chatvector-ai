@@ -66,8 +66,14 @@ class DatabaseService(ABC):
         match_count: int = 5,
         session_id: Optional[str] = None,
         query_text: Optional[str] = None,
+        tenant_id: Optional[str] = None,
     ) -> list[ChunkMatch]:
-        """Run vector similarity search for chunks (optionally hybrid with keyword search)."""
+        """Run vector similarity search for chunks (optionally hybrid with keyword search).
+
+        When tenant_id is supplied, the query enforces document ownership at
+        the database layer so that chunks from another tenant's document are
+        never returned even if the caller presents a valid doc_id.
+        """
         pass
 
     @abstractmethod
@@ -115,6 +121,14 @@ class DatabaseService(ABC):
         Returns the set of document IDs that were updated.
         """
         pass
+
+    async def list_tenant_documents(self, tenant_id: str) -> list[str]:
+        """Return IDs of all documents owned by tenant_id.
+
+        Default implementation returns an empty list; backends that support
+        tenant-scoped document listing should override this.
+        """
+        return []
 
     @abstractmethod
     async def store_chat_message(

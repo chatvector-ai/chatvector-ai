@@ -182,8 +182,14 @@ async def find_similar_chunks(
     match_count: int = 5,
     session_id: str | None = None,
     query_text: str | None = None,
+    tenant_id: str | None = None,
 ) -> list[ChunkMatch]:
-    """Find similar chunks with retry logic."""
+    """Find similar chunks with retry logic.
+
+    When tenant_id is supplied it is forwarded to the database implementation
+    so that tenant ownership is enforced at the query level, not only at the
+    route-level pre-check.
+    """
     service = get_db_service()
 
     async def _search():
@@ -193,6 +199,7 @@ async def find_similar_chunks(
             match_count,
             session_id=session_id,
             query_text=query_text,
+            tenant_id=tenant_id,
         )
 
     return await retry_async(
@@ -308,6 +315,23 @@ async def fail_stale_documents(
     )
 
 
+async def list_tenant_documents(tenant_id: str) -> list[str]:
+    """Return all document IDs owned by tenant_id (durable DB query)."""
+    service = get_db_service()
+
+    async def _list():
+        return await service.list_tenant_documents(tenant_id)
+
+    return await retry_async(
+        _list,
+        max_retries=3,
+        base_delay=0.5,
+        backoff=2.0,
+        timeout=10.0,
+        func_name=f"{service.__class__.__name__}.list_tenant_documents",
+    )
+
+
 async def store_chat_message(
     session_id: str,
     role: str,
@@ -354,6 +378,7 @@ __all__ = [
     "get_document",
     "create_document_with_chunks_atomic",
     "find_similar_chunks",
+    "list_tenant_documents",
     "update_document_status",
     "get_document_status",
     "delete_document_chunks",
