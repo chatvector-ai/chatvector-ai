@@ -124,7 +124,14 @@ export function useDocumentPolling(
     let interval: ReturnType<typeof setInterval> | null = null;
 
     if (!useFallbackPolling && typeof window !== "undefined" && window.EventSource) {
-      // 1. Try SSE first
+      // 1. Try SSE first.
+      // NOTE: The browser EventSource API does not support custom headers, so
+      // the Authorization header cannot be sent on this connection.  When the
+      // backend requires authentication (APP_ENV=production), the server will
+      // return 401, the "error" event fires below, and we automatically fall
+      // back to the authenticated polling path (getDocumentStatus uses fetch
+      // with the Authorization header).  This means SSE works only in
+      // development mode; production deployments transparently use polling.
       const sseUrl = `${API_BASE}${path}/stream`;
       eventSource = new EventSource(sseUrl);
 

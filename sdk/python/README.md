@@ -52,15 +52,32 @@ for source in answer.sources:
 
 ## Authentication
 
-The client accepts an optional bearer token for forward compatibility with future authenticated backend deployments:
+ChatVector backends running with `APP_ENV=production` require an API key on every
+request.  Pass the key to the client constructor; the SDK sends
+`Authorization: Bearer <key>` on all requests automatically:
 
 ```python
 from chatvector import ChatVectorClient
 
 client = ChatVectorClient(
     base_url="https://api.chatvector.example",
-    api_key="your-token",
+    api_key="cv_live_yourprefixhere.yoursecrethere",
 )
+```
+
+Generate a key with the backend CLI (run once per environment):
+
+```bash
+python -m backend.cli create-tenant-key --tenant "My Org" --tenant-id my-org
+```
+
+The raw key is printed **once** and is never stored.  Record it immediately.
+
+In **development mode** (`APP_ENV=development`) the backend bypasses authentication
+so the `api_key` parameter can be omitted locally:
+
+```python
+client = ChatVectorClient(base_url="http://localhost:8000")
 ```
 
 ## Error Handling

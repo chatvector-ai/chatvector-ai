@@ -1,4 +1,4 @@
-import { API_BASE } from "./api";
+import { API_BASE, authHeaders } from "./api";
 
 export type ComponentHealth = {
   status: "ok" | "error";
@@ -38,6 +38,7 @@ export async function getSystemStatus(): Promise<SystemStatus> {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders(),
     },
     // Prevent Next.js from aggressively caching this client-side call
     cache: "no-store", 

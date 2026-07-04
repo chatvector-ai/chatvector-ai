@@ -2,6 +2,26 @@ import { getSessionId } from "./session";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/**
+ * ChatVector API key for the frontend demo.
+ *
+ * This is read from NEXT_PUBLIC_CHATVECTOR_API_KEY at build time and is
+ * visible to anyone who inspects the browser bundle.  It is intended only
+ * for local development and demonstration purposes — do NOT use a
+ * production key here.  For production deployments, proxy all API requests
+ * through a server-side component or Next.js Route Handler so the key stays
+ * server-side and out of the client bundle.
+ *
+ * When the variable is not set the frontend operates without authentication,
+ * which only works when the backend is running with APP_ENV=development.
+ */
+const DEMO_API_KEY = process.env.NEXT_PUBLIC_CHATVECTOR_API_KEY ?? "";
+
+export function authHeaders(): Record<string, string> {
+  if (!DEMO_API_KEY) return {};
+  return { Authorization: `Bearer ${DEMO_API_KEY}` };
+}
+
 export type ChatSource = {
   file_name: string;
   page_number: number | null;
@@ -78,6 +98,7 @@ export async function sendMessage(
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    ...authHeaders(),
   };
   const body: Record<string, string | number> = {
     question,
@@ -129,7 +150,10 @@ export async function sendMessage(
 export async function deleteDocument(
   documentId: string
 ): Promise<"gone" | "conflict" | "error"> {
-  const res = await fetch(`${API_BASE}/documents/${documentId}`, { method: "DELETE" });
+  const res = await fetch(`${API_BASE}/documents/${documentId}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
   if (res.status === 204 || res.status === 404) return "gone";
   if (res.status === 409) return "conflict";
   return "error";
@@ -174,7 +198,7 @@ function parseChunks(raw: unknown): { total: number; processed: number } | undef
 export async function getDocumentStatus(
   statusEndpoint: string
 ): Promise<DocumentStatusPayload> {
-  const res = await fetch(`${API_BASE}${statusEndpoint}`);
+  const res = await fetch(`${API_BASE}${statusEndpoint}`, { headers: authHeaders() });
   if (res.status === 404) throw new DocumentNotFoundError();
   if (!res.ok) throw new Error(`Status check failed: ${res.status}`);
   const data = (await res.json()) as Record<string, unknown>;
@@ -235,6 +259,7 @@ export async function sendBatchMessage(
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    ...authHeaders(),
   };
   if (sessionId !== null) {
     headers["X-Session-Id"] = sessionId;
@@ -289,7 +314,7 @@ export async function uploadDocument(
   const formData = new FormData();
   formData.append("file", file);
   
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...authHeaders() };
   if (sessionId !== null) {
     headers["X-Session-Id"] = sessionId;
   }
