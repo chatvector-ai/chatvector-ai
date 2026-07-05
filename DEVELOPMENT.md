@@ -30,13 +30,27 @@ Database: PostgreSQL with pgvector (port 5432)
 
 ## Quick Start
 
-Start the full backend stack (API + database):
+For the full local environment (backend, frontend demo, provider setup), use the Makefile workflow documented in [README.md — Quick Start](README.md#-quick-start):
+
+```bash
+make quickstart
+```
+
+That runs guided provider configuration, installs frontend dependencies, builds the backend Docker image, starts services, and opens browser tabs when ready.
+
+Returning contributors normally only need:
+
+```bash
+make
+```
+
+Backend-only (Docker stack):
 
 ```bash
 docker compose up --build
 ```
 
-Backend: http://localhost:8000
+Backend: http://localhost:8000  
 Docs: http://localhost:8000/docs
 
 ---
@@ -70,31 +84,39 @@ docker compose ps
 docker compose restart
 
 # Access PostgreSQL directly
-docker exec -it chatvector-db psql -U postgres -d postgres
+docker compose exec db psql -U postgres -d postgres
 ```
 
 ### Makefile Commands
 
-The project includes a `Makefile` with short, memorable commands as
-wrappers around standard `docker compose` commands.
+The project includes a `Makefile` with short commands for local development. Run `make help` for the full list.
 
 ```bash
-make dev        # Start backend (detached) + frontend dev server
-make up         # Start containers (detached)
-make build      # Rebuild and start containers
-make down       # Stop containers
-make reset      # Stop containers and remove volumes
-make logs       # Follow API logs
-make db         # Open Postgres shell
-make tests      # Run tests via Docker (docker compose run --rm tests)
-make prod-up    # Start production stack (standalone compose)
-make prod-down  # Stop production stack
-make prod-build # Rebuild and start production stack
-make clean      # Remove containers, volumes, and orphans
-make cleanup    # Delete all local branches except main
-make sync       # Sync fork with upstream main
-make help       # Show all available commands
+make quickstart  # Configure provider, install/build, then start everything
+make setup       # Configure env files, provider, dependencies, and Docker build
+make             # Start backend + frontend, open browser tabs (default)
+make dev         # Start backend + frontend without opening tabs
+make backend     # Start only the backend Docker stack (attached logs)
+make frontend    # Start only the frontend demo
+make open        # Open frontend and API docs in your browser
+make stop        # Stop this repo's frontend process and Docker services
+make up          # Start containers (detached)
+make build       # Rebuild and start containers
+make down        # Stop containers
+make reset       # Stop containers and remove volumes
+make logs        # Follow API logs
+make db          # Open Postgres shell
+make tests       # Run tests via Docker (docker compose run --rm tests)
+make prod-up     # Start production stack (standalone compose)
+make prod-down   # Stop production stack
+make prod-build  # Rebuild production stack
+make clean       # Remove containers, volumes, and orphans
+make cleanup     # Delete all local branches except main
+make sync        # Sync fork with upstream main
+make help        # Show all available commands
 ```
+
+Press **Ctrl+C** during `make`, `make dev`, or `make quickstart` to stop the frontend; backend containers keep running until `make stop`.
 
 Direct `docker compose` usage still works if preferred.
 
@@ -112,7 +134,7 @@ The database initializes automatically with:
 Verify setup:
 
 ```bash
-docker exec -it chatvector-db psql -U postgres -d postgres
+docker compose exec db psql -U postgres -d postgres
 
 \dx
 \dt
@@ -266,7 +288,7 @@ pytest -k "chat"  # run tests matching pattern
 ### Local development
 
 For day-to-day work use the [Quick Start](#quick-start) flow
-(`docker compose up --build` or `make up` / `make dev`). That stack
+(`make quickstart`, `make`, or `docker compose up --build`). That stack
 mounts live backend code and uses development defaults.
 
 ### Local production simulation
@@ -478,11 +500,12 @@ Frontend runs at http://localhost:3000
 ### Start backend + frontend together
 
 ```bash
-make dev
+make          # Opens browser tabs when services are ready
+make dev      # Same without opening tabs
+make quickstart  # Run setup first, then start with browser tabs
 ```
 
-This starts the backend stack in detached mode and the frontend dev
-server in the foreground.
+This starts the backend Docker stack and the non-containerized frontend dev server in the foreground. API keys are configured through `make setup` or `make quickstart` — see [README.md — Quick Start](README.md#-quick-start).
 
 ---
 

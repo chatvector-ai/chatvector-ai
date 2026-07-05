@@ -26,7 +26,7 @@ Think of it as an engine developers can use to build document-aware applications
 
 ## 🔗 Quick Links
 
-[![Good First Issues](https://img.shields.io/badge/Good%20First%20Issues-Start%20Here-brightgreen?style=for-the-badge&logo=github)](https://github.com/chatvector-ai/chatvector-ai/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22) [![Roadmap](https://img.shields.io/badge/Roadmap-Project%20Plan-1f6feb?style=for-the-badge&logo=bookstack&logoColor=white)](ROADMAP.md) [![Quick Setup](https://img.shields.io/badge/Quick%20Setup-5%20Min-2496ED?style=for-the-badge&logo=docker&logoColor=white)](#backend-setup) [![Project Board](https://img.shields.io/badge/Project%20Board-Track%20Progress-6f42c1?style=for-the-badge&logo=github&logoColor=white)](https://github.com/orgs/chatvector-ai/projects/2) [![Dev Notes](https://img.shields.io/badge/Dev%20Notes-Maintainer%20Guide-6e7781?style=for-the-badge&logo=markdown&logoColor=white)](DEVELOPMENT.md) [![Architecture](https://img.shields.io/badge/Architecture-Overview-purple?style=for-the-badge&logo=markdown&logoColor=white)](ARCHITECTURE.md) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge&logo=markdown&logoColor=white)](https://opensource.org/license/mit) [![Contributing Docs](https://img.shields.io/badge/Contributing%20Docs-Read%20Guide-0E8A16?style=for-the-badge&logo=bookstack&logoColor=white)](CONTRIBUTING.md) [![Contributing Video](https://img.shields.io/badge/Contributing%20Video-Watch-F24E1E?style=for-the-badge&logo=loom&logoColor=white)](https://www.loom.com/share/c41bdbff541f47d49efcb48920cba382) [![Discussions](https://img.shields.io/badge/Discussions-Ask%20%26%20Share-2da44e?style=for-the-badge&logo=github&logoColor=white)](https://github.com/chatvector-ai/chatvector-ai/discussions/51)
+[![Good First Issues](https://img.shields.io/badge/Good%20First%20Issues-Start%20Here-brightgreen?style=for-the-badge&logo=github)](https://github.com/chatvector-ai/chatvector-ai/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22) [![Roadmap](https://img.shields.io/badge/Roadmap-Project%20Plan-1f6feb?style=for-the-badge&logo=bookstack&logoColor=white)](ROADMAP.md) [![Quick Setup](https://img.shields.io/badge/Quick%20Setup-5%20Min-2496ED?style=for-the-badge&logo=docker&logoColor=white)](#-quick-start) [![Project Board](https://img.shields.io/badge/Project%20Board-Track%20Progress-6f42c1?style=for-the-badge&logo=github&logoColor=white)](https://github.com/orgs/chatvector-ai/projects/2) [![Dev Notes](https://img.shields.io/badge/Dev%20Notes-Maintainer%20Guide-6e7781?style=for-the-badge&logo=markdown&logoColor=white)](DEVELOPMENT.md) [![Architecture](https://img.shields.io/badge/Architecture-Overview-purple?style=for-the-badge&logo=markdown&logoColor=white)](ARCHITECTURE.md) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge&logo=markdown&logoColor=white)](https://opensource.org/license/mit) [![Contributing Docs](https://img.shields.io/badge/Contributing%20Docs-Read%20Guide-0E8A16?style=for-the-badge&logo=bookstack&logoColor=white)](CONTRIBUTING.md) [![Contributing Video](https://img.shields.io/badge/Contributing%20Video-Watch-F24E1E?style=for-the-badge&logo=loom&logoColor=white)](https://www.loom.com/share/c41bdbff541f47d49efcb48920cba382) [![Discussions](https://img.shields.io/badge/Discussions-Ask%20%26%20Share-2da44e?style=for-the-badge&logo=github&logoColor=white)](https://github.com/chatvector-ai/chatvector-ai/discussions/51)
 
 ---
 
@@ -37,7 +37,7 @@ Think of it as an engine developers can use to build document-aware applications
 - [Who is this for?](#-who-is-this-for)
 - [Current Status](#-current-status)
 - [Architecture Overview](#-architecture-overview)
-- [Quick Start](#-quick-start-run-in-5-minutes)
+- [Quick Start](#-quick-start)
 - [Contributing](#-contributing)
 - [License](#-license)
 
@@ -167,43 +167,98 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for full system design details.
 
 ---
 
-## 🎯 Quick Start: Run in 5 Minutes
+## 🎯 Quick Start
+
+After installing Docker and Node.js, start the complete ChatVector development environment with one command.
 
 ### Prerequisites
 
-- Docker & Docker Compose — [Install Docker](https://docs.docker.com/get-docker/)
-- Google AI Studio API Key — [Get Key](https://aistudio.google.com/)
+- [Docker](https://docs.docker.com/get-docker/) with Docker Compose (`docker compose`)
+- [Node.js](https://nodejs.org/) and npm
+- Either:
+  - an API key for a supported hosted provider (Gemini or OpenAI), or
+  - a local [Ollama](https://ollama.com/) installation
 
-### Backend Setup
+Gemini is the recommended default and the simplest guided setup.
 
-**1. Create `backend/.env`:**
+### One-command setup
+
 ```bash
-cp backend/.env.example backend/.env
+make quickstart
 ```
 
-Edit `backend/.env` and set your API key:
-```env
-APP_ENV=development
-LOG_LEVEL=INFO
-GEN_AI_KEY=your_google_ai_studio_api_key_here
-MAX_UPLOAD_SIZE_MB=10
-```
+The command creates the env file, pauses while you add provider credentials, then continues after you press Enter. It installs frontend dependencies, builds the backend Docker image, starts backend services and the non-containerized frontend demo, waits for both to become ready, and opens the frontend and API docs when supported.
 
-> **Provider options:** By default, ChatVector uses Google Gemini. To use OpenAI or Ollama instead, see `backend/.env.example` for all provider configuration variables.
+Setup is safe to rerun — existing `backend/.env` and `frontend-demo/.env.local` files are never overwritten.
 
-**2. Start the stack:**
+If provider configuration is already complete, `make quickstart` continues immediately without pausing.
+
+### Provider configuration
+
+Edit `backend/.env` to choose providers and set credentials. Gemini is the recommended default:
+
 ```bash
-docker compose up --build
+LLM_PROVIDER=gemini
+EMBEDDING_PROVIDER=gemini
+GEN_AI_KEY=your_google_ai_studio_api_key
 ```
 
-This starts Postgres with pgvector and the API with live reload.
+Supported combinations include Gemini, OpenAI, Ollama, Anthropic Claude (generation), and Voyage AI (embeddings), including mixed setups (for example Claude + Voyage). See `backend/.env.example` for all variables.
 
-**3. Test the API:**
+### URLs
 
-- Root: http://localhost:8000
+- Frontend demo (non-core reference UI): http://localhost:3000
 - Swagger UI: http://localhost:8000/docs
 
-**Try the endpoints:**
+### Alternative non-interactive flow
+
+```bash
+make setup
+# edit backend/.env
+make
+```
+
+- `make setup` — create env files, install dependencies, and build Docker images (prints editing instructions if configuration is incomplete; does not wait)
+- `make` — start backend and frontend, then open browser tabs
+
+### Returning contributors
+
+Returning contributors normally use:
+
+```bash
+make
+```
+
+### Start without browser tabs
+
+```bash
+make dev
+```
+
+Useful for SSH sessions, CI, or when you prefer to open URLs yourself.
+
+### Useful commands
+
+| Command | Purpose |
+|---|---|
+| `make quickstart` | Create env, pause for credentials, then start everything |
+| `make setup` | Create env files, install dependencies, and build Docker images |
+| `make` | Start backend + frontend, open browser tabs (default) |
+| `make dev` | Start backend + frontend without opening tabs |
+| `make backend` | Start only the backend Docker stack |
+| `make frontend` | Start only the frontend demo |
+| `make open` | Open the frontend and API docs URLs |
+| `make stop` | Stop this repo's frontend process and Docker services |
+| `make help` | Show all Make commands |
+
+**Notes:**
+
+- Setup is safe to rerun and preserves existing env files.
+- Provider credentials are edited in `backend/.env` — the setup scripts do not prompt for or read API keys in the terminal.
+- Press **Ctrl+C** while `make`, `make dev`, or `make quickstart` is running to stop the frontend; backend containers keep running until you run `make stop`.
+- The frontend demo is a **non-core, non-containerized** reference UI for testing the backend.
+
+### Try the API
 
 1. `POST /upload` — upload a PDF, get a `document_id` and `status_endpoint`
 2. `GET /documents/{document_id}/status` — poll ingestion stage and progress
@@ -222,27 +277,32 @@ This starts Postgres with pgvector and the API with live reload.
 | `docker compose logs -f api` | Follow API logs in real time |
 | `docker compose exec db psql -U postgres` | Connect to Postgres directly |
 
-Or use the Makefile shortcuts — run `make help` to see all available commands.
+Or use the Makefile shortcuts above — run `make help` for the full list.
 
 ---
 
-### Frontend Demo (Non-Core)
+### Manual setup (alternative)
+
+If you prefer not to use Make, copy `backend/.env.example` to `backend/.env` and configure your providers. Gemini is the simplest default:
+
+```env
+LLM_PROVIDER=gemini
+EMBEDDING_PROVIDER=gemini
+GEN_AI_KEY=your_key_here
+```
+
+See `backend/.env.example` for OpenAI, Ollama, Anthropic Claude, Voyage AI, and mixed-provider configurations. Then:
+
 ```bash
+docker compose up --build
+
 cd frontend-demo
-npm install
-
-# Create frontend env
+npm ci
 echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
-
 npm run dev
 ```
 
 Frontend runs at http://localhost:3000
-
-Or start backend + frontend together:
-```bash
-make dev
-```
 
 ---
 

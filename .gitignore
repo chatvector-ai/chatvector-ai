@@ -62,4 +62,5 @@ logs/
 # Temporary files
 *.tmp
 *.temp
+.chatvector-dev-frontend.pid
 venv/
