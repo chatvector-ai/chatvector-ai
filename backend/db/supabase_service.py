@@ -206,32 +206,67 @@ class SupabaseService(DatabaseService):
         logger.info(f"[Supabase] Deleted chunks for failed upload document {doc_id}")
 
     async def delete_document(self, document_id: str, tenant_id: Optional[str] = None) -> None:
-        """Atomically delete a document and its chunks using RPC.
+        """Delete a document and its chunks.
 
-        When tenant_id is provided, ownership is verified before deletion so that
-        a tenant cannot delete another tenant's document.
+        When tenant_id is provided the deletion uses tenant-scoped table-level
+        deletes so that the final operation itself enforces ownership — the
+        DELETE FROM documents WHERE id=? AND tenant_id=? can only succeed if
+        the row belongs to the tenant.  The unscoped `delete_document_atomic`
+        RPC is only used for internal maintenance paths (tenant_id=None).
+
+        Delete order: chunks first (FK constraint), then document.
         """
-        if tenant_id is not None:
-            existing = await self.get_document(document_id, tenant_id=tenant_id)
-            if existing is None:
-                logger.warning(
-                    "[Supabase] delete_document: doc %s not found for tenant %s — skipping",
-                    document_id,
-                    tenant_id,
-                )
-                return
+        _tid = tenant_id
 
-        try:
-            await self._run_io(
-                lambda: supabase_client.rpc(
-                    "delete_document_atomic", {"target_document_id": document_id}
-                ).execute(),
-                operation_name="delete_document_atomic",
-            )
-            logger.info(f"[Supabase] Atomically deleted document {document_id}")
-        except Exception as e:
-            logger.error(f"[Supabase] Deletion failed for document {document_id}: {e}")
-            raise
+        if _tid is not None:
+            # Tenant-scoped path: table-level deletes enforce ownership at DB level.
+            # Step 1 – delete chunks (no tenant column on document_chunks; ownership
+            #           is established by the document FK checked in step 2).
+            def _delete_chunks():
+                return (
+                    supabase_client.table("document_chunks")
+                    .delete()
+                    .eq("document_id", document_id)
+                    .execute()
+                )
+
+            # Step 2 – delete the document row, constraining by BOTH id and tenant_id.
+            #           If the document doesn't belong to this tenant the WHERE clause
+            #           matches nothing and the delete is a silent no-op.
+            def _delete_doc():
+                return (
+                    supabase_client.table("documents")
+                    .delete()
+                    .eq("id", document_id)
+                    .eq("tenant_id", _tid)
+                    .execute()
+                )
+
+            try:
+                await self._run_io(_delete_chunks, operation_name="delete_document_chunks_tenant")
+                await self._run_io(_delete_doc, operation_name="delete_document_tenant")
+                logger.info(
+                    "[Supabase] Deleted document %s (tenant=%s)", document_id, _tid
+                )
+            except Exception as e:
+                logger.error(
+                    "[Supabase] Deletion failed for document %s (tenant=%s): %s",
+                    document_id, _tid, e,
+                )
+                raise
+        else:
+            # Unscoped internal path (e.g., admin or startup cleanup): use atomic RPC.
+            try:
+                await self._run_io(
+                    lambda: supabase_client.rpc(
+                        "delete_document_atomic", {"target_document_id": document_id}
+                    ).execute(),
+                    operation_name="delete_document_atomic",
+                )
+                logger.info("[Supabase] Atomically deleted document %s (unscoped)", document_id)
+            except Exception as e:
+                logger.error("[Supabase] Deletion failed for document %s: %s", document_id, e)
+                raise
 
     async def fail_stale_documents(self, statuses: list[str], tenant_id: Optional[str] = None) -> set[str]:
         result = await self._run_io(

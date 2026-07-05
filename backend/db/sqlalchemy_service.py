@@ -249,9 +249,13 @@ class SQLAlchemyService(DatabaseService):
                     await session.execute(
                         delete(DocumentChunk).where(DocumentChunk.document_id == document_id)
                     )
-                    await session.execute(
-                        delete(Document).where(Document.id == document_id)
-                    )
+                    # Delete document constraining by BOTH id and tenant_id (defense-in-depth:
+                    # the WHERE clause itself prevents cross-tenant deletion even if this
+                    # method is called without the ownership pre-check above).
+                    doc_delete_stmt = delete(Document).where(Document.id == document_id)
+                    if tenant_id is not None:
+                        doc_delete_stmt = doc_delete_stmt.where(Document.tenant_id == tenant_id)
+                    await session.execute(doc_delete_stmt)
                 logger.info(f"[PostgreSQL] Atomically deleted document {document_id}")
             except Exception:
                 logger.error(f"[PostgreSQL] Failed to delete document {document_id}")

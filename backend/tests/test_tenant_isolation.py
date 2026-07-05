@@ -119,9 +119,13 @@ def svc() -> SQLAlchemyService:
 
 
 async def _cleanup_tenant(tenant_id: str, svc: SQLAlchemyService) -> None:
-    """Remove test data so tests don't pollute each other."""
+    """Remove test data so tests don't pollute each other.
+
+    Chunks must be deleted before documents (FK from document_chunks.document_id
+    → documents.id prevents deleting a document that still has chunks).
+    """
     from sqlalchemy import delete, select
-    from core.models import ApiKey, Document, Tenant
+    from core.models import ApiKey, Document, DocumentChunk, Tenant
 
     async with svc.async_session() as session:
         async with session.begin():
@@ -130,6 +134,11 @@ async def _cleanup_tenant(tenant_id: str, svc: SQLAlchemyService) -> None:
                     select(Document.id).where(Document.tenant_id == tenant_id)
                 )
             ).scalars().all()
+            # Delete chunks first to satisfy FK constraint
+            for doc_id in doc_ids:
+                await session.execute(
+                    delete(DocumentChunk).where(DocumentChunk.document_id == doc_id)
+                )
             for doc_id in doc_ids:
                 await session.execute(
                     delete(Document).where(Document.id == doc_id)

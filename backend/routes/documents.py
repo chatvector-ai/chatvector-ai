@@ -13,6 +13,7 @@ from middleware.rate_limit import limiter
 import db
 from core.config import STALE_INGESTION_STATUSES
 from services.queue_service import ingestion_queue
+from services.tenant_registry import invalidate_tenant_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -149,5 +150,9 @@ async def delete_document(request: Request, document_id: UUID, auth: AuthContext
             },
         )
 
-    await db.delete_document(str(document_id), tenant_id=get_current_tenant(auth))
+    tenant_id = get_current_tenant(auth)
+    await db.delete_document(str(document_id), tenant_id=tenant_id)
+    # Invalidate cache so subsequent tenant-scope retrieval does not include this doc.
+    if tenant_id:
+        invalidate_tenant_cache(tenant_id)
     return Response(status_code=204)
