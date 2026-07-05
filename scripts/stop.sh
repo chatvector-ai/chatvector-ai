@@ -8,7 +8,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 main() {
   stop_local_frontend
   docker_compose down
-  echo "All local ChatVector services stopped."
+  echo "Stopped Docker Compose project for this checkout."
 }
 
 main "$@"

@@ -84,7 +84,7 @@ docker compose ps
 docker compose restart
 
 # Access PostgreSQL directly
-docker exec -it chatvector-db psql -U postgres -d postgres
+docker compose exec db psql -U postgres -d postgres
 ```
 
 ### Makefile Commands
@@ -134,7 +134,7 @@ The database initializes automatically with:
 Verify setup:
 
 ```bash
-docker exec -it chatvector-db psql -U postgres -d postgres
+docker compose exec db psql -U postgres -d postgres
 
 \dx
 \dt
