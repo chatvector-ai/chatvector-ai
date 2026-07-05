@@ -12,7 +12,13 @@ main() {
   check_prerequisites
   check_docker_daemon
 
-  configure_backend_provider
+  if [[ "${QUICKSTART:-0}" == "1" ]]; then
+    if ! handle_quickstart_provider_configuration; then
+      exit 0
+    fi
+  else
+    handle_setup_provider_configuration
+  fi
 
   ensure_frontend_env
   install_frontend_dependencies
@@ -35,15 +41,16 @@ URLs:
 Existing env files are never overwritten. To change providers later, edit backend/.env.
 EOF
   else
+    print_provider_edit_instructions
     cat <<EOF
 
 Setup finished. Provider configuration is not complete yet.
 
-Edit backend/.env, then run:
+When configuration is complete, run:
   make
 
 Or rerun:
-  make setup
+  make quickstart
 EOF
   fi
 }

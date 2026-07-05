@@ -187,37 +187,43 @@ Gemini is the recommended default and the simplest guided setup.
 make quickstart
 ```
 
-This checks prerequisites, creates missing env files, guides you through provider selection, securely prompts for any required API key, installs frontend dependencies, builds the backend Docker image, starts backend services and the non-containerized frontend demo, waits for both to become ready, and opens the frontend and API docs when supported.
+The command creates the env file, pauses while you add provider credentials, then continues after you press Enter. It installs frontend dependencies, builds the backend Docker image, starts backend services and the non-containerized frontend demo, waits for both to become ready, and opens the frontend and API docs when supported.
 
 Setup is safe to rerun — existing `backend/.env` and `frontend-demo/.env.local` files are never overwritten.
 
-### Provider choices
+If provider configuration is already complete, `make quickstart` continues immediately without pausing.
 
-| Option | Use case |
-|---|---|
-| **Gemini** (recommended) | Simplest setup — generation and embeddings |
-| **OpenAI** | Generation and embeddings via OpenAI |
-| **Ollama** | Local models — no API key required |
-| **Advanced** | Mixed providers configured manually in `backend/.env` (e.g. Anthropic Claude for generation, Voyage AI for embeddings) |
+### Provider configuration
 
-Claude provides generation only — pair it with Gemini, OpenAI, Ollama, or Voyage for embeddings. See `backend/.env.example` for all variables.
+Edit `backend/.env` to choose providers and set credentials. Gemini is the recommended default:
+
+```bash
+LLM_PROVIDER=gemini
+EMBEDDING_PROVIDER=gemini
+GEN_AI_KEY=your_google_ai_studio_api_key
+```
+
+Supported combinations include Gemini, OpenAI, Ollama, Anthropic Claude (generation), and Voyage AI (embeddings), including mixed setups (for example Claude + Voyage). See `backend/.env.example` for all variables.
 
 ### URLs
 
 - Frontend demo (non-core reference UI): http://localhost:3000
 - Swagger UI: http://localhost:8000/docs
 
-### Alternative: separate setup and startup
+### Alternative non-interactive flow
 
 ```bash
 make setup
+# edit backend/.env
 make
 ```
 
-- `make setup` — one-time configuration, provider selection, and dependency setup
+- `make setup` — create env files, install dependencies, and build Docker images (prints editing instructions if configuration is incomplete; does not wait)
 - `make` — start backend and frontend, then open browser tabs
 
-### Returning to the project
+### Returning contributors
+
+Returning contributors normally use:
 
 ```bash
 make
@@ -235,8 +241,8 @@ Useful for SSH sessions, CI, or when you prefer to open URLs yourself.
 
 | Command | Purpose |
 |---|---|
-| `make quickstart` | Configure provider, install/build, then start everything |
-| `make setup` | Configure env files, provider, dependencies, and Docker build |
+| `make quickstart` | Create env, pause for credentials, then start everything |
+| `make setup` | Create env files, install dependencies, and build Docker images |
 | `make` | Start backend + frontend, open browser tabs (default) |
 | `make dev` | Start backend + frontend without opening tabs |
 | `make backend` | Start only the backend Docker stack |
@@ -248,7 +254,7 @@ Useful for SSH sessions, CI, or when you prefer to open URLs yourself.
 **Notes:**
 
 - Setup is safe to rerun and preserves existing env files.
-- API keys are entered through hidden terminal prompts — do not pass them on the command line.
+- Provider credentials are edited in `backend/.env` — the setup scripts do not prompt for or read API keys in the terminal.
 - Press **Ctrl+C** while `make`, `make dev`, or `make quickstart` is running to stop the frontend; backend containers keep running until you run `make stop`.
 - The frontend demo is a **non-core, non-containerized** reference UI for testing the backend.
 

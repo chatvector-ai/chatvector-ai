@@ -30,9 +30,9 @@ help:
 	@echo "$(CYAN)ChatVector — local development$(RESET)"
 	@echo ""
 	@echo "$(YELLOW)Quick start$(RESET)"
-	@echo "  $(GREEN)make quickstart$(RESET)  Configure provider, install/build, then start everything"
+	@echo "  $(GREEN)make quickstart$(RESET)  Create env, pause for credentials, then start everything"
 	@echo "  $(GREEN)make$(RESET)             Start backend + frontend, open browser tabs (default)"
-	@echo "  $(GREEN)make setup$(RESET)       Configure env files, provider, dependencies, and Docker build"
+	@echo "  $(GREEN)make setup$(RESET)       Create env files, install dependencies, and build Docker images"
 	@echo "  $(GREEN)make dev$(RESET)         Start backend + frontend without opening tabs"
 	@echo ""
 	@echo "$(YELLOW)Individual services$(RESET)"
@@ -73,7 +73,8 @@ dev:
 all:
 	@OPEN_BROWSER=1 ./scripts/dev.sh
 
-quickstart: setup
+quickstart:
+	@QUICKSTART=1 ./scripts/setup.sh
 	@OPEN_BROWSER=1 ./scripts/dev.sh
 
 backend:

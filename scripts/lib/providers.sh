@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Guided provider setup and configuration validation.
+# Provider setup validation and manual-edit guidance.
 
 GEN_AI_KEY_PLACEHOLDER="your_google_ai_studio_api_key_here"
 OPENAI_API_KEY_PLACEHOLDER="your_openai_api_key_here"
@@ -8,6 +8,7 @@ VOYAGE_API_KEY_PLACEHOLDER="your_voyage_api_key_here"
 
 OLLAMA_DEFAULT_LLM_MODEL="llama3"
 OLLAMA_DEFAULT_EMBEDDING_MODEL="nomic-embed-text"
+MAX_PROVIDER_EDIT_ATTEMPTS="${MAX_PROVIDER_EDIT_ATTEMPTS:-5}"
 
 effective_llm_provider() {
   to_lower "$(env_value_or_default "${BACKEND_ENV}" "LLM_PROVIDER" "gemini")"
@@ -17,11 +18,6 @@ effective_embedding_provider() {
   to_lower "$(env_value_or_default "${BACKEND_ENV}" "EMBEDDING_PROVIDER" "gemini")"
 }
 
-env_var_is_set() {
-  local key="$1"
-  grep -qE "^${key}=" "${BACKEND_ENV}" 2>/dev/null
-}
-
 provider_env_var_name() {
   case "$1" in
     gemini) printf '%s' "GEN_AI_KEY" ;;
@@ -29,6 +25,17 @@ provider_env_var_name() {
     anthropic) printf '%s' "ANTHROPIC_API_KEY" ;;
     voyage) printf '%s' "VOYAGE_API_KEY" ;;
     *) return 1 ;;
+  esac
+}
+
+provider_env_var_example_line() {
+  local var="$1"
+  case "${var}" in
+    GEN_AI_KEY) printf '%s\n' "GEN_AI_KEY=your_google_ai_studio_api_key" ;;
+    OPENAI_API_KEY) printf '%s\n' "OPENAI_API_KEY=your_openai_api_key" ;;
+    ANTHROPIC_API_KEY) printf '%s\n' "ANTHROPIC_API_KEY=your_anthropic_api_key" ;;
+    VOYAGE_API_KEY) printf '%s\n' "VOYAGE_API_KEY=your_voyage_api_key" ;;
+    *) printf '%s\n' "${var}=" ;;
   esac
 }
 
@@ -66,17 +73,6 @@ provider_key_requirement_met() {
     voyage) voyage_key_valid ;;
     *) return 1 ;;
   esac
-}
-
-has_explicit_provider_selection() {
-  env_var_is_set "LLM_PROVIDER" || env_var_is_set "EMBEDDING_PROVIDER"
-}
-
-is_guided_preset_pair() {
-  local llm emb
-  llm="$(effective_llm_provider)"
-  emb="$(effective_embedding_provider)"
-  [[ "${llm}" == "${emb}" && ( "${llm}" == "gemini" || "${llm}" == "openai" || "${llm}" == "ollama" ) ]]
 }
 
 list_missing_provider_env_vars() {
@@ -135,34 +131,117 @@ is_provider_configuration_complete() {
   provider_key_requirement_met "${llm}" && provider_key_requirement_met "${emb}"
 }
 
-print_keep_existing_provider_next_steps() {
-  cat <<EOF
-
-Keep your existing provider selections and edit:
-  backend/.env
-
-See:
-  backend/.env.example
-
-When configuration is complete, run:
-  make
-EOF
+ensure_backend_env_file() {
+  if [[ ! -f "${BACKEND_ENV}" ]]; then
+    cp "${BACKEND_ENV_EXAMPLE}" "${BACKEND_ENV}"
+    echo "Created backend/.env from backend/.env.example"
+  else
+    echo "Preserving existing backend/.env"
+  fi
 }
 
-print_manual_provider_next_steps() {
-  cat <<EOF
+print_provider_edit_instructions() {
+  local llm emb var missing_vars=0
 
-Advanced provider configuration selected.
+  llm="$(effective_llm_provider)"
+  emb="$(effective_embedding_provider)"
 
-Edit:
-  backend/.env
+  echo ""
+  echo "Backend provider configuration is incomplete."
+  echo ""
+  echo "Current providers:"
+  echo "  LLM_PROVIDER=${llm}"
+  echo "  EMBEDDING_PROVIDER=${emb}"
+  echo ""
+  echo "Edit:"
+  echo "  backend/.env"
+  echo ""
 
-See:
-  backend/.env.example
+  while IFS= read -r var; do
+    [[ -n "${var}" ]] || continue
+    if [[ "${missing_vars}" -eq 0 ]]; then
+      echo "Set:"
+      missing_vars=1
+    fi
+    printf '  '
+    provider_env_var_example_line "${var}"
+  done < <(list_missing_provider_env_vars | sort -u)
 
-When configuration is complete, run:
-  make
-EOF
+  if [[ "${missing_vars}" -eq 0 ]]; then
+    describe_provider_requirements || true
+  fi
+
+  echo ""
+  echo "See backend/.env.example for all provider options."
+}
+
+wait_for_provider_configuration_interactive() {
+  local attempt=0
+
+  while (( attempt < MAX_PROVIDER_EDIT_ATTEMPTS )); do
+    print_provider_edit_instructions
+    echo "Save the file, return to this terminal, and press Enter to continue."
+    echo "Press Ctrl+C to cancel."
+    echo ""
+
+    IFS= read -r _ || return 1
+
+    echo ""
+    echo "Checking provider configuration..."
+
+    if is_provider_configuration_complete; then
+      echo "Provider configuration complete."
+      echo "Continuing setup..."
+      return 0
+    fi
+
+    attempt=$((attempt + 1))
+    echo "Provider configuration is still incomplete."
+    describe_provider_requirements || true
+    echo ""
+  done
+
+  echo "Provider configuration is still incomplete after ${MAX_PROVIDER_EDIT_ATTEMPTS} attempts."
+  print_provider_edit_instructions
+  echo "Edit backend/.env, then run:"
+  echo "  make"
+  return 1
+}
+
+handle_quickstart_provider_configuration() {
+  ensure_backend_env_file
+
+  if is_provider_configuration_complete; then
+    echo "Provider configuration already complete (LLM=$(effective_llm_provider), embeddings=$(effective_embedding_provider))."
+    return 0
+  fi
+
+  if [[ -t 0 ]]; then
+    if wait_for_provider_configuration_interactive; then
+      return 0
+    fi
+    return 1
+  fi
+
+  print_provider_edit_instructions
+  echo "Non-interactive session: edit backend/.env, then run:"
+  echo "  make quickstart"
+  echo "or:"
+  echo "  make setup"
+  echo "  make"
+  return 1
+}
+
+handle_setup_provider_configuration() {
+  ensure_backend_env_file
+
+  if is_provider_configuration_complete; then
+    echo "Provider configuration already complete (LLM=$(effective_llm_provider), embeddings=$(effective_embedding_provider))."
+    return 0
+  fi
+
+  echo "Backend provider configuration is missing or incomplete."
+  return 0
 }
 
 default_ollama_docker_base_url() {
@@ -173,66 +252,6 @@ ollama_host_check_url() {
   local url="$1"
   url="${url//host.docker.internal/localhost}"
   printf '%s' "${url}"
-}
-
-prompt_for_api_key() {
-  local provider_name="$1"
-  local prompt_text="$2"
-  local help_url="$3"
-  local var_name="$4"
-  local input=""
-  local attempt=0
-
-  while [[ -z "${input}" ]]; do
-    attempt=$((attempt + 1))
-    if [[ "${attempt}" -eq 1 ]]; then
-      prompt_hidden "${prompt_text}" input
-    else
-      echo "Hidden input is unavailable in this terminal." >&2
-      prompt_visible \
-        "Enter your ${provider_name} API key (key only, not VAR=...): " \
-        input
-    fi
-
-    if [[ -z "${input}" ]]; then
-      echo "A valid ${provider_name} API key is required." >&2
-      echo "Enter the key value only — do not include GEN_AI_KEY= or quotes." >&2
-      echo "Get one at ${help_url}" >&2
-    fi
-  done
-  printf -v "${var_name}" '%s' "${input}"
-}
-
-apply_gemini_preset() {
-  local key_input=""
-  prompt_for_api_key \
-    "Google Gemini" \
-    "Enter your Google Gemini API key (key only, hidden): " \
-    "https://aistudio.google.com/" \
-    key_input
-
-  set_env_vars "${BACKEND_ENV}" \
-    "LLM_PROVIDER=gemini" \
-    "EMBEDDING_PROVIDER=gemini" \
-    "GEN_AI_KEY=${key_input}"
-
-  echo "Configured Gemini for generation and embeddings (key not shown)."
-}
-
-apply_openai_preset() {
-  local key_input=""
-  prompt_for_api_key \
-    "OpenAI" \
-    "Enter your OpenAI API key (key only, hidden): " \
-    "https://platform.openai.com/api-keys" \
-    key_input
-
-  set_env_vars "${BACKEND_ENV}" \
-    "LLM_PROVIDER=openai" \
-    "EMBEDDING_PROVIDER=openai" \
-    "OPENAI_API_KEY=${key_input}"
-
-  echo "Configured OpenAI for generation and embeddings (key not shown)."
 }
 
 ollama_model_available() {
@@ -331,145 +350,6 @@ verify_ollama_docker_connectivity() {
       echo "Install and start Ollama on your host, then rerun: make" >&2
     fi
     return 1
-  fi
-
-  return 0
-}
-
-apply_ollama_preset() {
-  local docker_base_url llm_model embed_model
-
-  prompt_with_default \
-    "Ollama base URL for the API container" \
-    "$(default_ollama_docker_base_url)" \
-    docker_base_url
-  prompt_with_default "Ollama LLM model" "${OLLAMA_DEFAULT_LLM_MODEL}" llm_model
-  prompt_with_default "Ollama embedding model" "${OLLAMA_DEFAULT_EMBEDDING_MODEL}" embed_model
-
-  set_env_vars "${BACKEND_ENV}" \
-    "LLM_PROVIDER=ollama" \
-    "EMBEDDING_PROVIDER=ollama" \
-    "OLLAMA_BASE_URL=${docker_base_url}" \
-    "LLM_MODEL=${llm_model}" \
-    "EMBEDDING_MODEL=${embed_model}"
-
-  echo "Configured Ollama for generation and embeddings."
-
-  if ! check_ollama_host_and_models "${docker_base_url}" "${llm_model}" "${embed_model}"; then
-    echo "Ollama settings were saved, but host readiness checks failed." >&2
-    echo "Fix Ollama on your host, then run: make" >&2
-    return 0
-  fi
-}
-
-apply_advanced_mode() {
-  print_manual_provider_next_steps
-}
-
-offer_incomplete_configuration_choice() {
-  local selection=""
-
-  cat <<'EOF'
-
-Existing provider configuration is incomplete.
-
-1) Keep it and edit backend/.env manually
-2) Replace it with a guided provider preset
-
-Selection [1]:
-EOF
-  IFS= read -r selection || true
-  selection="${selection:-1}"
-
-  case "${selection}" in
-    1|"")
-      describe_provider_requirements || true
-      print_keep_existing_provider_next_steps
-      return 0
-      ;;
-    2)
-      run_provider_wizard
-      return $?
-      ;;
-    *)
-      echo "Invalid selection. Choose 1 or 2." >&2
-      return 1
-      ;;
-  esac
-}
-
-show_provider_menu() {
-  cat <<'EOF'
-
-Choose a provider setup:
-
-1) Gemini — recommended, simplest setup
-2) OpenAI
-3) Ollama — local, no API key
-4) Advanced / mixed providers
-
-Selection [1]:
-EOF
-}
-
-run_provider_wizard() {
-  local selection=""
-
-  show_provider_menu
-  IFS= read -r selection || true
-  selection="${selection:-1}"
-
-  case "${selection}" in
-    1|"")
-      apply_gemini_preset
-      ;;
-    2)
-      apply_openai_preset
-      ;;
-    3)
-      apply_ollama_preset
-      ;;
-    4)
-      apply_advanced_mode
-      return 0
-      ;;
-    *)
-      echo "Invalid selection. Choose 1, 2, 3, or 4." >&2
-      return 1
-      ;;
-  esac
-}
-
-configure_backend_provider() {
-  if [[ ! -f "${BACKEND_ENV}" ]]; then
-    cp "${BACKEND_ENV_EXAMPLE}" "${BACKEND_ENV}"
-    echo "Created backend/.env from backend/.env.example"
-  else
-    echo "Preserving existing backend/.env"
-  fi
-
-  if is_provider_configuration_complete; then
-    echo "Provider configuration already complete (LLM=$(effective_llm_provider), embeddings=$(effective_embedding_provider))."
-    return 0
-  fi
-
-  echo "Backend provider configuration is missing or incomplete."
-
-  if has_explicit_provider_selection; then
-    if ! offer_incomplete_configuration_choice; then
-      return 1
-    fi
-  else
-    if ! describe_provider_requirements; then
-      echo "Guided setup can configure Gemini, OpenAI, or Ollama, or you can choose Advanced for manual editing."
-    fi
-    if ! run_provider_wizard; then
-      return 1
-    fi
-  fi
-
-  if is_provider_configuration_complete; then
-    return 0
   fi
 
   return 0
