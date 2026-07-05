@@ -12,6 +12,8 @@ BACKEND_ENV_EXAMPLE="${REPO_ROOT}/backend/.env.example"
 FRONTEND_DIR="${REPO_ROOT}/frontend-demo"
 FRONTEND_ENV="${FRONTEND_DIR}/.env.local"
 FRONTEND_PID_FILE="${REPO_ROOT}/.chatvector-dev-frontend.pid"
+FRONTEND_PORT="${FRONTEND_PORT:-3000}"
+FRONTEND_DEV_URL="http://localhost:${FRONTEND_PORT}"
 
 if command -v docker-compose >/dev/null 2>&1; then
   DOCKER_COMPOSE=(docker-compose)
@@ -263,6 +265,46 @@ ensure_frontend_not_running() {
   clear_frontend_pid_file
 }
 
+is_frontend_port_in_use() {
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"${FRONTEND_PORT}" -sTCP:LISTEN >/dev/null 2>&1
+    return $?
+  fi
+
+  if command -v nc >/dev/null 2>&1; then
+    nc -z localhost "${FRONTEND_PORT}" >/dev/null 2>&1
+    return $?
+  fi
+
+  return 1
+}
+
+print_frontend_port_listener_info() {
+  if ! command -v lsof >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local listeners
+  listeners="$(lsof -nP -iTCP:"${FRONTEND_PORT}" -sTCP:LISTEN 2>/dev/null || true)"
+  [[ -n "${listeners}" ]] || return 0
+
+  echo "Process using port ${FRONTEND_PORT}:"
+  echo "${listeners}"
+}
+
+require_frontend_port_available() {
+  if ! is_frontend_port_in_use; then
+    return 0
+  fi
+
+  echo "Error: Port ${FRONTEND_PORT} is already in use." >&2
+  print_frontend_port_listener_info >&2
+  echo "" >&2
+  echo "Stop the conflicting process manually, or from this repo run:" >&2
+  echo "  make stop" >&2
+  return 1
+}
+
 install_frontend_dependencies() {
   echo "Installing frontend dependencies..."
   (
@@ -289,7 +331,7 @@ wait_for_http() {
 
   echo "Waiting for ${label} at ${url}..."
   while (( elapsed < timeout )); do
-    if curl -sf "${url}" >/dev/null 2>&1; then
+    if curl -sf --max-time 2 "${url}" >/dev/null 2>&1; then
       echo "${label} is ready."
       return 0
     fi
@@ -309,10 +351,30 @@ wait_for_backend() {
 }
 
 wait_for_frontend() {
-  if ! wait_for_http "http://localhost:3000" "Frontend demo" "${FRONTEND_WAIT_TIMEOUT:-120}"; then
-    echo "Check the frontend terminal output for Next.js errors." >&2
-    return 1
-  fi
+  local frontend_pid="${1:-}"
+  local timeout="${FRONTEND_WAIT_TIMEOUT:-120}"
+  local elapsed=0
+  local interval=2
+
+  echo "Waiting for Frontend demo at ${FRONTEND_DEV_URL}..."
+  while (( elapsed < timeout )); do
+    if [[ -n "${frontend_pid}" ]] && ! kill -0 "${frontend_pid}" 2>/dev/null; then
+      echo "Error: Frontend demo process exited before becoming ready at ${FRONTEND_DEV_URL}." >&2
+      return 1
+    fi
+
+    if curl -sf --max-time 2 "${FRONTEND_DEV_URL}" >/dev/null 2>&1; then
+      echo "Frontend demo is ready."
+      return 0
+    fi
+
+    sleep "${interval}"
+    elapsed=$((elapsed + interval))
+  done
+
+  echo "Error: Frontend demo did not become ready at ${FRONTEND_DEV_URL} within ${timeout}s." >&2
+  echo "Check the frontend terminal output for Next.js errors." >&2
+  return 1
 }
 
 require_complete_provider_configuration() {

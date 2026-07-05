@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 
-FRONTEND_URL="http://localhost:3000"
+FRONTEND_URL="${FRONTEND_DEV_URL}"
 DOCS_URL="http://localhost:8000/docs"
 
 open_with_command() {

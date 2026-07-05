@@ -62,7 +62,11 @@ start_frontend() {
 
   ensure_frontend_not_running
 
-  echo "Starting frontend demo (Next.js)..."
+  if ! require_frontend_port_available; then
+    exit 1
+  fi
+
+  echo "Starting frontend demo (Next.js) on port ${FRONTEND_PORT}..."
   (
     cd "${FRONTEND_DIR}"
     exec npm run dev
@@ -90,7 +94,7 @@ main() {
 
   start_frontend
 
-  if ! wait_for_frontend; then
+  if ! wait_for_frontend "${FRONTEND_PID}"; then
     echo "Error: Frontend demo failed to become ready." >&2
     exit 1
   fi
@@ -101,7 +105,7 @@ main() {
 
   echo ""
   echo "Development environment running."
-  echo "  Frontend : http://localhost:3000"
+  echo "  Frontend : ${FRONTEND_DEV_URL}"
   echo "  API docs : http://localhost:8000/docs"
   echo "Press Ctrl+C to stop the frontend (backend containers keep running)."
   echo ""

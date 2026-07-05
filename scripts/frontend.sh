@@ -14,6 +14,11 @@ main() {
     exit 1
   fi
 
+  ensure_frontend_not_running
+  if ! require_frontend_port_available; then
+    exit 1
+  fi
+
   cd "${FRONTEND_DIR}"
   exec npm run dev
 }
