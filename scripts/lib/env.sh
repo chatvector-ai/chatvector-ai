@@ -65,37 +65,109 @@ is_placeholder_value() {
   return 1
 }
 
-prompt_hidden() {
+normalize_secret_input() {
+  local var_name="$1"
+  local value="${!var_name}"
+
+  value="${value//$'\r'/}"
+  value="${value//$'\n'/}"
+  value="${value#export }"
+  value="${value#EXPORT }"
+  if [[ "${value}" =~ ^GEN_AI_KEY= ]]; then
+    value="${value#GEN_AI_KEY=}"
+  fi
+  if [[ "${value}" =~ ^OPENAI_API_KEY= ]]; then
+    value="${value#OPENAI_API_KEY=}"
+  fi
+  if [[ "${value}" =~ ^ANTHROPIC_API_KEY= ]]; then
+    value="${value#ANTHROPIC_API_KEY=}"
+  fi
+  if [[ "${value}" =~ ^VOYAGE_API_KEY= ]]; then
+    value="${value#VOYAGE_API_KEY=}"
+  fi
+  value="${value%\"}"
+  value="${value#\"}"
+  value="${value%\'}"
+  value="${value#\'}"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+
+  printf -v "${var_name}" '%s' "${value}"
+}
+
+read_line_hidden_from_stdin() {
+  local prompt="$1"
+  local var_name="$2"
+  local input=""
+
+  printf '%s' "${prompt}" >&2
+  if stty -echo 2>/dev/null; then
+    IFS= read -r input || true
+    stty echo 2>/dev/null
+  else
+    IFS= read -rs input || true
+  fi
+  printf '\n' >&2
+  printf -v "${var_name}" '%s' "${input}"
+}
+
+read_line_hidden_from_tty() {
   local prompt="$1"
   local var_name="$2"
   local input=""
   local tty="/dev/tty"
 
-  sanitize_prompt_input() {
-    input="${input//$'\r'/}"
-    input="${input//$'\n'/}"
-    input="${input#"${input%%[![:space:]]*}"}"
-    input="${input%"${input##*[![:space:]]}"}"
-  }
+  [[ -r "${tty}" ]] || return 1
 
-  if [[ -r "${tty}" ]]; then
-    printf '%s' "${prompt}" >"${tty}"
-    if stty -echo 2>/dev/null <"${tty}"; then
-      # stty -echo is more reliable than read -s for pasted input in IDE terminals.
-      IFS= read -r input <"${tty}" || true
-      stty echo 2>/dev/null <"${tty}"
-    else
-      IFS= read -rs input <"${tty}" || true
-    fi
-    printf '\n' >"${tty}"
+  printf '%s' "${prompt}" >"${tty}"
+  if stty -echo 2>/dev/null <"${tty}"; then
+    IFS= read -r input <"${tty}" || true
+    stty echo 2>/dev/null <"${tty}"
+  else
+    IFS= read -rs input <"${tty}" || true
+  fi
+  printf '\n' >"${tty}"
+  printf -v "${var_name}" '%s' "${input}"
+}
+
+prompt_hidden() {
+  local prompt="$1"
+  local var_name="$2"
+
+  printf -v "${var_name}" ''
+
+  if [[ -r /dev/tty ]]; then
+    read_line_hidden_from_tty "${prompt}" "${var_name}" || true
+  fi
+
+  if [[ -z "${!var_name}" && -t 0 ]]; then
+    read_line_hidden_from_stdin "${prompt}" "${var_name}"
+  fi
+
+  normalize_secret_input "${var_name}"
+}
+
+prompt_visible() {
+  local prompt="$1"
+  local var_name="$2"
+  local input=""
+
+  if [[ -r /dev/tty ]]; then
+    printf '%s' "${prompt}" >/dev/tty
+    IFS= read -r input </dev/tty || true
+    printf '\n' >/dev/tty
+  elif [[ -t 0 ]]; then
+    printf '%s' "${prompt}" >&2
+    IFS= read -r input || true
+    printf '\n' >&2
   else
     printf '%s' "${prompt}" >&2
-    IFS= read -rs input || true
+    IFS= read -r input || true
     printf '\n' >&2
   fi
 
-  sanitize_prompt_input
   printf -v "${var_name}" '%s' "${input}"
+  normalize_secret_input "${var_name}"
 }
 
 prompt_with_default() {

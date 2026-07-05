@@ -181,11 +181,22 @@ prompt_for_api_key() {
   local help_url="$3"
   local var_name="$4"
   local input=""
+  local attempt=0
 
   while [[ -z "${input}" ]]; do
-    prompt_hidden "${prompt_text}" input
+    attempt=$((attempt + 1))
+    if [[ "${attempt}" -eq 1 ]]; then
+      prompt_hidden "${prompt_text}" input
+    else
+      echo "Hidden input is unavailable in this terminal." >&2
+      prompt_visible \
+        "Enter your ${provider_name} API key (key only, not VAR=...): " \
+        input
+    fi
+
     if [[ -z "${input}" ]]; then
       echo "A valid ${provider_name} API key is required." >&2
+      echo "Enter the key value only — do not include GEN_AI_KEY= or quotes." >&2
       echo "Get one at ${help_url}" >&2
     fi
   done
@@ -196,7 +207,7 @@ apply_gemini_preset() {
   local key_input=""
   prompt_for_api_key \
     "Google Gemini" \
-    "Enter your Google Gemini API key (input hidden): " \
+    "Enter your Google Gemini API key (key only, hidden): " \
     "https://aistudio.google.com/" \
     key_input
 
@@ -212,7 +223,7 @@ apply_openai_preset() {
   local key_input=""
   prompt_for_api_key \
     "OpenAI" \
-    "Enter your OpenAI API key (input hidden): " \
+    "Enter your OpenAI API key (key only, hidden): " \
     "https://platform.openai.com/api-keys" \
     key_input
 
