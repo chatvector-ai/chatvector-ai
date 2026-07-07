@@ -180,6 +180,10 @@ class Settings:
         0, int(os.getenv("HEALTH_CHECK_CACHE_TTL_SECONDS", "60"))
     )
 
+    RATE_LIMIT_DEV_IP_FALLBACK: bool = os.getenv(
+        "RATE_LIMIT_DEV_IP_FALLBACK", "false"
+    ).lower() in ("1", "true", "yes")
+
     RATE_LIMIT_UPLOAD: str = os.getenv("RATE_LIMIT_UPLOAD", "20/hour")
     RATE_LIMIT_CHAT: str = os.getenv("RATE_LIMIT_CHAT", "30/minute")
     RATE_LIMIT_CHAT_BATCH: str = os.getenv("RATE_LIMIT_CHAT_BATCH", "10/minute")

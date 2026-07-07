@@ -44,6 +44,7 @@ async def require_auth(request: Request) -> AuthContext:
     # ── Non-production bypass ────────────────────────────────────────────────
     if config.APP_ENV.lower() in ("development", "test"):
         dev_tenant = os.getenv("DEV_TENANT_ID", "dev").strip()
+        request.state.tenant_id = dev_tenant
         return AuthContext(tenant_id=dev_tenant)
 
     # ── Parse the Authorization header ──────────────────────────────────────
@@ -69,6 +70,7 @@ async def require_auth(request: Request) -> AuthContext:
         raise _401("invalid_api_key", "API key is invalid or has been revoked.")
 
     tenant_id, api_key_id = result
+    request.state.tenant_id = tenant_id
     return AuthContext(tenant_id=tenant_id, api_key_id=api_key_id)
 
 
