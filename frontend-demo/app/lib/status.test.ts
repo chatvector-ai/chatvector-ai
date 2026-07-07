@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getSystemStatus, StatusFetchError } from "./status";
+import { getSystemStatus, StatusFetchError, statusErrorTitle } from "./status";
 
 const HEALTHY_STATUS = {
   status: "healthy",
@@ -129,6 +129,22 @@ describe("getSystemStatus", () => {
     });
   });
 
+  it("reports HTML bodies even when the Content-Type claims JSON", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response('<pre style="font-family: monospace;">System Status</pre>', {
+        status: 502,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    await expect(getSystemStatus()).rejects.toMatchObject({
+      name: "StatusFetchError",
+      kind: "unexpected_response",
+      httpStatus: 502,
+      message: expect.stringContaining("Expected JSON but received text/html"),
+    });
+  });
+
   it("throws for plain-text responses", async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response("upstream connect error", {
@@ -186,5 +202,31 @@ describe("getSystemStatus", () => {
     expect(err).toBeInstanceOf(Error);
     expect(err).toBeInstanceOf(StatusFetchError);
     expect(err.kind).toBe("network");
+  });
+
+  it("rejects JSON payloads that do not match the status schema", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify({ status: "unknown", message: "nope" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    await expect(getSystemStatus()).rejects.toMatchObject({
+      name: "StatusFetchError",
+      kind: "invalid_json",
+      message: expect.stringContaining("did not look like a system status response"),
+    });
+  });
+});
+
+describe("statusErrorTitle", () => {
+  it.each([
+    ["network", "Backend Unreachable"],
+    ["unexpected_response", "Unexpected Response"],
+    ["invalid_json", "Unreadable Response"],
+    ["http_error", "Backend Error"],
+  ] as const)("maps %s to a user-facing heading", (kind, title) => {
+    expect(statusErrorTitle(kind)).toBe(title);
   });
 });

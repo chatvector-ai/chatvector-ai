@@ -77,6 +77,71 @@ function formatHttpDetail(httpStatus: number, contentType: string | null): strin
   return `HTTP ${httpStatus} · Expected JSON but received ${mediaType(contentType)}.`;
 }
 
+function unexpectedResponseDetail(
+  httpStatus: number,
+  contentType: string | null,
+  body: string
+): string {
+  if (looksLikeHtml(contentType, body)) {
+    return `HTTP ${httpStatus} · Expected JSON but received text/html.`;
+  }
+  return formatHttpDetail(httpStatus, contentType);
+}
+
+export function statusErrorTitle(kind: StatusFetchErrorKind): string {
+  switch (kind) {
+    case "network":
+      return "Backend Unreachable";
+    case "unexpected_response":
+      return "Unexpected Response";
+    case "invalid_json":
+      return "Unreadable Response";
+    case "http_error":
+      return "Backend Error";
+  }
+}
+
+function parseSystemStatus(parsed: unknown): SystemStatus {
+  if (parsed == null || typeof parsed !== "object") {
+    throw new StatusFetchError(
+      "The backend response could not be read.\n\nThe payload did not look like a system status response.",
+      "invalid_json"
+    );
+  }
+
+  const payload = parsed as Record<string, unknown>;
+  const status = payload.status;
+  if (status !== "healthy" && status !== "degraded" && status !== "unhealthy") {
+    throw new StatusFetchError(
+      "The backend response could not be read.\n\nThe payload did not look like a system status response.",
+      "invalid_json"
+    );
+  }
+
+  if (payload.components == null || typeof payload.components !== "object") {
+    throw new StatusFetchError(
+      "The backend response could not be read.\n\nThe payload did not look like a system status response.",
+      "invalid_json"
+    );
+  }
+
+  if (payload.metrics == null || typeof payload.metrics !== "object") {
+    throw new StatusFetchError(
+      "The backend response could not be read.\n\nThe payload did not look like a system status response.",
+      "invalid_json"
+    );
+  }
+
+  if (typeof payload.uptime !== "string" || typeof payload.version !== "string") {
+    throw new StatusFetchError(
+      "The backend response could not be read.\n\nThe payload did not look like a system status response.",
+      "invalid_json"
+    );
+  }
+
+  return parsed as SystemStatus;
+}
+
 export async function getSystemStatus(): Promise<SystemStatus> {
   let res: Response;
   try {
@@ -124,7 +189,7 @@ export async function getSystemStatus(): Promise<SystemStatus> {
       });
     }
     throw new StatusFetchError(
-      `The backend returned an unexpected response.\n\n${formatHttpDetail(res.status, contentType)}`,
+      `The backend returned an unexpected response.\n\n${unexpectedResponseDetail(res.status, contentType, body)}`,
       "unexpected_response",
       { httpStatus: res.status, contentType: contentType ?? undefined }
     );
@@ -179,5 +244,5 @@ export async function getSystemStatus(): Promise<SystemStatus> {
     );
   }
 
-  return parsed as SystemStatus;
+  return parseSystemStatus(parsed);
 }
