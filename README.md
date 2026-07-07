@@ -107,7 +107,7 @@ Phases 1, 2, and 2.5 are complete. Phase 3 is actively underway — most backend
 - ✅ Redis-backed ingestion queue (production default; in-memory fallback for local dev)
 - ✅ Structured logging with request ID tracing
 - ✅ Health checks with TTL caching on `/status`
-- ✅ Per-IP rate limiting on all public endpoints
+- ✅ Per-tenant rate limiting on all authenticated API routes
 - ✅ Security headers, CORS hardening, input validation
 - ✅ Production Compose config + GitHub Actions CI
 - ✅ Pluggable LLM providers (Gemini, OpenAI, Ollama, Anthropic Claude)
@@ -125,7 +125,7 @@ Phases 1, 2, and 2.5 are complete. Phase 3 is actively underway — most backend
 
 **Active Phase 3 work:**
 - 🚧 Production API-key authentication and strict tenant enforcement (plumbing scaffolded; validation not yet active)
-- 🚧 Per-tenant rate limiting
+- 🚧 Redis-backed distributed rate limiting
 - 🚧 Python SDK parity (sessions, streaming, retrieval scopes)
 - 🚧 Node.js/TypeScript SDK (planned)
 - 🚧 Query transformation debug metadata and retrieval inspection tooling
@@ -138,7 +138,7 @@ Phases 1, 2, and 2.5 are complete. Phase 3 is actively underway — most backend
 
 - **FastAPI** — modern Python API framework
 - **Uvicorn** — high-performance ASGI server
-- **slowapi** — per-IP rate limiting
+- **slowapi** — per-tenant rate limiting
 - **Design goals:** clarity, extensibility, resilience, and security by default
 
 ### AI & Retrieval Layer

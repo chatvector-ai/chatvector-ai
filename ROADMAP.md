@@ -36,7 +36,7 @@ Phase 2 expanded flexibility, retrieval quality, and usability while maintaining
 - Query transformations (rewrite, expand, stepback)
 - Prompt tuning and system prompt configuration
 - Pluggable LLM and embedding providers (Gemini, OpenAI, Ollama)
-- Per-IP rate limiting via slowapi
+- Per-tenant rate limiting via slowapi (replaces earlier per-IP limiting)
 - LLM + embedding health checks on `/status`
 - Observability improvements and structured logging guide
 - Production Docker Compose and GitHub Actions CI pipeline
@@ -131,7 +131,7 @@ Routes depend on `require_auth`, but enforcement is not yet complete:
 - Secure API-key storage, lookup, and API key → tenant resolution
 - Rejection of missing or invalid keys
 - Strict tenant scoping on documents, sessions, chunks, ingestion jobs, and delete operations
-- Per-tenant rate limiting (replacing per-IP limiting)
+- Per-tenant rate limiting on authenticated API routes
 - API-key lifecycle tooling (generation, rotation, revocation, expiration)
 - Optional `external_user_id` field for developer-side user mapping
 

@@ -237,7 +237,11 @@ All external I/O is wrapped with retry logic via `backend/utils/retry.py`.
 
 ## Rate Limiting
 
-Per-IP HTTP rate limiting via `slowapi` on all public endpoints.
+Per-tenant HTTP rate limiting via `slowapi` on all authenticated API routes.
+The authenticated tenant ID (resolved by `require_auth`) is the primary
+rate-limit key. In development/test, optional IP fallback applies only when
+`RATE_LIMIT_DEV_IP_FALLBACK=true` and no tenant is present on the request.
+Production never silently falls back to IP-based limiting.
 
 | Endpoint | Default limit |
 | --- | --- |
@@ -251,6 +255,7 @@ Per-IP HTTP rate limiting via `slowapi` on all public endpoints.
 
 All limits are configurable via env vars (`RATE_LIMIT_*`).
 429 responses return `{"detail": {"code": "rate_limited", "message": "..."}}`.
+Rate-limit events are logged with tenant ID and path — raw API keys are never logged.
 
 Storage is in-memory for single-instance deployments. Redis-backed
 rate limit storage will be introduced in Phase 3 alongside the Redis
