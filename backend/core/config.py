@@ -153,6 +153,7 @@ class Settings:
     CHAT_BATCH_MAX_ITEMS: int = max(1, int(os.getenv("CHAT_BATCH_MAX_ITEMS", "20")))
     CHAT_MAX_DOC_IDS_PER_QUERY: int = max(1, int(os.getenv("CHAT_MAX_DOC_IDS_PER_QUERY", "10")))
     MAX_SESSION_HISTORY_MESSAGES: int = max(1, int(os.getenv("MAX_SESSION_HISTORY_MESSAGES", "20")))
+    QUERY_TRANSFORMATION_HISTORY_WINDOW: int = max(1, int(os.getenv("QUERY_TRANSFORMATION_HISTORY_WINDOW", "6")))
     SQLALCHEMY_POOL_SIZE: int = max(1, int(os.getenv("SQLALCHEMY_POOL_SIZE", "5")))
     SQLALCHEMY_MAX_OVERFLOW: int = max(0, int(os.getenv("SQLALCHEMY_MAX_OVERFLOW", "10")))
     SQLALCHEMY_POOL_TIMEOUT_SEC: int = max(1, int(os.getenv("SQLALCHEMY_POOL_TIMEOUT_SEC", "30")))

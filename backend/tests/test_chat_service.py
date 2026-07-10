@@ -634,3 +634,221 @@ async def test_batch_latency_and_model_present_in_no_documents_in_scope_error():
     assert "model" in result[0]
     assert result[0]["latency_ms"] == 0
     assert result[0]["model"] == ""
+
+
+# ---------------------------------------------------------------------------
+# History-aware retrieval (Issue #337)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_history_loaded_before_transform_query_for_single_chat():
+    """Session history must be passed to transform_query so follow-ups can be resolved."""
+    full_history = [{"role": "user", "content": f"msg{i}"} for i in range(10)]
+
+    captured: dict = {}
+
+    async def fake_transform(question: str, history=None) -> list[str]:
+        captured["history"] = history
+        return [question]
+
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch("services.chat_service.generate_answer", new=AsyncMock(return_value=("ans", 0, "m"))),
+        patch("db.get_session_history", new=AsyncMock(return_value=full_history)),
+        patch("db.store_chat_message", new=AsyncMock()),
+        patch("services.chat_service.transform_query", new=fake_transform),
+    ):
+        await answer_question_for_document(
+            question="What about it?",
+            doc_id="doc-1",
+            session_id="sess-abc",
+            auth=TEST_AUTH,
+        )
+
+    assert captured["history"] is not None
+    assert len(captured["history"]) <= chat_service_mod.config.QUERY_TRANSFORMATION_HISTORY_WINDOW
+
+
+@pytest.mark.asyncio
+async def test_history_bounded_to_window_for_single_chat():
+    """Only the most recent QUERY_TRANSFORMATION_HISTORY_WINDOW messages must be passed."""
+    window = 4
+    full_history = [{"role": "user", "content": f"msg{i}"} for i in range(20)]
+
+    captured: dict = {}
+
+    async def fake_transform(question: str, history=None) -> list[str]:
+        captured["history"] = history
+        return [question]
+
+    with (
+        patch("services.chat_service.config.QUERY_TRANSFORMATION_HISTORY_WINDOW", window),
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch("services.chat_service.generate_answer", new=AsyncMock(return_value=("ans", 0, "m"))),
+        patch("db.get_session_history", new=AsyncMock(return_value=full_history)),
+        patch("db.store_chat_message", new=AsyncMock()),
+        patch("services.chat_service.transform_query", new=fake_transform),
+    ):
+        await answer_question_for_document(
+            question="Q?",
+            doc_id="doc-1",
+            session_id="sess-abc",
+            auth=TEST_AUTH,
+        )
+
+    assert captured["history"] == full_history[:window]
+
+
+@pytest.mark.asyncio
+async def test_no_history_passed_to_transform_when_no_session_id():
+    """Without a session_id, transform_query must receive no history (one-shot behavior)."""
+    captured: dict = {}
+
+    async def fake_transform(question: str, history=None) -> list[str]:
+        captured["history"] = history
+        return [question]
+
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch("services.chat_service.generate_answer", new=AsyncMock(return_value=("ans", 0, "m"))),
+        patch("services.chat_service.transform_query", new=fake_transform),
+    ):
+        await answer_question_for_document(
+            question="standalone question",
+            doc_id="doc-1",
+            auth=TEST_AUTH,
+        )
+
+    assert not captured["history"]
+
+
+@pytest.mark.asyncio
+async def test_history_session_isolation_single_chat():
+    """get_session_history must be called with the exact session_id of the request."""
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch("services.chat_service.generate_answer", new=AsyncMock(return_value=("ans", 0, "m"))),
+        patch("db.get_session_history", new=AsyncMock(return_value=[])) as mock_hist,
+        patch("db.store_chat_message", new=AsyncMock()),
+    ):
+        await answer_question_for_document(
+            question="Q",
+            doc_id="doc-1",
+            session_id="session-xyz",
+            auth=TEST_AUTH,
+        )
+
+    mock_hist.assert_awaited_once()
+    call_kwargs = mock_hist.call_args.kwargs
+    assert call_kwargs["session_id"] == "session-xyz"
+
+
+@pytest.mark.asyncio
+async def test_history_tenant_isolation_single_chat():
+    """get_session_history must be called with the tenant_id from the AuthContext."""
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch("services.chat_service.generate_answer", new=AsyncMock(return_value=("ans", 0, "m"))),
+        patch("db.get_session_history", new=AsyncMock(return_value=[])) as mock_hist,
+        patch("db.store_chat_message", new=AsyncMock()),
+    ):
+        await answer_question_for_document(
+            question="Q",
+            doc_id="doc-1",
+            session_id="session-abc",
+            auth=AuthContext(tenant_id="tenant-isolated"),
+        )
+
+    call_kwargs = mock_hist.call_args.kwargs
+    assert call_kwargs["tenant_id"] == "tenant-isolated"
+
+
+@pytest.mark.asyncio
+async def test_batch_history_bounded_to_window():
+    """In batch mode, each query's transformation history must also be bounded."""
+    window = 3
+    full_history = [{"role": "user", "content": f"msg{i}"} for i in range(10)]
+
+    captured_per_question: dict[str, list | None] = {}
+
+    async def fake_transform(question: str, history=None) -> list[str]:
+        captured_per_question[question] = history
+        return [question]
+
+    with (
+        patch("services.chat_service.config.QUERY_TRANSFORMATION_HISTORY_WINDOW", window),
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1], [0.2]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch("services.chat_service.generate_answer", new=AsyncMock(return_value=("ans", 0, "m"))),
+        patch("db.get_session_history", new=AsyncMock(return_value=full_history)),
+        patch("db.store_chat_message", new=AsyncMock()),
+        patch("services.chat_service.transform_query", new=fake_transform),
+    ):
+        await answer_questions_for_documents_batch(
+            [
+                {"question": "Q1", "doc_ids": ["doc-a"], "session_id": "sess-1"},
+                {"question": "Q2", "doc_ids": ["doc-b"], "session_id": "sess-2"},
+            ],
+            auth=TEST_AUTH,
+        )
+
+    for hist in captured_per_question.values():
+        assert hist is not None
+        assert len(hist) == window
+
+
+@pytest.mark.asyncio
+async def test_batch_no_history_for_queries_without_session_id():
+    """Batch queries without session_id must receive None history for transformation."""
+    captured: dict[str, list | None] = {}
+
+    async def fake_transform(question: str, history=None) -> list[str]:
+        captured[question] = history
+        return [question]
+
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch("services.chat_service.generate_answer", new=AsyncMock(return_value=("ans", 0, "m"))),
+        patch("services.chat_service.transform_query", new=fake_transform),
+    ):
+        await answer_questions_for_documents_batch(
+            [{"question": "standalone Q", "doc_ids": ["doc-a"]}],
+            auth=TEST_AUTH,
+        )
+
+    assert not captured["standalone Q"]
+
+
+@pytest.mark.asyncio
+async def test_batch_history_tenant_isolation():
+    """Each batch query's history load must use the tenant_id from the AuthContext."""
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch("services.chat_service.generate_answer", new=AsyncMock(return_value=("ans", 0, "m"))),
+        patch("db.get_session_history", new=AsyncMock(return_value=[])) as mock_hist,
+        patch("db.store_chat_message", new=AsyncMock()),
+    ):
+        await answer_questions_for_documents_batch(
+            [{"question": "Q", "doc_ids": ["doc-a"], "session_id": "sess-t"}],
+            auth=AuthContext(tenant_id="tenant-batch"),
+        )
+
+    mock_hist.assert_awaited()
+    call_kwargs = mock_hist.call_args.kwargs
+    assert call_kwargs["tenant_id"] == "tenant-batch"

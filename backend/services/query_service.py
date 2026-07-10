@@ -72,17 +72,68 @@ async def stepback_query(question: str) -> list[str]:
     return [question, broader]
 
 
-async def transform_query(question: str) -> list[str]:
+def _format_history_context(history: list[dict]) -> str:
+    """Render session history as a conversational context string.
+
+    History arrives ordered most-recent-first (as returned by get_session_history).
+    We reverse it so the prompt reads chronologically.
+    """
+    lines: list[str] = []
+    for msg in reversed(history):
+        role = msg.get("role", "")
+        content = (msg.get("content") or "").strip()
+        if role == "user":
+            lines.append(f"User: {content}")
+        elif role == "assistant":
+            lines.append(f"Assistant: {content}")
+    return "\n".join(lines)
+
+
+async def _resolve_to_standalone(question: str, history: list[dict]) -> str:
+    """Rewrite a follow-up question into a self-contained standalone query.
+
+    Uses the provided conversation history to resolve pronouns ("it", "they",
+    "that"), implicit references ("the second option", "the earlier plan"), and
+    omitted subjects so that the resulting question can be used for retrieval
+    without any surrounding context.
+    """
+    history_text = _format_history_context(history)
+    system_instruction = (
+        "You are a query resolution assistant. Given a conversation history and a "
+        "follow-up question, rewrite the follow-up as a complete standalone question "
+        'that does not rely on context from the conversation. Resolve pronouns ("it", '
+        '"they", "that"), references ("the second option", "the earlier plan"), and '
+        "omitted subjects. If the question is already standalone, return it unchanged. "
+        "Return only the rewritten question, nothing else."
+    )
+    user_text = (
+        f"Conversation history:\n{history_text}\n\nFollow-up question: {question}"
+    )
+    resolved = await _llm_transform(system_instruction, user_text)
+    if resolved is None:
+        return question
+    return resolved
+
+
+async def transform_query(
+    question: str, history: list[dict] | None = None
+) -> list[str]:
     if not config.QUERY_TRANSFORMATION_ENABLED:
         return [question]
 
+    # When recent session history is available, resolve any follow-up references
+    # into a standalone question before applying the retrieval strategy.
+    effective_question = question
+    if history:
+        effective_question = await _resolve_to_standalone(question, history)
+
     strategy = config.QUERY_TRANSFORMATION_STRATEGY
     if strategy == "rewrite":
-        return [await rewrite_query(question)]
+        return [await rewrite_query(effective_question)]
     if strategy == "expand":
-        return await expand_query(question)
+        return await expand_query(effective_question)
     if strategy == "stepback":
-        return await stepback_query(question)
+        return await stepback_query(effective_question)
 
     logger.warning(
         "Unknown QUERY_TRANSFORMATION_STRATEGY=%r; returning original question unchanged",

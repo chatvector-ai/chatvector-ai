@@ -254,7 +254,22 @@ async def answer_question_for_document(
             },
         }
 
-    transformed_queries = await transform_query(question)
+    # Load session history before query transformation so follow-up questions
+    # can be resolved into standalone retrieval queries.
+    history: list[dict] = []
+    if session_id:
+        import db
+        try:
+            history = await db.get_session_history(
+                session_id=session_id, limit=config.MAX_SESSION_HISTORY_MESSAGES, tenant_id=tenant_id
+            )
+        except Exception as e:
+            logger.error(f"Failed to load chat history for session {session_id}: {e}", exc_info=True)
+
+    transformation_history = (
+        history[: config.QUERY_TRANSFORMATION_HISTORY_WINDOW] if history else None
+    )
+    transformed_queries = await transform_query(question, history=transformation_history)
     query_embeddings = await get_embeddings(transformed_queries)
     all_chunks: list = []
     seen_chunk_keys: set = set()
@@ -273,17 +288,11 @@ async def answer_question_for_document(
                 seen_chunk_keys.add(key)
                 all_chunks.append(chunk)
     matching_chunks = await _finalize_retrieved_chunks(question, all_chunks, match_count)
-    if session_id:
-        import db
-        try:
-            history = await db.get_session_history(
-                session_id=session_id, limit=config.MAX_SESSION_HISTORY_MESSAGES, tenant_id=tenant_id
-            )
-            if not session_context:
-                session_context = SessionContext()
-            session_context.chat_history = history
-        except Exception as e:
-            logger.error(f"Failed to load chat history for session {session_id}: {e}", exc_info=True)
+
+    if history:
+        if not session_context:
+            session_context = SessionContext()
+        session_context.chat_history = history
 
     context = build_context_from_chunks(matching_chunks, session_context=session_context)
     answer, latency_ms, model_name = await generate_answer(question, context)
@@ -357,7 +366,22 @@ async def answer_question_stream_for_document(
             )
             return
 
-        transformed_queries = await transform_query(question)
+        # Load session history before query transformation so follow-up questions
+        # can be resolved into standalone retrieval queries.
+        history: list[dict] = []
+        if session_id:
+            import db
+            try:
+                history = await db.get_session_history(
+                    session_id=session_id, limit=config.MAX_SESSION_HISTORY_MESSAGES, tenant_id=tenant_id
+                )
+            except Exception as e:
+                logger.error(f"Failed to load chat history for session {session_id}: {e}", exc_info=True)
+
+        transformation_history = (
+            history[: config.QUERY_TRANSFORMATION_HISTORY_WINDOW] if history else None
+        )
+        transformed_queries = await transform_query(question, history=transformation_history)
         query_embeddings = await get_embeddings(transformed_queries)
         all_chunks: list = []
         seen_chunk_keys: set = set()
@@ -375,19 +399,12 @@ async def answer_question_stream_for_document(
                     seen_chunk_keys.add(key)
                     all_chunks.append(chunk)
         matching_chunks = await _finalize_retrieved_chunks(question, all_chunks, match_count)
-        
-        if session_id:
-            import db
-            try:
-                history = await db.get_session_history(
-                    session_id=session_id, limit=config.MAX_SESSION_HISTORY_MESSAGES, tenant_id=tenant_id
-                )
-                if not session_context:
-                    session_context = SessionContext()
-                session_context.chat_history = history
-            except Exception as e:
-                logger.error(f"Failed to load chat history for session {session_id}: {e}", exc_info=True)
-            
+
+        if history:
+            if not session_context:
+                session_context = SessionContext()
+            session_context.chat_history = history
+
         context = build_context_from_chunks(matching_chunks, session_context=session_context)
 
         full_answer_chunks: list[str] = []
@@ -471,8 +488,43 @@ async def answer_questions_for_documents_batch(
             }
         )
 
+    # Pre-load session histories so each query's transformation can resolve
+    # follow-up references.  One DB round-trip per unique session_id.
+    async def _load_batch_history(session_id: str | None) -> list[dict]:
+        if not session_id:
+            return []
+        import db
+        try:
+            return await db.get_session_history(
+                session_id=session_id,
+                limit=config.MAX_SESSION_HISTORY_MESSAGES,
+                tenant_id=tenant_id,
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to pre-load session history for batch transformation (session=%s): %s",
+                session_id,
+                e,
+                exc_info=True,
+            )
+            return []
+
+    per_query_histories: list[list[dict]] = list(
+        await asyncio.gather(
+            *[_load_batch_history(q.get("session_id")) for q in normalized_queries]
+        )
+    )
+
     transformed_query_lists = await asyncio.gather(
-        *[transform_query(q["question"]) for q in normalized_queries]
+        *[
+            transform_query(
+                q["question"],
+                history=(
+                    h[: config.QUERY_TRANSFORMATION_HISTORY_WINDOW] if h else None
+                ),
+            )
+            for q, h in zip(normalized_queries, per_query_histories)
+        ]
     )
     flat_queries = [q for queries in transformed_query_lists for q in queries]
     flat_embeddings = await get_embeddings(flat_queries)
@@ -503,7 +555,7 @@ async def answer_questions_for_documents_batch(
         offset += n
 
     async def _process_query(
-        query: dict, query_embeddings: list[list[float]]
+        query: dict, query_embeddings: list[list[float]], preloaded_history: list[dict]
     ) -> dict:
         try:
             session_id = query.get("session_id")
@@ -550,18 +602,11 @@ async def answer_questions_for_documents_batch(
             )
             
             query_session_context = session_context
-            if session_id:
-                import db
-                try:
-                    history = await db.get_session_history(
-                        session_id=session_id, limit=config.MAX_SESSION_HISTORY_MESSAGES, tenant_id=tenant_id
-                    )
-                    from copy import deepcopy
-                    query_session_context = deepcopy(session_context) if session_context else SessionContext()
-                    query_session_context.chat_history = history
-                except Exception as e:
-                    logger.error(f"Failed to load batch chat history for session {session_id}: {e}", exc_info=True)
-                
+            if preloaded_history:
+                from copy import deepcopy
+                query_session_context = deepcopy(session_context) if session_context else SessionContext()
+                query_session_context.chat_history = preloaded_history
+
             context = build_context_from_chunks(matching_chunks, session_context=query_session_context)
             answer, latency_ms, model_name = await generate_answer(query["question"], context)
 
@@ -623,7 +668,9 @@ async def answer_questions_for_documents_batch(
 
     return await asyncio.gather(
         *[
-            _process_query(query, embeddings)
-            for query, embeddings in zip(normalized_queries, per_query_embeddings)
+            _process_query(query, embeddings, history)
+            for query, embeddings, history in zip(
+                normalized_queries, per_query_embeddings, per_query_histories
+            )
         ]
     )
