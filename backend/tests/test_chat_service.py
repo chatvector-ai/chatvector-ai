@@ -1,7 +1,8 @@
 import asyncio
+import json
 from dataclasses import dataclass
 from typing import Optional
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -11,6 +12,15 @@ from services.chat_service import answer_question_for_document
 from services.chat_service import answer_questions_for_documents_batch
 
 TEST_AUTH = AuthContext(tenant_id="dev")
+
+
+def _parse_sse_event(raw: str) -> tuple[str, object]:
+    lines = raw.strip().split("\n")
+    event = lines[0].split(": ", 1)[1]
+    data_raw = lines[1].split(": ", 1)[1]
+    if data_raw == "[DONE]":
+        return event, data_raw
+    return event, json.loads(data_raw)
 
 
 async def _passthrough_retrieval_doc_ids(**kwargs):
@@ -454,10 +464,13 @@ async def test_answer_question_stream_for_document_success():
     """Test successful generation of an SSE stream."""
     from services.chat_service import answer_question_stream_for_document
     from core.auth import AuthContext
-    
+
     async def mock_generate_stream(q, c):
         yield "part1 "
         yield "part2"
+
+    mock_provider = MagicMock()
+    mock_provider.model_name = "test-stream-model"
 
     with (
         patch("services.chat_service._resolve_retrieval_doc_ids", new=AsyncMock(return_value=["doc-1"])),
@@ -465,16 +478,28 @@ async def test_answer_question_stream_for_document_success():
         patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1, 0.2]])),
         patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
         patch("services.chat_service.build_context_from_chunks", return_value="context"),
-        patch("services.chat_service.generate_answer_stream", new=mock_generate_stream)
+        patch("services.chat_service.generate_answer_stream", new=mock_generate_stream),
+        patch("services.providers.get_llm_provider", return_value=mock_provider),
     ):
         chunks = []
-        async for chunk in answer_question_stream_for_document("q", "doc-1", match_count=5, auth=AuthContext(tenant_id="dev")):
+        async for chunk in answer_question_stream_for_document(
+            "q", "doc-1", match_count=5, auth=AuthContext(tenant_id="dev")
+        ):
             chunks.append(chunk)
 
-        assert len(chunks) == 3
-        assert chunks[0] == "event: token\ndata: \"part1 \"\n\n"
-        assert chunks[1] == "event: token\ndata: \"part2\"\n\n"
-        assert chunks[2] == "event: done\ndata: [DONE]\n\n"
+        assert len(chunks) == 4
+        assert chunks[0] == 'event: token\ndata: "part1 "\n\n'
+        assert chunks[1] == 'event: token\ndata: "part2"\n\n'
+
+        complete_event, complete_data = _parse_sse_event(chunks[2])
+        assert complete_event == "complete"
+        assert complete_data["type"] == "complete"
+        assert complete_data["session_id"] is None
+        assert complete_data["sources"] == []
+        assert complete_data["latency_ms"] >= 0
+        assert complete_data["model"] == "test-stream-model"
+
+        assert chunks[3] == "event: done\ndata: [DONE]\n\n"
 
 @pytest.mark.asyncio
 async def test_stream_history_loaded_and_bounded_before_transform():
@@ -518,7 +543,7 @@ async def test_answer_question_stream_for_document_error():
     from services.chat_service import answer_question_stream_for_document
     from core.auth import AuthContext
     from services.answer_service import LLM_MSG_RATE_LIMIT
-    
+
     async def mock_generate_stream(q, c):
         yield LLM_MSG_RATE_LIMIT
 
@@ -528,14 +553,164 @@ async def test_answer_question_stream_for_document_error():
         patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1, 0.2]])),
         patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
         patch("services.chat_service.build_context_from_chunks", return_value="context"),
-        patch("services.chat_service.generate_answer_stream", new=mock_generate_stream)
+        patch("services.chat_service.generate_answer_stream", new=mock_generate_stream),
+        patch("db.store_chat_message", new=AsyncMock()) as mock_store,
     ):
         chunks = []
-        async for chunk in answer_question_stream_for_document("q", "doc-1", match_count=5, auth=AuthContext(tenant_id="dev")):
+        async for chunk in answer_question_stream_for_document(
+            "q", "doc-1", match_count=5, auth=AuthContext(tenant_id="dev"), session_id="sess-1"
+        ):
             chunks.append(chunk)
 
         assert len(chunks) == 1
-        assert chunks[0] == f"event: error\ndata: \"{LLM_MSG_RATE_LIMIT}\"\n\n"
+        event, data = _parse_sse_event(chunks[0])
+        assert event == "error"
+        assert data == {
+            "type": "error",
+            "code": "llm_rate_limited",
+            "message": LLM_MSG_RATE_LIMIT,
+        }
+        mock_store.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Streaming SSE contract (Issue #338)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_stream_complete_event_includes_sources_and_session_id():
+    from services.chat_service import answer_question_stream_for_document
+
+    chunks_data = [
+        _FakeChunk(
+            id="c1",
+            chunk_text="ctx",
+            file_name="report.pdf",
+            page_number=3,
+            chunk_index=0,
+            document_id="doc-1",
+        ),
+    ]
+
+    async def mock_generate_stream(q, c):
+        yield "answer"
+
+    mock_provider = MagicMock()
+    mock_provider.model_name = "gemini-test"
+
+    with (
+        patch("services.chat_service._resolve_retrieval_doc_ids", new=AsyncMock(return_value=["doc-1"])),
+        patch("services.chat_service.transform_query", new=AsyncMock(return_value=["q"])),
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch(
+            "services.chat_service._retrieve_chunks_for_documents",
+            new=AsyncMock(return_value=chunks_data),
+        ),
+        patch("services.chat_service.build_context_from_chunks", return_value="context"),
+        patch("services.chat_service.generate_answer_stream", new=mock_generate_stream),
+        patch("services.providers.get_llm_provider", return_value=mock_provider),
+        patch("db.get_session_history", new=AsyncMock(return_value=[])),
+        patch("db.store_chat_message", new=AsyncMock()),
+    ):
+        events = []
+        async for event in answer_question_stream_for_document(
+            "Q?",
+            "doc-1",
+            session_id="sess-complete",
+            auth=TEST_AUTH,
+        ):
+            events.append(event)
+
+    _, complete_data = _parse_sse_event(events[-2])
+    assert complete_data["session_id"] == "sess-complete"
+    assert complete_data["sources"] == [
+        {
+            "file_name": "report.pdf",
+            "page_number": 3,
+            "chunk_index": 0,
+            "score": 0.85,
+        }
+    ]
+    assert complete_data["model"] == "gemini-test"
+    assert complete_data["latency_ms"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_stream_no_documents_error_is_structured_json():
+    from services.chat_service import answer_question_stream_for_document
+
+    with patch(
+        "services.chat_service._resolve_retrieval_doc_ids",
+        new=AsyncMock(return_value=[]),
+    ):
+        events = [
+            event
+            async for event in answer_question_stream_for_document(
+                "Q?", "doc-1", auth=TEST_AUTH
+            )
+        ]
+
+    assert len(events) == 1
+    event_name, data = _parse_sse_event(events[0])
+    assert event_name == "error"
+    assert data == {
+        "type": "error",
+        "code": "no_documents_in_scope",
+        "message": "No documents available for retrieval in the requested scope.",
+    }
+
+
+@pytest.mark.asyncio
+async def test_stream_cancellation_does_not_persist():
+    from services.chat_service import answer_question_stream_for_document
+
+    async def blocking_stream(q, c):
+        yield "partial "
+        await asyncio.Event().wait()
+
+    with (
+        patch("services.chat_service._resolve_retrieval_doc_ids", new=AsyncMock(return_value=["doc-1"])),
+        patch("services.chat_service.transform_query", new=AsyncMock(return_value=["q"])),
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="context"),
+        patch("services.chat_service.generate_answer_stream", new=blocking_stream),
+        patch("db.store_chat_message", new=AsyncMock()) as mock_store,
+    ):
+        gen = answer_question_stream_for_document(
+            "Q?", "doc-1", session_id="sess-cancel", auth=TEST_AUTH
+        )
+        first = await gen.__anext__()
+        assert first.startswith("event: token")
+        await gen.aclose()
+
+    mock_store.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stream_legacy_done_follows_complete_event():
+    from services.chat_service import answer_question_stream_for_document
+
+    async def mock_generate_stream(q, c):
+        yield "ok"
+
+    with (
+        patch("services.chat_service._resolve_retrieval_doc_ids", new=AsyncMock(return_value=["doc-1"])),
+        patch("services.chat_service.transform_query", new=AsyncMock(return_value=["q"])),
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="context"),
+        patch("services.chat_service.generate_answer_stream", new=mock_generate_stream),
+        patch("services.providers.get_llm_provider", return_value=MagicMock(model_name="m")),
+    ):
+        events = [
+            event
+            async for event in answer_question_stream_for_document("Q?", "doc-1", auth=TEST_AUTH)
+        ]
+
+    event_names = [_parse_sse_event(event)[0] for event in events]
+    assert event_names == ["token", "complete", "done"]
 
 
 # ---------------------------------------------------------------------------

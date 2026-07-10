@@ -90,6 +90,22 @@ async def chat(request: Request, payload: ChatRequest, auth: AuthContext = Depen
 @router.post("/chat/stream")
 @limiter.limit(config.RATE_LIMIT_CHAT)
 async def chat_stream(request: Request, payload: ChatRequest, auth: AuthContext = Depends(require_auth)):
+    """Stream a chat answer as Server-Sent Events (SSE).
+
+    Requires ``ENABLE_STREAMING=true``. Event contract:
+
+    - ``token`` — incremental answer text; ``data`` is a JSON-encoded string
+      (unchanged from earlier clients).
+    - ``complete`` — final structured payload with ``sources``, ``latency_ms``,
+      ``model``, and ``session_id``.
+    - ``done`` — legacy completion marker ``[DONE]`` (deprecated; retained for
+      backward compatibility).
+    - ``error`` — structured JSON object ``{"type": "error", "code": "...", "message": "..."}``.
+
+    Interrupted streams (client disconnect, cancellation, or provider failure
+    mid-stream) do not persist assistant messages. Successful streams persist
+    user and assistant messages after the ``complete`` event is emitted.
+    """
     if not config.ENABLE_STREAMING:
         raise HTTPException(
             status_code=400,
