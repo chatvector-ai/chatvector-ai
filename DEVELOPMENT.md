@@ -219,7 +219,49 @@ stream fails or streaming is disabled.
 > **Note:** The stream endpoint works by polling the database on a ~1 second
 > interval and emitting SSE events — it is not a push-from-worker channel yet.
 
-**Key config:**
+### Chat streaming (`POST /chat/stream`)
+
+Requires `ENABLE_STREAMING=true` in `backend/.env`. The request body matches
+`POST /chat`.
+
+**SSE events:**
+
+| Event | Payload | Notes |
+|---|---|---|
+| `token` | JSON string | Incremental answer text. Format unchanged for existing clients. |
+| `complete` | JSON object | Final metadata: `type`, `session_id`, `sources`, `latency_ms`, `model`. |
+| `done` | `[DONE]` | **Deprecated.** Retained for backward compatibility; emitted after `complete`. |
+| `error` | JSON object | `type`, `code`, and `message`. Valid JSON — not a plain string. |
+
+Example successful sequence:
+
+```text
+event: token
+data: "Hello"
+
+event: complete
+data: {"type":"complete","session_id":"...","sources":[...],"latency_ms":1234,"model":"..."}
+
+event: done
+data: [DONE]
+```
+
+Example error:
+
+```text
+event: error
+data: {"type":"error","code":"llm_rate_limited","message":"..."}
+```
+
+**Interruption behavior:** client disconnects, generator cancellation, and
+provider failures mid-stream stop the stream without persisting a partial
+assistant message. User and assistant messages are stored only after a
+successful `complete` event.
+
+**Latency note:** `latency_ms` in the `complete` event measures LLM generation
+wall time for the stream, not retrieval or embedding time.
+
+---
 
 ```env
 QUEUE_WORKER_COUNT=3      # concurrent background workers (1–5)
