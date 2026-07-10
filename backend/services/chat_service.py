@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import json
+import time
 from typing import Optional, AsyncGenerator
 
 from core.auth import AuthContext, require_current_tenant
@@ -216,6 +217,35 @@ def _build_sources(chunks: list) -> list[dict]:
     ]
 
 
+def _format_sse_event(event: str, data: dict | str) -> str:
+    payload = json.dumps(data) if isinstance(data, dict) else data
+    return f"event: {event}\ndata: {payload}\n\n"
+
+
+def _build_stream_complete_payload(
+    *,
+    session_id: Optional[str],
+    sources: list[dict],
+    latency_ms: int,
+    model: str,
+) -> dict:
+    return {
+        "type": "complete",
+        "session_id": session_id,
+        "sources": sources,
+        "latency_ms": latency_ms,
+        "model": model,
+    }
+
+
+def _build_stream_error_payload(*, code: str, message: str) -> dict:
+    return {
+        "type": "error",
+        "code": code,
+        "message": message,
+    }
+
+
 async def answer_question_for_document(
     question: str,
     doc_id: str,
@@ -359,10 +389,12 @@ async def answer_question_stream_for_document(
             tenant_id=tenant_id,
         )
         if not doc_ids:
-            yield (
-                'event: error\ndata: '
-                + json.dumps("No documents available for retrieval in the requested scope.")
-                + "\n\n"
+            yield _format_sse_event(
+                "error",
+                _build_stream_error_payload(
+                    code="no_documents_in_scope",
+                    message="No documents available for retrieval in the requested scope.",
+                ),
             )
             return
 
@@ -399,6 +431,7 @@ async def answer_question_stream_for_document(
                     seen_chunk_keys.add(key)
                     all_chunks.append(chunk)
         matching_chunks = await _finalize_retrieved_chunks(question, all_chunks, match_count)
+        sources = _build_sources(matching_chunks)
 
         if history:
             if not session_context:
@@ -408,14 +441,44 @@ async def answer_question_stream_for_document(
         context = build_context_from_chunks(matching_chunks, session_context=session_context)
 
         full_answer_chunks: list[str] = []
-        async for chunk in generate_answer_stream(question, context):
-            err = _structured_error_from_llm_answer(chunk)
-            if err is not None:
-                yield f"event: error\ndata: {json.dumps(err['message'])}\n\n"
-                return
-            full_answer_chunks.append(chunk)
-            yield f"event: token\ndata: {json.dumps(chunk)}\n\n"
+        t0 = time.perf_counter()
+        try:
+            async for chunk in generate_answer_stream(question, context):
+                err = _structured_error_from_llm_answer(chunk)
+                if err is not None:
+                    yield _format_sse_event(
+                        "error",
+                        _build_stream_error_payload(
+                            code=err["code"],
+                            message=err["message"],
+                        ),
+                    )
+                    return
+                full_answer_chunks.append(chunk)
+                yield f"event: token\ndata: {json.dumps(chunk)}\n\n"
+        except asyncio.CancelledError:
+            logger.info(
+                "Chat stream cancelled for document %s (session=%s)",
+                doc_id,
+                session_id,
+            )
+            raise
 
+        latency_ms = int((time.perf_counter() - t0) * 1000)
+        from services.providers import get_llm_provider
+
+        model_name = getattr(get_llm_provider(), "model_name", "")
+
+        yield _format_sse_event(
+            "complete",
+            _build_stream_complete_payload(
+                session_id=session_id,
+                sources=sources,
+                latency_ms=latency_ms,
+                model=model_name,
+            ),
+        )
+        # Legacy completion marker — deprecated; retained for backward compatibility.
         yield "event: done\ndata: [DONE]\n\n"
         logger.info(f"Answer stream generated successfully for document {doc_id}")
 
@@ -432,9 +495,17 @@ async def answer_question_stream_for_document(
             except Exception as e:
                 logger.error(f"Failed to store streaming chat messages for session {session_id}: {e}", exc_info=True)
 
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
         logger.error(f"Stream failed for document {doc_id}: {e}", exc_info=True)
-        yield f"event: error\ndata: {json.dumps('An unexpected error occurred.')}\n\n"
+        yield _format_sse_event(
+            "error",
+            _build_stream_error_payload(
+                code="stream_failed",
+                message="An unexpected error occurred.",
+            ),
+        )
 
 async def answer_questions_for_documents_batch(
     queries: list[dict],
