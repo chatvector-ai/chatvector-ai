@@ -244,6 +244,16 @@ def _validate_queue_backend(backend: str) -> None:
 config = Settings()
 _validate_queue_backend(config.QUEUE_BACKEND)
 
+if config.QUERY_TRANSFORMATION_HISTORY_WINDOW > config.MAX_SESSION_HISTORY_MESSAGES:
+    logger.warning(
+        "QUERY_TRANSFORMATION_HISTORY_WINDOW=%d exceeds MAX_SESSION_HISTORY_MESSAGES=%d. "
+        "The effective window will be capped at %d messages loaded from the session. "
+        "Lower QUERY_TRANSFORMATION_HISTORY_WINDOW or raise MAX_SESSION_HISTORY_MESSAGES.",
+        config.QUERY_TRANSFORMATION_HISTORY_WINDOW,
+        config.MAX_SESSION_HISTORY_MESSAGES,
+        config.MAX_SESSION_HISTORY_MESSAGES,
+    )
+
 
 def _validate_cors_origins(origins: list[str]) -> None:
     for origin in origins:

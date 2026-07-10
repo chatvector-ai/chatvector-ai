@@ -477,6 +477,42 @@ async def test_answer_question_stream_for_document_success():
         assert chunks[2] == "event: done\ndata: [DONE]\n\n"
 
 @pytest.mark.asyncio
+async def test_stream_history_loaded_and_bounded_before_transform():
+    """Streaming path must pass a bounded history slice to transform_query."""
+    from services.chat_service import answer_question_stream_for_document
+
+    window = 3
+    full_history = [{"role": "user", "content": f"msg{i}"} for i in range(10)]
+    captured: dict = {}
+
+    async def fake_transform(question: str, history=None) -> list[str]:
+        captured["history"] = history
+        return [question]
+
+    async def mock_stream(q, c):
+        yield "tok"
+
+    with (
+        patch("services.chat_service._resolve_retrieval_doc_ids", new=AsyncMock(return_value=["doc-1"])),
+        patch("services.chat_service.config.QUERY_TRANSFORMATION_HISTORY_WINDOW", window),
+        patch("services.chat_service.transform_query", new=fake_transform),
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch("services.chat_service.generate_answer_stream", new=mock_stream),
+        patch("db.get_session_history", new=AsyncMock(return_value=full_history)),
+        patch("db.store_chat_message", new=AsyncMock()),
+    ):
+        async for _ in answer_question_stream_for_document(
+            "follow-up?", "doc-1", match_count=5,
+            session_id="sess-s", auth=TEST_AUTH,
+        ):
+            pass
+
+    assert captured["history"] == full_history[:window]
+
+
+@pytest.mark.asyncio
 async def test_answer_question_stream_for_document_error():
     """Test error handling in SSE stream."""
     from services.chat_service import answer_question_stream_for_document

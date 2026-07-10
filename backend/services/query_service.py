@@ -96,6 +96,11 @@ async def _resolve_to_standalone(question: str, history: list[dict]) -> str:
     "that"), implicit references ("the second option", "the earlier plan"), and
     omitted subjects so that the resulting question can be used for retrieval
     without any surrounding context.
+
+    Latency/cost note: this makes one additional LLM call on top of whatever
+    transformation strategy follows.  Keep the history window small
+    (QUERY_TRANSFORMATION_HISTORY_WINDOW, default 6 messages) to limit token
+    overhead.  The call is skipped entirely when no history is provided.
     """
     history_text = _format_history_context(history)
     system_instruction = (
