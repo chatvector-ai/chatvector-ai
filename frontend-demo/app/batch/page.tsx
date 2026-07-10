@@ -84,7 +84,10 @@ export default function BatchPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 py-10 text-foreground">
+    <div
+      className="mx-auto w-full max-w-4xl px-4 py-10 text-foreground"
+      aria-busy={!documentsLoaded}
+    >
       <div className="mb-8">
         <div className="flex items-center gap-2 text-accent">
           <Layers size={20} />
@@ -100,8 +103,7 @@ export default function BatchPage() {
         </p>
       </div>
 
-      <div aria-busy={!documentsLoaded}>
-        {!documentsLoaded ? (
+      {!documentsLoaded ? (
         <div className="flex flex-col gap-6" aria-busy="true">
           <div className="animate-pulse">
             <div className="mb-2 h-4 w-20 rounded bg-border" />
@@ -271,7 +273,6 @@ export default function BatchPage() {
           )}
         </div>
       )}
-      </div>
     </div>
   );
 }
