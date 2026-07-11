@@ -16,7 +16,9 @@ import {
   formatResponseMetadata,
 } from "../lib/citations";
 import RetrievalInspector from "../components/RetrievalInspector";
+import RetrievalSettingsPanel from "../components/RetrievalSettingsPanel";
 import { getUploadedDocuments, type StoredDocument } from "../lib/documentStore";
+import { useRetrievalSettings } from "../lib/hooks/useRetrievalSettings";
 
 type BatchMode = "compare" | "synthesize";
 
@@ -116,6 +118,7 @@ function BatchResultCard({
 export default function BatchPage() {
   const [documents, setDocuments] = useState<StoredDocument[]>([]);
   const [documentsLoaded, setDocumentsLoaded] = useState(false);
+  const { settings, setScope, setMatchCount, loaded: retrievalLoaded } = useRetrievalSettings();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<BatchMode>("compare");
   const [question, setQuestion] = useState("");
@@ -172,8 +175,14 @@ export default function BatchPage() {
     try {
       const response =
         mode === "compare"
-          ? await sendBatchMessage(question.trim(), selectedDocIds)
-          : await sendSynthesizedBatchMessage(question.trim(), selectedDocIds);
+          ? await sendBatchMessage(question.trim(), selectedDocIds, {
+              matchCount: settings.matchCount,
+              scope: settings.scope,
+            })
+          : await sendSynthesizedBatchMessage(question.trim(), selectedDocIds, {
+              matchCount: settings.matchCount,
+              scope: settings.scope,
+            });
       setResults(response.results);
       setSummary({
         count: response.count,
@@ -192,7 +201,7 @@ export default function BatchPage() {
   return (
     <div
       className="mx-auto w-full max-w-4xl px-4 py-10 text-foreground"
-      aria-busy={!documentsLoaded}
+      aria-busy={!documentsLoaded || !retrievalLoaded}
     >
       <div className="mb-8">
         <div className="flex items-center gap-2 text-accent">
@@ -208,7 +217,7 @@ export default function BatchPage() {
         </p>
       </div>
 
-      {!documentsLoaded ? (
+      {!documentsLoaded || !retrievalLoaded ? (
         <div className="flex flex-col gap-6" aria-busy="true">
           <div className="animate-pulse">
             <div className="mb-2 h-4 w-20 rounded bg-border" />
@@ -363,6 +372,12 @@ export default function BatchPage() {
               ))}
             </ul>
           </div>
+
+          <RetrievalSettingsPanel
+            settings={settings}
+            onScopeChange={setScope}
+            onMatchCountChange={setMatchCount}
+          />
 
           <div>
             <button

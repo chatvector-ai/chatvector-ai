@@ -13,6 +13,7 @@ import {
   saveUploadedDocument,
   removeUploadedDocument,
 } from "../documentStore";
+import type { RetrievalSettings } from "../retrievalSettings";
 
 const welcomeMessages: Message[] = [
   {
@@ -22,7 +23,7 @@ const welcomeMessages: Message[] = [
   },
 ];
 
-export function useChat(sessionId: string | null) {
+export function useChat(sessionId: string | null, retrievalSettings: RetrievalSettings) {
   const [messages, setMessages] = useState<Message[]>(welcomeMessages);
   const [input, setInput] = useState("");
   const [attachment, setAttachment] = useState<AttachmentState | null>(null);
@@ -155,7 +156,11 @@ export function useChat(sessionId: string | null) {
     setInflight(true);
 
     try {
-      const response = await sendMessage(text, attachment.documentId, 5, sessionId);
+      const response = await sendMessage(text, attachment.documentId, {
+        matchCount: retrievalSettings.matchCount,
+        scope: retrievalSettings.scope,
+        sessionId,
+      });
       setMessages((prev) => [
         ...prev,
         {
