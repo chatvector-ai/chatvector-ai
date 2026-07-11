@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Layers, Loader2, FileText, AlertCircle, CheckCircle2 } from "lucide-react";
 import {
   sendBatchMessage,
+  sendSynthesizedBatchMessage,
   ChatError,
   softFailureMessage,
   type BatchResultItem,
@@ -16,6 +17,8 @@ import {
 } from "../lib/citations";
 import { getUploadedDocuments, type StoredDocument } from "../lib/documentStore";
 
+type BatchMode = "compare" | "synthesize";
+
 function hasPartialBatchResult(result: BatchResultItem): boolean {
   return Boolean(
     result.answer ||
@@ -24,10 +27,85 @@ function hasPartialBatchResult(result: BatchResultItem): boolean {
   );
 }
 
+function BatchResultCard({
+  result,
+  title,
+}: {
+  result: BatchResultItem;
+  title: string;
+}) {
+  const isError = result.status === "error";
+  const showPartialContent = isError && hasPartialBatchResult(result);
+  const metadata = formatResponseMetadata({
+    chunks: result.chunks,
+    model: result.model,
+    latency_ms: result.latency_ms,
+  });
+
+  return (
+    <div
+      className={`flex flex-col gap-3 rounded-xl border p-4 ${
+        isError ? "border-red-500/40 bg-red-500/5" : "border-border bg-surface"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        {isError ? (
+          <AlertCircle size={16} className="shrink-0 text-red-500" />
+        ) : (
+          <CheckCircle2 size={16} className="shrink-0 text-green-500" />
+        )}
+        <span className="truncate text-sm font-medium" title={title}>
+          {title}
+        </span>
+      </div>
+
+      {isError && (
+        <div className="text-sm text-red-500">
+          <p>{softFailureMessage(result.error)}</p>
+          {result.error?.code && (
+            <p className="mt-1 font-mono text-xs text-red-500/80">
+              {result.error.code}
+            </p>
+          )}
+        </div>
+      )}
+
+      {(!isError || showPartialContent) && result.answer && (
+        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+          {result.answer}
+        </p>
+      )}
+
+      {!isError && !result.answer && (
+        <p className="text-sm text-muted italic">No answer was generated.</p>
+      )}
+
+      {result.chunks === 0 && !isError && (
+        <p className="text-sm text-muted italic">
+          No chunks retrieved for this query.
+        </p>
+      )}
+
+      {result.sources && result.sources.length > 0 && (
+        <div className="mt-auto flex flex-col gap-1 border-t border-border pt-2">
+          {deduplicatedSources(result.sources).map((source, sourceIndex) => (
+            <span key={sourceIndex} className="text-xs text-muted">
+              {formatCitationLine(source)}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {metadata && <p className="text-xs text-muted">{metadata}</p>}
+    </div>
+  );
+}
+
 export default function BatchPage() {
   const [documents, setDocuments] = useState<StoredDocument[]>([]);
   const [documentsLoaded, setDocumentsLoaded] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [mode, setMode] = useState<BatchMode>("compare");
   const [question, setQuestion] = useState("");
   const [inflight, setInflight] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +127,19 @@ export default function BatchPage() {
     return map;
   }, [documents]);
 
+  const selectedDocIds = useMemo(
+    () => documents.map((d) => d.documentId).filter((id) => selected.has(id)),
+    [documents, selected]
+  );
+
+  const synthesizeTitle = useMemo(() => {
+    if (selectedDocIds.length === 1) {
+      const docId = selectedDocIds[0];
+      return nameById.get(docId) ?? docId;
+    }
+    return `Across ${selectedDocIds.length} documents`;
+  }, [selectedDocIds, nameById]);
+
   const toggle = (documentId: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -67,10 +158,10 @@ export default function BatchPage() {
     setSummary(null);
     setInflight(true);
     try {
-      const docIds = documents
-        .map((d) => d.documentId)
-        .filter((id) => selected.has(id));
-      const response = await sendBatchMessage(question.trim(), docIds);
+      const response =
+        mode === "compare"
+          ? await sendBatchMessage(question.trim(), selectedDocIds)
+          : await sendSynthesizedBatchMessage(question.trim(), selectedDocIds);
       setResults(response.results);
       setSummary({
         count: response.count,
@@ -101,8 +192,7 @@ export default function BatchPage() {
         <h1 className="mt-2 text-3xl font-bold">Ask one question across many documents</h1>
         <p className="mt-2 max-w-2xl text-muted">
           Select documents you&apos;ve uploaded in the chat, enter a single
-          question, and ChatVector retrieves and answers from each one in
-          parallel — one answer card per document.
+          question, and choose how ChatVector should answer.
         </p>
       </div>
 
@@ -148,6 +238,70 @@ export default function BatchPage() {
       ) : (
         <div className="flex flex-col gap-6">
           <div>
+            <p className="mb-2 text-sm font-medium">Mode</p>
+            <div
+              className="inline-flex rounded-lg border border-border bg-surface p-1"
+              role="radiogroup"
+              aria-label="Batch query mode"
+            >
+              <label className="cursor-pointer">
+                <input
+                  type="radio"
+                  name="batch-mode"
+                  value="compare"
+                  checked={mode === "compare"}
+                  onChange={() => setMode("compare")}
+                  className="sr-only"
+                />
+                <span
+                  className={`inline-block rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                    mode === "compare"
+                      ? "bg-accent text-surface"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  Compare
+                </span>
+              </label>
+              <label className="cursor-pointer">
+                <input
+                  type="radio"
+                  name="batch-mode"
+                  value="synthesize"
+                  checked={mode === "synthesize"}
+                  onChange={() => setMode("synthesize")}
+                  className="sr-only"
+                />
+                <span
+                  className={`inline-block rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                    mode === "synthesize"
+                      ? "bg-accent text-surface"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  Synthesize
+                </span>
+              </label>
+            </div>
+            <p className="mt-2 max-w-2xl text-sm text-muted">
+              {mode === "compare" ? (
+                <>
+                  <strong className="text-foreground">Compare</strong> sends one
+                  query per document and shows a separate answer card for each —
+                  useful for seeing what each file contributes.
+                </>
+              ) : (
+                <>
+                  <strong className="text-foreground">Synthesize</strong> sends
+                  one query across all selected documents and returns a single
+                  combined answer with citations from every contributing file —
+                  best for cross-document questions.
+                </>
+              )}
+            </p>
+          </div>
+
+          <div>
             <label
               htmlFor="batch-question"
               className="mb-2 block text-sm font-medium"
@@ -159,7 +313,11 @@ export default function BatchPage() {
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               rows={3}
-              placeholder="e.g. What are the key takeaways?"
+              placeholder={
+                mode === "synthesize"
+                  ? "e.g. What's the expense process for visiting Apex Manufacturing, and are there known dashboard bugs?"
+                  : "e.g. What are the key takeaways?"
+              }
               className="w-full resize-y rounded-lg border border-border bg-surface px-4 py-3 text-base text-foreground outline-none focus:border-accent"
             />
           </div>
@@ -200,7 +358,11 @@ export default function BatchPage() {
               className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-accent px-5 py-2.5 font-medium text-surface transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {inflight && <Loader2 size={16} className="animate-spin" />}
-              {inflight ? "Querying..." : "Run batch query"}
+              {inflight
+                ? "Querying..."
+                : mode === "compare"
+                  ? "Run batch query"
+                  : "Synthesize answer"}
             </button>
           </div>
 
@@ -211,7 +373,7 @@ export default function BatchPage() {
             </div>
           )}
 
-          {summary && (
+          {summary && mode === "compare" && (
             <div className="flex flex-wrap gap-4 rounded-lg border border-border bg-surface px-4 py-3 text-sm">
               <span>
                 <strong>{summary.count}</strong> total
@@ -225,78 +387,23 @@ export default function BatchPage() {
             </div>
           )}
 
-          {results && (
+          {results && mode === "synthesize" && results[0] && (
+            <BatchResultCard result={results[0]} title={synthesizeTitle} />
+          )}
+
+          {results && mode === "compare" && (
             <div className="grid gap-4 md:grid-cols-2">
               {results.map((result, index) => {
                 const docId = result.doc_ids[0];
-                const name = (docId && nameById.get(docId)) || docId || "Unknown document";
-                const isError = result.status === "error";
-                const showPartialContent = isError && hasPartialBatchResult(result);
-                const metadata = formatResponseMetadata({
-                  chunks: result.chunks,
-                  model: result.model,
-                  latency_ms: result.latency_ms,
-                });
+                const name =
+                  (docId && nameById.get(docId)) || docId || "Unknown document";
 
                 return (
-                  <div
+                  <BatchResultCard
                     key={`${docId ?? "doc"}-${index}`}
-                    className={`flex flex-col gap-3 rounded-xl border p-4 ${
-                      isError ? "border-red-500/40 bg-red-500/5" : "border-border bg-surface"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      {isError ? (
-                        <AlertCircle size={16} className="shrink-0 text-red-500" />
-                      ) : (
-                        <CheckCircle2 size={16} className="shrink-0 text-green-500" />
-                      )}
-                      <span className="truncate text-sm font-medium" title={name}>
-                        {name}
-                      </span>
-                    </div>
-
-                    {isError && (
-                      <div className="text-sm text-red-500">
-                        <p>{softFailureMessage(result.error)}</p>
-                        {result.error?.code && (
-                          <p className="mt-1 font-mono text-xs text-red-500/80">
-                            {result.error.code}
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {(!isError || showPartialContent) && result.answer && (
-                      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
-                        {result.answer}
-                      </p>
-                    )}
-
-                    {!isError && !result.answer && (
-                      <p className="text-sm text-muted italic">No answer was generated.</p>
-                    )}
-
-                    {result.chunks === 0 && !isError && (
-                      <p className="text-sm text-muted italic">
-                        No chunks retrieved for this document.
-                      </p>
-                    )}
-
-                    {result.sources && result.sources.length > 0 && (
-                      <div className="mt-auto flex flex-col gap-1 border-t border-border pt-2">
-                        {deduplicatedSources(result.sources).map((source, sourceIndex) => (
-                          <span key={sourceIndex} className="text-xs text-muted">
-                            {formatCitationLine(source)}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {metadata && (
-                      <p className="text-xs text-muted">{metadata}</p>
-                    )}
-                  </div>
+                    result={result}
+                    title={name}
+                  />
                 );
               })}
             </div>
