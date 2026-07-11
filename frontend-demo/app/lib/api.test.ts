@@ -6,8 +6,11 @@ const MOCK_RESPONSE = {
   chunks: 3,
   answer: "RAG stands for Retrieval-Augmented Generation.",
   sources: [
-    { file_name: "doc.pdf", page_number: 1, chunk_index: 0 },
+    { file_name: "doc.pdf", page_number: 1, chunk_index: 0, score: 0.91 },
   ],
+  latency_ms: 2100,
+  model: "gemini-2.5-flash",
+  doc_id: "doc-123",
 };
 
 vi.mock("./session", () => ({ getSessionId: () => "test-session-id" }));
@@ -70,7 +73,7 @@ describe("sendMessage", () => {
       "llm_unexpected",
       "An unexpected error occurred with the LLM provider.",
     ],
-  ])("throws a helpful message for %s soft failures", async (code, message) => {
+  ])("returns full response for %s soft failures", async (code) => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -82,11 +85,15 @@ describe("sendMessage", () => {
       )
     );
 
-    await expect(sendMessage("q", "doc-123")).rejects.toMatchObject({
-      name: "ChatError",
-      code,
-      message,
-    });
+    const result = await sendMessage("q", "doc-123");
+
+    expect(result.status).toBe("error");
+    expect(result.error).toEqual({ code, message: "Backend provider error." });
+    expect(result.answer).toBe(MOCK_RESPONSE.answer);
+    expect(result.sources).toEqual(MOCK_RESPONSE.sources);
+    expect(result.chunks).toBe(MOCK_RESPONSE.chunks);
+    expect(result.latency_ms).toBe(MOCK_RESPONSE.latency_ms);
+    expect(result.model).toBe(MOCK_RESPONSE.model);
   });
 
   it("falls back to the generic LLM message for unknown soft failure codes", async () => {
@@ -101,11 +108,11 @@ describe("sendMessage", () => {
       )
     );
 
-    await expect(sendMessage("q", "doc-123")).rejects.toMatchObject({
-      name: "ChatError",
-      code: "llm_unexpected",
-      message: "An unexpected error occurred with the LLM provider.",
-    });
+    const result = await sendMessage("q", "doc-123");
+
+    expect(result.status).toBe("error");
+    expect(result.error).toEqual({ code: "llm_error", message: "Provider failed." });
+    expect(result.answer).toBe(MOCK_RESPONSE.answer);
   });
 
   it("throws no_document on 404", async () => {
@@ -165,14 +172,21 @@ describe("sendBatchMessage", () => {
         doc_ids: ["doc-1"],
         chunks: 2,
         answer: "First summary.",
-        sources: [{ file_name: "a.pdf", page_number: 1, chunk_index: 0 }],
+        sources: [{ file_name: "a.pdf", page_number: 1, chunk_index: 0, score: 0.77 }],
+        latency_ms: 1800,
+        model: "gemini-2.5-flash",
+        session_id: "sess-1",
       },
       {
         status: "error",
         question: "Summary?",
         doc_ids: ["doc-2"],
-        chunks: 0,
-        error: { code: "query_processing_failed", message: "boom" },
+        chunks: 1,
+        answer: "Partial answer.",
+        sources: [{ file_name: "b.pdf", page_number: 3, chunk_index: 2, score: 0.64 }],
+        latency_ms: 2200,
+        model: "gemini-2.5-flash",
+        error: { code: "llm_rate_limited", message: "Slow down." },
       },
     ],
   };
