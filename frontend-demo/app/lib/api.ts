@@ -27,6 +27,23 @@ export type ChatSource = {
   page_number: number | null;
   chunk_index: number | null;
   score?: number | null;
+  score_type?: string | null;
+};
+
+/** Opt-in retrieval debug metadata when the backend exposes it. */
+export type RetrievalDebugMetadata = {
+  original_query?: string;
+  transformed_queries?: string[];
+  transformation_strategy?: string;
+};
+
+export type RetrievalInspectorData = {
+  question?: string;
+  retrieval_debug?: RetrievalDebugMetadata;
+  sources?: ChatSource[];
+  chunks?: number;
+  model?: string;
+  latency_ms?: number;
 };
 
 export type Message = {
@@ -34,6 +51,8 @@ export type Message = {
   sender: "user" | "ai";
   text: string;
   document_id?: string;
+  question?: string;
+  retrieval_debug?: RetrievalDebugMetadata;
   sources?: ChatSource[];
   chunks?: number;
   latency_ms?: number;
@@ -49,6 +68,7 @@ export type ChatResponse = {
   doc_id?: string;
   latency_ms?: number;
   model?: string;
+  retrieval_debug?: RetrievalDebugMetadata;
   status?: "ok" | "error";
   error?: { code: ChatErrorCode | string; message: string };
 };
@@ -262,6 +282,7 @@ export type BatchResultItem = {
   sources?: ChatSource[];
   latency_ms?: number;
   model?: string;
+  retrieval_debug?: RetrievalDebugMetadata;
   session_id?: string;
   error?: { code: string; message: string };
 };

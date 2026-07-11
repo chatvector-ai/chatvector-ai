@@ -15,6 +15,7 @@ import {
   formatCitationLine,
   formatResponseMetadata,
 } from "../lib/citations";
+import RetrievalInspector from "../components/RetrievalInspector";
 import { getUploadedDocuments, type StoredDocument } from "../lib/documentStore";
 
 type BatchMode = "compare" | "synthesize";
@@ -97,6 +98,17 @@ function BatchResultCard({
       )}
 
       {metadata && <p className="text-xs text-muted">{metadata}</p>}
+
+      <RetrievalInspector
+        data={{
+          question: result.question,
+          retrieval_debug: result.retrieval_debug,
+          sources: result.sources,
+          chunks: result.chunks,
+          model: result.model,
+          latency_ms: result.latency_ms,
+        }}
+      />
     </div>
   );
 }
