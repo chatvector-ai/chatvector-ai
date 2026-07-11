@@ -206,15 +206,18 @@ async def _finalize_retrieved_chunks(question: str, chunks: list, match_count: i
 
 def _build_sources(chunks: list) -> list[dict]:
     """Extract citation metadata from retrieved chunks."""
-    return [
-        {
+    sources: list[dict] = []
+    for chunk in chunks:
+        source = {
             "file_name": chunk.file_name,
             "page_number": chunk.page_number,
             "chunk_index": chunk.chunk_index,
             "score": chunk.similarity,
         }
-        for chunk in chunks
-    ]
+        if chunk.score_type is not None:
+            source["score_type"] = chunk.score_type
+        sources.append(source)
+    return sources
 
 
 def _format_sse_event(event: str, data: dict | str) -> str:

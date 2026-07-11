@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import delete, func, literal_column, select, update as sql_update
+from sqlalchemy import delete, func, literal, literal_column, select, update as sql_update
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -16,7 +16,13 @@ from core.models import Document, DocumentChunk
 from core.config import config
 from db.base import ChunkMatch, ChunkRecord, DatabaseService
 from db.tenant_scope import require_tenant_id
-from services.retrieval_service import merge_chunk_matches, reciprocal_rank_fusion
+from services.retrieval_service import (
+    SCORE_TYPE_HYBRID_RRF,
+    SCORE_TYPE_VECTOR,
+    merge_chunk_matches_with_scores,
+    reciprocal_rank_fusion,
+    reciprocal_rank_fusion_scores,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -332,7 +338,12 @@ class SQLAlchemyService(DatabaseService):
             return doc_ids
 
     def _chunk_match_from_row(
-        self, chunk: DocumentChunk, file_name: str, *, similarity: float | None = None
+        self,
+        chunk: DocumentChunk,
+        file_name: str,
+        *,
+        similarity: float | None = None,
+        score_type: str | None = None,
     ) -> ChunkMatch:
         return ChunkMatch(
             id=str(chunk.id),
@@ -341,6 +352,7 @@ class SQLAlchemyService(DatabaseService):
             embedding=chunk.embedding,
             created_at=str(chunk.created_at) if chunk.created_at else None,
             similarity=similarity,
+            score_type=score_type,
             chunk_index=chunk.chunk_index,
             page_number=chunk.page_number,
             character_offset_start=chunk.character_offset_start,
@@ -356,18 +368,25 @@ class SQLAlchemyService(DatabaseService):
         limit: int,
         tenant_id: Optional[str] = None,
     ) -> list[ChunkMatch]:
+        distance = DocumentChunk.embedding.op("<=>")(query_embedding)
+        similarity_expr = (literal(1.0) - distance).label("similarity")
         stmt = (
-            select(DocumentChunk, Document.file_name)
+            select(DocumentChunk, Document.file_name, similarity_expr)
             .join(Document, DocumentChunk.document_id == Document.id)
             .where(DocumentChunk.document_id == doc_id)
         )
         if tenant_id is not None:
             stmt = stmt.where(Document.tenant_id == tenant_id)
-        stmt = stmt.order_by(DocumentChunk.embedding.op("<=>")(query_embedding)).limit(limit)
+        stmt = stmt.order_by(distance).limit(limit)
         result = await session.execute(stmt)
         return [
-            self._chunk_match_from_row(chunk, file_name)
-            for chunk, file_name in result.all()
+            self._chunk_match_from_row(
+                chunk,
+                file_name,
+                similarity=float(similarity) if similarity is not None else None,
+                score_type=SCORE_TYPE_VECTOR,
+            )
+            for chunk, file_name, similarity in result.all()
         ]
 
     async def _find_keyword_chunks(
@@ -454,7 +473,19 @@ class SQLAlchemyService(DatabaseService):
                             ],
                             limit=match_count,
                         )
-                        matches = merge_chunk_matches(fused_ids, matches_by_id)
+                        rrf_scores = reciprocal_rank_fusion_scores(
+                            [
+                                [m.id for m in vector_matches],
+                                [m.id for m in keyword_matches],
+                            ],
+                            limit=match_count,
+                        )
+                        matches = merge_chunk_matches_with_scores(
+                            fused_ids,
+                            matches_by_id,
+                            rrf_scores,
+                            score_type=SCORE_TYPE_HYBRID_RRF,
+                        )
 
                     duration_ms = int((time.perf_counter() - start) * 1000)
                     mode = "hybrid" if use_hybrid else "vector"

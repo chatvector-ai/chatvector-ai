@@ -2,6 +2,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
 
+SCORE_TYPE_VECTOR = "vector"
+SCORE_TYPE_HYBRID_RRF = "hybrid_rrf"
+SCORE_TYPE_RERANKED = "reranked"
+
 # Abstract base class that defines WHAT database operations we need.
 # All DB services (sqlalchemy, supabase, etc.) must implement these methods.
 
@@ -28,6 +32,7 @@ class ChunkMatch:
     embedding: Optional[list[float]] = None
     created_at: Optional[str] = None
     similarity: Optional[float] = None
+    score_type: Optional[str] = None
     chunk_index: Optional[int] = None
     page_number: Optional[int] = None
     character_offset_start: Optional[int] = None

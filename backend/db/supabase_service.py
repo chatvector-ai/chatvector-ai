@@ -8,6 +8,7 @@ from core.config import config
 from core.clients import supabase_client
 from db.base import ChunkMatch, ChunkRecord, DatabaseService
 from db.tenant_scope import require_tenant_id
+from services.retrieval_service import SCORE_TYPE_VECTOR
 
 logger = logging.getLogger(__name__)
 
@@ -309,6 +310,7 @@ class SupabaseService(DatabaseService):
                 embedding=c.get("embedding"),
                 created_at=c.get("created_at"),
                 similarity=c.get("similarity"),
+                score_type=SCORE_TYPE_VECTOR,
                 chunk_index=c.get("chunk_index"),
                 page_number=c.get("page_number"),
                 character_offset_start=c.get("character_offset_start"),

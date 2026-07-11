@@ -7,7 +7,12 @@ from __future__ import annotations
 
 from enum import Enum
 
-from db.base import ChunkMatch
+from db.base import (
+    SCORE_TYPE_HYBRID_RRF,
+    SCORE_TYPE_RERANKED,
+    SCORE_TYPE_VECTOR,
+    ChunkMatch,
+)
 from services.reranker import rerank_chunks_if_enabled
 
 # Standard RRF constant (Cormack et al.)
@@ -122,8 +127,19 @@ def reciprocal_rank_fusion(
 
     score(d) = sum over each list L: 1 / (k + rank_L(d))
     """
+    scores = reciprocal_rank_fusion_scores(ranked_lists, k=k, limit=limit)
+    return list(scores.keys())
+
+
+def reciprocal_rank_fusion_scores(
+    ranked_lists: list[list[str]],
+    *,
+    k: int = RRF_K_DEFAULT,
+    limit: int | None = None,
+) -> dict[str, float]:
+    """Return fused RRF scores keyed by chunk ID."""
     if not ranked_lists:
-        return []
+        return {}
 
     scores: dict[str, float] = {}
     for ranked in ranked_lists:
@@ -132,8 +148,8 @@ def reciprocal_rank_fusion(
 
     ordered = sorted(scores.keys(), key=lambda item_id: scores[item_id], reverse=True)
     if limit is not None:
-        return ordered[:limit]
-    return ordered
+        ordered = ordered[:limit]
+    return {item_id: scores[item_id] for item_id in ordered}
 
 
 def merge_chunk_matches(
@@ -148,15 +164,52 @@ def merge_chunk_matches(
             merged.append(match)
     return merged
 
+
+def merge_chunk_matches_with_scores(
+    ranked_ids: list[str],
+    matches_by_id: dict[str, ChunkMatch],
+    scores_by_id: dict[str, float],
+    *,
+    score_type: str,
+) -> list[ChunkMatch]:
+    """Return ChunkMatch objects with fused scores and score type metadata."""
+    merged: list[ChunkMatch] = []
+    for chunk_id in ranked_ids:
+        match = matches_by_id.get(chunk_id)
+        if match is None:
+            continue
+        merged.append(
+            ChunkMatch(
+                id=match.id,
+                chunk_text=match.chunk_text,
+                document_id=match.document_id,
+                embedding=match.embedding,
+                created_at=match.created_at,
+                similarity=scores_by_id.get(chunk_id, match.similarity),
+                score_type=score_type,
+                chunk_index=match.chunk_index,
+                page_number=match.page_number,
+                character_offset_start=match.character_offset_start,
+                character_offset_end=match.character_offset_end,
+                file_name=match.file_name,
+            )
+        )
+    return merged
+
 __all__ = [
     "DEFAULT_RETRIEVAL_SCOPE",
     "InvalidRetrievalScopeError",
     "RetrievalScope",
+    "SCORE_TYPE_HYBRID_RRF",
+    "SCORE_TYPE_RERANKED",
+    "SCORE_TYPE_VECTOR",
     "assert_tenant_isolation",
     "filter_doc_ids_for_tenant",
     "merge_chunk_matches",
+    "merge_chunk_matches_with_scores",
     "parse_retrieval_scope",
     "reciprocal_rank_fusion",
+    "reciprocal_rank_fusion_scores",
     "rerank_chunks_if_enabled",
     "resolve_scoped_doc_ids",
 ]

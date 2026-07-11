@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from db.base import ChunkMatch
+from db.base import SCORE_TYPE_RERANKED, ChunkMatch
 
 from services.reranker.base import RerankRequest, RerankResult, RerankerProvider
 
@@ -79,6 +79,7 @@ class SimilarityRerankerProvider(RerankerProvider):
                     embedding=chunk.embedding,
                     created_at=chunk.created_at,
                     similarity=combined_score,
+                    score_type=SCORE_TYPE_RERANKED,
                     chunk_index=chunk.chunk_index,
                     page_number=chunk.page_number,
                     character_offset_start=chunk.character_offset_start,
