@@ -26,6 +26,7 @@ export type ChatSource = {
   file_name: string;
   page_number: number | null;
   chunk_index: number | null;
+  score?: number | null;
 };
 
 export type Message = {
@@ -35,6 +36,9 @@ export type Message = {
   document_id?: string;
   sources?: ChatSource[];
   chunks?: number;
+  latency_ms?: number;
+  model?: string;
+  error?: { code: string; message: string };
 };
 
 export type ChatResponse = {
@@ -42,8 +46,11 @@ export type ChatResponse = {
   chunks: number;
   answer: string;
   sources: ChatSource[];
+  doc_id?: string;
+  latency_ms?: number;
+  model?: string;
   status?: "ok" | "error";
-  error?: { code: ChatErrorCode; message: string };
+  error?: { code: ChatErrorCode | string; message: string };
 };
 
 export type ChatErrorCode =
@@ -83,9 +90,14 @@ function isChatErrorCode(code: unknown): code is ChatErrorCode {
   return typeof code === "string" && code in CHAT_ERROR_MESSAGES;
 }
 
-function toSoftLlmChatError(error?: ChatResponse["error"]): ChatError {
-  const code = isChatErrorCode(error?.code) ? error.code : "llm_unexpected";
-  return new ChatError(code, CHAT_ERROR_MESSAGES[code]);
+export function softFailureMessage(error?: ChatResponse["error"]): string {
+  if (!error) {
+    return CHAT_ERROR_MESSAGES.llm_unexpected;
+  }
+  if (isChatErrorCode(error.code)) {
+    return CHAT_ERROR_MESSAGES[error.code];
+  }
+  return error.message || CHAT_ERROR_MESSAGES.llm_unexpected;
 }
 
 export async function sendMessage(
@@ -140,10 +152,6 @@ export async function sendMessage(
   }
 
   const response = (await res.json()) as ChatResponse;
-  if (response.status === "error") {
-    throw toSoftLlmChatError(response.error);
-  }
-
   return response;
 }
 
@@ -252,6 +260,9 @@ export type BatchResultItem = {
   chunks?: number;
   answer?: string;
   sources?: ChatSource[];
+  latency_ms?: number;
+  model?: string;
+  session_id?: string;
   error?: { code: string; message: string };
 };
 

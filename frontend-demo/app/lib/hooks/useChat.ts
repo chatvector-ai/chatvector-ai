@@ -164,6 +164,11 @@ export function useChat(sessionId: string | null) {
           text: response.answer,
           sources: response.sources,
           chunks: response.chunks,
+          latency_ms: response.latency_ms,
+          model: response.model,
+          ...(response.status === "error"
+            ? { error: response.error }
+            : {}),
         },
       ]);
     } catch (e) {
