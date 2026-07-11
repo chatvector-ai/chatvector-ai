@@ -15,6 +15,9 @@ from .models import (
     ChatSource,
     DocumentResponse,
     DocumentStatus,
+    RetrievalScope,
+    Session,
+    SessionListResponse,
 )
 
 __all__ = [
@@ -30,4 +33,7 @@ __all__ = [
     "ChatSource",
     "DocumentResponse",
     "DocumentStatus",
+    "RetrievalScope",
+    "Session",
+    "SessionListResponse",
 ]

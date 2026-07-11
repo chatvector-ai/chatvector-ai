@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping
 
 JSONDict = dict[str, Any]
 JSONMapping = Mapping[str, Any]
+
+RetrievalScope = Literal["session", "tenant"]
 
 
 @dataclass(slots=True)
@@ -169,20 +171,90 @@ class ChatResponse:
 
 
 @dataclass(slots=True)
+class Session:
+    """Session metadata returned by the session management endpoints."""
+
+    id: str
+    tenant_id: str | None
+    created_at: str
+    last_active: str
+    metadata: JSONDict
+    document_ids: list[str]
+    raw: JSONDict = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, payload: JSONMapping) -> "Session":
+        """Build a session model from an API response payload."""
+        raw = dict(payload)
+        metadata = payload.get("metadata")
+        return cls(
+            id=str(payload.get("id", "")),
+            tenant_id=_optional_str(payload.get("tenant_id")),
+            created_at=str(payload.get("created_at", "")),
+            last_active=str(payload.get("last_active", "")),
+            metadata=dict(metadata) if isinstance(metadata, Mapping) else {},
+            document_ids=_string_list(payload.get("document_ids")),
+            raw=raw,
+        )
+
+    def to_dict(self) -> JSONDict:
+        """Convert the model back to a JSON-serializable dictionary."""
+        return {
+            "id": self.id,
+            "tenant_id": self.tenant_id,
+            "created_at": self.created_at,
+            "last_active": self.last_active,
+            "metadata": dict(self.metadata),
+            "document_ids": list(self.document_ids),
+        }
+
+
+@dataclass(slots=True)
+class SessionListResponse:
+    """Collection response returned from ``GET /sessions``."""
+
+    sessions: list[Session] = field(default_factory=list)
+    raw: JSONDict = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, payload: JSONMapping) -> "SessionListResponse":
+        """Build a session list model from an API response payload."""
+        raw = dict(payload)
+        sessions_payload = payload.get("sessions")
+        sessions = [
+            Session.from_dict(item)
+            for item in sessions_payload
+            if isinstance(item, Mapping)
+        ] if isinstance(sessions_payload, list) else []
+        return cls(sessions=sessions, raw=raw)
+
+    def to_dict(self) -> JSONDict:
+        """Convert the model back to a JSON-serializable dictionary."""
+        return {"sessions": [session.to_dict() for session in self.sessions]}
+
+
+@dataclass(slots=True)
 class BatchChatQuery:
     """Input payload for one item in a batch chat request."""
 
     question: str
     doc_ids: list[str]
     match_count: int = 5
+    session_id: str | None = None
+    scope: RetrievalScope | None = None
 
     def to_dict(self) -> JSONDict:
         """Convert the batch query into the API request payload."""
-        return {
+        payload: JSONDict = {
             "question": self.question,
             "doc_ids": list(self.doc_ids),
             "match_count": self.match_count,
         }
+        if self.session_id is not None:
+            payload["session_id"] = self.session_id
+        if self.scope is not None:
+            payload["scope"] = self.scope
+        return payload
 
 
 @dataclass(slots=True)

@@ -80,6 +80,38 @@ so the `api_key` parameter can be omitted locally:
 client = ChatVectorClient(base_url="http://localhost:8000")
 ```
 
+## Sessions and Retrieval Scope
+
+Create and manage chat sessions without raw HTTP calls. Documents are associated
+with a session automatically when you chat with both a `doc_id` and `session_id`.
+
+```python
+from chatvector import ChatVectorClient
+
+with ChatVectorClient(base_url="http://localhost:8000", api_key="cv_live_...") as client:
+    session = client.create_session()
+
+    response = client.chat(
+        question="Summarize this document",
+        doc_id="doc-1",
+        session_id=session.id,
+    )
+
+    response = client.chat(
+        question="What do we know across all documents?",
+        doc_id="doc-1",
+        session_id=session.id,
+        scope="tenant",
+    )
+
+    sessions = client.list_sessions()
+    client.delete_session(session.id)
+```
+
+If `session_id` is omitted, the backend preserves its automatic session-creation
+behavior. Retrieval scope defaults to `"session"`; use `"tenant"` to search across
+all documents for the authenticated tenant.
+
 ## Error Handling
 
 All SDK methods raise typed exceptions:
@@ -108,6 +140,7 @@ See the runnable scripts in [examples](./examples):
 - `upload_wait_chat.py`
 - `check_status.py`
 - `batch_chat.py`
+- `session_chat.py`
 
 ## API Notes
 

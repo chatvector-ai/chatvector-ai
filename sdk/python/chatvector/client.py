@@ -22,6 +22,9 @@ from .models import (
     ChatResponse,
     DocumentResponse,
     DocumentStatus,
+    RetrievalScope,
+    Session,
+    SessionListResponse,
 )
 
 JSONDict = dict[str, Any]
@@ -127,7 +130,62 @@ class ChatVectorClient:
         payload = self._request_json("GET", f"documents/{document_id}/status")
         return DocumentStatus.from_dict(payload)
 
-    def chat(self, question: str, doc_id: str, match_count: int = 5) -> ChatResponse:
+    def create_session(self, session_id: str | None = None) -> Session:
+        """
+        Create a new chat session.
+
+        Args:
+            session_id: Optional client-provided session identifier.
+
+        Returns:
+            A typed session response.
+        """
+        body: JSONDict = {}
+        if session_id is not None:
+            body["session_id"] = session_id
+        payload = self._request_json("POST", "sessions", json=body)
+        return Session.from_dict(payload)
+
+    def get_session(self, session_id: str) -> Session:
+        """
+        Fetch session metadata by identifier.
+
+        Args:
+            session_id: Session identifier to retrieve.
+
+        Returns:
+            A typed session response.
+        """
+        payload = self._request_json("GET", f"sessions/{session_id}")
+        return Session.from_dict(payload)
+
+    def list_sessions(self) -> SessionListResponse:
+        """
+        List all sessions for the authenticated tenant.
+
+        Returns:
+            A typed list of session responses.
+        """
+        payload = self._request_json("GET", "sessions")
+        return SessionListResponse.from_dict(payload)
+
+    def delete_session(self, session_id: str) -> None:
+        """
+        Delete a session by identifier.
+
+        Args:
+            session_id: Session identifier to delete.
+        """
+        self._request_no_content("DELETE", f"sessions/{session_id}")
+
+    def chat(
+        self,
+        question: str,
+        doc_id: str,
+        match_count: int = 5,
+        session_id: str | None = None,
+        scope: RetrievalScope | None = None,
+    ) -> ChatResponse:
         """
         Ask a question against a single document.
 
@@ -135,34 +193,48 @@ class ChatVectorClient:
             question: User question to answer.
             doc_id: Document identifier to search against.
             match_count: Number of matching chunks to retrieve.
+            session_id: Optional session identifier for conversation continuity.
+            scope: Retrieval scope — ``"session"`` (default) or ``"tenant"``.
 
         Returns:
             A typed chat response containing the answer and citations.
         """
-        payload = {
+        payload: JSONDict = {
             "question": question,
             "doc_id": doc_id,
             "match_count": match_count,
         }
+        if session_id is not None:
+            payload["session_id"] = session_id
+        if scope is not None:
+            payload["scope"] = scope
         response_payload = self._request_json("POST", "chat", json=payload)
         return ChatResponse.from_dict(response_payload)
 
     def batch_chat(
         self,
         queries: Sequence[BatchChatQuery | JSONMapping],
+        session_id: str | None = None,
+        scope: RetrievalScope | None = None,
     ) -> BatchChatResponse:
         """
         Run multiple chat queries in a single API call.
 
         Args:
             queries: List of batch query payloads or ``BatchChatQuery`` models.
+            session_id: Optional shared session identifier for the batch.
+            scope: Optional shared retrieval scope for the batch.
 
         Returns:
             A typed batch response containing per-query outcomes.
         """
-        payload = {
+        payload: JSONDict = {
             "queries": [self._serialize_batch_query(query) for query in queries],
         }
+        if session_id is not None:
+            payload["session_id"] = session_id
+        if scope is not None:
+            payload["scope"] = scope
         response_payload = self._request_json("POST", "chat/batch", json=payload)
         return BatchChatResponse.from_dict(response_payload)
 
@@ -238,10 +310,42 @@ class ChatVectorClient:
         Raises:
             ChatVectorAPIError: If the API or network request fails.
         """
+        response = self._request_response(method, url, **kwargs)
+        return self._parse_json_dict(response)
+
+    def _request_no_content(self, method: str, url: str, **kwargs: Any) -> None:
+        """
+        Send an HTTP request that returns no response body on success.
+
+        Args:
+            method: HTTP method to use.
+            url: Relative API path.
+            **kwargs: Additional request parameters passed to ``httpx.Client``.
+
+        Raises:
+            ChatVectorAPIError: If the API or network request fails.
+        """
+        self._request_response(method, url, **kwargs)
+
+    def _request_response(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        """
+        Send an HTTP request with retry support and return the raw response.
+
+        Args:
+            method: HTTP method to use.
+            url: Relative API path.
+            **kwargs: Additional request parameters passed to ``httpx.Client``.
+
+        Returns:
+            The successful HTTP response.
+
+        Raises:
+            ChatVectorAPIError: If the API or network request fails.
+        """
         max_attempts = self.max_retries + 1
         call_idx = [0]
 
-        def _attempt() -> JSONDict:
+        def _attempt() -> httpx.Response:
             i = call_idx[0]
             call_idx[0] += 1
             try:
@@ -250,9 +354,9 @@ class ChatVectorClient:
                     if i + 1 < max_attempts:
                         raise WantsRetry(self._retry_after_seconds(response))
                     response.raise_for_status()
-                    return self._parse_json_dict(response)
+                    return response
                 response.raise_for_status()
-                return self._parse_json_dict(response)
+                return response
             except httpx.TimeoutException as exc:
                 if i + 1 < max_attempts:
                     raise WantsRetry(0.0) from exc
@@ -278,7 +382,7 @@ class ChatVectorClient:
             max_retries=max_attempts,
             base_delay=self.retry_backoff,
             backoff=2.0,
-            func_name="_request_json",
+            func_name="_request_response",
         )
 
     def _map_http_error(self, response: httpx.Response) -> ChatVectorAPIError:

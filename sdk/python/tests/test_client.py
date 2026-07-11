@@ -19,6 +19,8 @@ from chatvector import (
     ChatVectorTimeoutError,
     DocumentResponse,
     DocumentStatus,
+    Session,
+    SessionListResponse,
 )
 
 
@@ -477,6 +479,277 @@ class ChatVectorClientTests(unittest.TestCase):
                 self.client.chat("Hello?", "doc-123")
 
         self.assertIn("non-JSON response", str(exc_info.exception))
+
+    def test_create_session_returns_typed_session(self) -> None:
+        """Session creation should deserialize into a typed session model."""
+        response = make_response(
+            201,
+            method="POST",
+            url="https://api.chatvector.test/sessions",
+            json_data={
+                "id": "sess-1",
+                "tenant_id": "tenant-1",
+                "created_at": "2026-01-01T00:00:00",
+                "last_active": "2026-01-01T00:00:00",
+                "metadata": {},
+                "document_ids": [],
+            },
+        )
+
+        with patch.object(self.client._client, "request", return_value=response) as mock_request:
+            session = self.client.create_session()
+
+        self.assertIsInstance(session, Session)
+        self.assertEqual(session.id, "sess-1")
+        self.assertEqual(session.tenant_id, "tenant-1")
+        self.assertEqual(session.document_ids, [])
+        self.assertEqual(mock_request.call_args.kwargs["json"], {})
+
+    def test_create_session_accepts_custom_session_id(self) -> None:
+        """Session creation should forward a client-provided session identifier."""
+        response = make_response(
+            201,
+            method="POST",
+            url="https://api.chatvector.test/sessions",
+            json_data={
+                "id": "custom-sess",
+                "tenant_id": "tenant-1",
+                "created_at": "2026-01-01T00:00:00",
+                "last_active": "2026-01-01T00:00:00",
+                "metadata": {},
+                "document_ids": [],
+            },
+        )
+
+        with patch.object(self.client._client, "request", return_value=response) as mock_request:
+            session = self.client.create_session(session_id="custom-sess")
+
+        self.assertEqual(session.id, "custom-sess")
+        self.assertEqual(mock_request.call_args.kwargs["json"], {"session_id": "custom-sess"})
+
+    def test_get_session_returns_typed_session(self) -> None:
+        """Fetching a session should deserialize into a typed session model."""
+        response = make_response(
+            200,
+            url="https://api.chatvector.test/sessions/sess-1",
+            json_data={
+                "id": "sess-1",
+                "tenant_id": "tenant-1",
+                "created_at": "2026-01-01T00:00:00",
+                "last_active": "2026-01-02T00:00:00",
+                "metadata": {"source": "sdk"},
+                "document_ids": ["doc-123"],
+            },
+        )
+
+        with patch.object(self.client._client, "request", return_value=response):
+            session = self.client.get_session("sess-1")
+
+        self.assertEqual(session.id, "sess-1")
+        self.assertEqual(session.metadata, {"source": "sdk"})
+        self.assertEqual(session.document_ids, ["doc-123"])
+
+    def test_list_sessions_returns_typed_list_response(self) -> None:
+        """Listing sessions should deserialize into a typed list response."""
+        response = make_response(
+            200,
+            url="https://api.chatvector.test/sessions",
+            json_data={
+                "sessions": [
+                    {
+                        "id": "sess-1",
+                        "tenant_id": "tenant-1",
+                        "created_at": "2026-01-01T00:00:00",
+                        "last_active": "2026-01-01T00:00:00",
+                        "metadata": {},
+                        "document_ids": [],
+                    },
+                    {
+                        "id": "sess-2",
+                        "tenant_id": "tenant-1",
+                        "created_at": "2026-01-02T00:00:00",
+                        "last_active": "2026-01-02T00:00:00",
+                        "metadata": {},
+                        "document_ids": ["doc-456"],
+                    },
+                ]
+            },
+        )
+
+        with patch.object(self.client._client, "request", return_value=response):
+            result = self.client.list_sessions()
+
+        self.assertIsInstance(result, SessionListResponse)
+        self.assertEqual(len(result.sessions), 2)
+        self.assertEqual(result.sessions[1].document_ids, ["doc-456"])
+
+    def test_delete_session_sends_delete_request(self) -> None:
+        """Deleting a session should issue a DELETE request and accept 204 responses."""
+        response = make_response(
+            204,
+            method="DELETE",
+            url="https://api.chatvector.test/sessions/sess-1",
+        )
+
+        with patch.object(self.client._client, "request", return_value=response) as mock_request:
+            self.client.delete_session("sess-1")
+
+        self.assertEqual(mock_request.call_args.args[:2], ("DELETE", "sessions/sess-1"))
+
+    def test_get_session_not_found_raises_structured_api_error(self) -> None:
+        """Missing sessions should raise a structured API error with status code 404."""
+        response = make_response(
+            404,
+            url="https://api.chatvector.test/sessions/missing",
+            json_data={"detail": "Session not found"},
+        )
+
+        with patch.object(self.client._client, "request", return_value=response):
+            with self.assertRaises(ChatVectorAPIError) as exc_info:
+                self.client.get_session("missing")
+
+        self.assertEqual(exc_info.exception.status_code, 404)
+        self.assertEqual(exc_info.exception.details, "Session not found")
+
+    def test_chat_forwards_session_id_and_scope(self) -> None:
+        """Single chat requests should forward session and scope parameters."""
+        response = make_response(
+            200,
+            method="POST",
+            url="https://api.chatvector.test/chat",
+            json_data={
+                "question": "What is this document about?",
+                "chunks": 1,
+                "answer": "An onboarding guide.",
+                "sources": [],
+            },
+        )
+
+        with patch.object(self.client._client, "request", return_value=response) as mock_request:
+            result = self.client.chat(
+                "What is this document about?",
+                "doc-123",
+                session_id="sess-1",
+                scope="tenant",
+            )
+
+        self.assertEqual(result.answer, "An onboarding guide.")
+        self.assertEqual(
+            mock_request.call_args.kwargs["json"],
+            {
+                "question": "What is this document about?",
+                "doc_id": "doc-123",
+                "match_count": 5,
+                "session_id": "sess-1",
+                "scope": "tenant",
+            },
+        )
+
+    def test_chat_omits_session_and_scope_when_not_provided(self) -> None:
+        """Single chat requests should remain backward compatible without session parameters."""
+        response = make_response(
+            200,
+            method="POST",
+            url="https://api.chatvector.test/chat",
+            json_data={
+                "question": "Hello?",
+                "chunks": 1,
+                "answer": "Hi.",
+                "sources": [],
+            },
+        )
+
+        with patch.object(self.client._client, "request", return_value=response) as mock_request:
+            self.client.chat("Hello?", "doc-123")
+
+        self.assertEqual(
+            mock_request.call_args.kwargs["json"],
+            {
+                "question": "Hello?",
+                "doc_id": "doc-123",
+                "match_count": 5,
+            },
+        )
+
+    def test_batch_chat_forwards_batch_and_query_session_scope(self) -> None:
+        """Batch chat should forward shared and per-query session/scope parameters."""
+        response = make_response(
+            200,
+            method="POST",
+            url="https://api.chatvector.test/chat/batch",
+            json_data={
+                "count": 1,
+                "success_count": 1,
+                "failure_count": 0,
+                "results": [
+                    {
+                        "status": "ok",
+                        "question": "Summarize it.",
+                        "doc_ids": ["doc-123"],
+                        "chunks": 1,
+                        "answer": "Summary",
+                        "sources": [],
+                    }
+                ],
+            },
+        )
+
+        with patch.object(self.client._client, "request", return_value=response) as mock_request:
+            batch = self.client.batch_chat(
+                [
+                    BatchChatQuery(
+                        question="Summarize it.",
+                        doc_ids=["doc-123"],
+                        session_id="sess-item",
+                        scope="tenant",
+                    )
+                ],
+                session_id="sess-batch",
+                scope="session",
+            )
+
+        self.assertEqual(batch.results[0].answer, "Summary")
+        self.assertEqual(
+            mock_request.call_args.kwargs["json"],
+            {
+                "queries": [
+                    {
+                        "question": "Summarize it.",
+                        "doc_ids": ["doc-123"],
+                        "match_count": 5,
+                        "session_id": "sess-item",
+                        "scope": "tenant",
+                    }
+                ],
+                "session_id": "sess-batch",
+                "scope": "session",
+            },
+        )
+
+    def test_invalid_scope_raises_structured_api_error(self) -> None:
+        """Validation failures for unsupported scope values should raise structured API errors."""
+        response = make_response(
+            422,
+            method="POST",
+            url="https://api.chatvector.test/chat",
+            json_data={
+                "detail": [
+                    {
+                        "type": "literal_error",
+                        "loc": ["body", "scope"],
+                        "msg": "Input should be 'session' or 'tenant'",
+                        "input": "global",
+                    }
+                ]
+            },
+        )
+
+        with patch.object(self.client._client, "request", return_value=response):
+            with self.assertRaises(ChatVectorAPIError) as exc_info:
+                self.client.chat("Hello?", "doc-123", scope="global")  # type: ignore[arg-type]
+
+        self.assertEqual(exc_info.exception.status_code, 422)
+        self.assertIsInstance(exc_info.exception.details, list)
 
 
 if __name__ == "__main__":
