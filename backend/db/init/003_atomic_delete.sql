@@ -2,6 +2,10 @@
 -- Issue: #245
 -- Description: Adds an RPC function to perform atomic deletion of a document and its chunks.
 -- This ensures that no orphaned chunks remain if a network failure occurs between delete calls.
+--
+-- LEGACY: This RPC is retained for databases that already have it installed.
+-- It is NOT called by any current runtime code path. SQLAlchemyService performs
+-- atomic deletion natively via ORM transactions. Safe to leave in place.
 
 CREATE OR REPLACE FUNCTION delete_document_atomic(target_document_id uuid)
 RETURNS void

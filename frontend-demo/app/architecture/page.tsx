@@ -30,7 +30,7 @@ export default function ArchitecturePage() {
 ├─────────────────────────────────┤
 │     Ingestion / Query Logic     │  ← chunking, embedding, retrieval
 ├─────────────────────────────────┤
-│   Database Strategy (Adapter)   │  ← SQLAlchemy  /  Supabase
+│   Database Strategy (Adapter)   │  ← SQLAlchemy (all environments)
 ├─────────────────────────────────┤
 │     Vector Store (pgvector)     │  ← similarity search in Postgres
 └─────────────────────────────────┘`}</pre>
@@ -46,10 +46,11 @@ export default function ArchitecturePage() {
           <p className="mb-6 text-[1rem] leading-[1.8] text-foreground">
             ChatVector uses a <em>Strategy Pattern</em> for database access. The
             application code never talks to a specific database driver directly —
-            it calls a common interface backed by either{" "}
-            <strong>SQLAlchemy</strong> (local / Docker) or{" "}
-            <strong>Supabase</strong> (hosted production). Swapping backends
-            requires only an environment variable change.
+            it calls a common interface backed by{" "}
+            <strong>SQLAlchemy</strong> in all environments. The target
+            PostgreSQL/pgvector instance is configured via{" "}
+            <code className="rounded border border-border bg-surface px-1 py-0.5 font-mono text-[0.85em]">DATABASE_URL</code>
+            — local Docker, Neon, RDS, Cloud SQL, or Supabase Postgres.
           </p>
 
           <div className="mb-10 overflow-x-auto">
@@ -71,19 +72,19 @@ export default function ArchitecturePage() {
                   [
                     "Backend",
                     "SQLAlchemy + Docker Postgres",
-                    "Supabase (managed Postgres)",
+                    "SQLAlchemy + PostgreSQL/pgvector",
                   ],
                   [
                     "Vector store",
                     "pgvector via Docker",
-                    "pgvector via Supabase",
+                    "pgvector (any host via DATABASE_URL)",
                   ],
                   [
                     "Setup",
                     "docker compose up",
-                    "Set SUPABASE_URL + SUPABASE_KEY",
+                    "Set DATABASE_URL to your Postgres host",
                   ],
-                  ["Cost", "Free", "Supabase free tier / paid"],
+                  ["Cost", "Free", "Depends on provider (Neon, RDS, Supabase Postgres, etc.)"],
                   [
                     "Best for",
                     "Local dev & CI",

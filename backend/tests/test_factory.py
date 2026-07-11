@@ -1,6 +1,6 @@
 """
 Tests for the database factory.
-Ensures the right service is returned based on environment.
+Ensures SQLAlchemyService is returned in all environments.
 """
 import importlib
 
@@ -40,8 +40,8 @@ def test_factory_returns_sqlalchemy_in_dev(monkeypatch, reset_db_singleton):
     assert isinstance(service, SQLAlchemyService)
 
 
-def test_factory_returns_sqlalchemy_in_test_when_database_url(monkeypatch, reset_db_singleton):
-    """pytest uses APP_ENV=test; match CI by using SQLAlchemy when DATABASE_URL is set."""
+def test_factory_returns_sqlalchemy_in_test(monkeypatch, reset_db_singleton):
+    """pytest uses APP_ENV=test; SQLAlchemy is used when DATABASE_URL is set."""
     pytest.importorskip("pgvector")
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv(
@@ -56,15 +56,20 @@ def test_factory_returns_sqlalchemy_in_test_when_database_url(monkeypatch, reset
     assert isinstance(service, SQLAlchemyService)
 
 
-def test_factory_returns_supabase_in_prod(monkeypatch, reset_db_singleton):
-    """Should return SupabaseService when APP_ENV=production."""
+def test_factory_returns_sqlalchemy_in_production(monkeypatch, reset_db_singleton):
+    """Should return SQLAlchemyService in production — no Supabase client path exists."""
+    pytest.importorskip("pgvector")
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres",
+    )
     importlib.reload(core.config)
     importlib.reload(db_module)
     service = db_module.get_db_service()
-    from db.supabase_service import SupabaseService
+    from db.sqlalchemy_service import SQLAlchemyService
 
-    assert isinstance(service, SupabaseService)
+    assert isinstance(service, SQLAlchemyService)
 
 
 @pytest.mark.asyncio

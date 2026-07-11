@@ -101,11 +101,6 @@ class Settings:
     APP_ENV: str = os.getenv("APP_ENV", "production")
     IS_PROD = APP_ENV.lower() == "production"
     ENABLE_STREAMING: bool = os.getenv("ENABLE_STREAMING", "false").lower() in ("1", "true", "yes")
-    SUPABASE_URL: str | None = os.getenv("SUPABASE_URL")
-    SUPABASE_KEY: str | None = os.getenv("SUPABASE_KEY")
-    SUPABASE_HTTP_TIMEOUT_SEC: int = max(
-        1, int(os.getenv("SUPABASE_HTTP_TIMEOUT_SEC", "30"))
-    )
     GEN_AI_KEY: str | None = os.getenv("GEN_AI_KEY")
 
     # Provider selection
@@ -149,7 +144,6 @@ class Settings:
     HYBRID_RETRIEVAL_ENABLED: bool = os.getenv(
         "HYBRID_RETRIEVAL_ENABLED", "false"
     ).lower() in ("1", "true", "yes")
-    SUPABASE_IO_CONCURRENCY: int = max(1, int(os.getenv("SUPABASE_IO_CONCURRENCY", "16")))
     CHAT_BATCH_MAX_ITEMS: int = max(1, int(os.getenv("CHAT_BATCH_MAX_ITEMS", "20")))
     CHAT_MAX_DOC_IDS_PER_QUERY: int = max(1, int(os.getenv("CHAT_MAX_DOC_IDS_PER_QUERY", "10")))
     MAX_SESSION_HISTORY_MESSAGES: int = max(1, int(os.getenv("MAX_SESSION_HISTORY_MESSAGES", "20")))
@@ -219,16 +213,6 @@ class Settings:
     LLM_HEALTH_CHECK_TIMEOUT_SEC: int = max(
         1, int(os.getenv("LLM_HEALTH_CHECK_TIMEOUT_SEC", "120"))
     )
-
-    # Backwards-compatible lowercase properties for accessing config values
-    @property
-    def supabase_url(self) -> str | None:
-        return self.SUPABASE_URL
-
-    @property
-    def supabase_key(self) -> str | None:
-        return self.SUPABASE_KEY
-
 
 VALID_QUEUE_BACKENDS = {"memory", "redis"}
 

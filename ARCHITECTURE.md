@@ -42,19 +42,19 @@ The system is designed for:
 An abstract base class defines the contract:
 - `DatabaseService` (`db/base.py`)
 
-Two implementations:
-- `SQLAlchemyService` — development (local PostgreSQL via asyncpg)
-- `SupabaseService` — production (Supabase-hosted PostgreSQL)
+One implementation:
+- `SQLAlchemyService` — all environments (PostgreSQL/pgvector via asyncpg)
 
-Selected via an environment-aware factory in `backend/db/__init__.py`.
-All DB operations are wrapped with retry logic at the factory layer.
+`DATABASE_URL` controls the target PostgreSQL instance. Any PostgreSQL host with pgvector enabled is supported: local Docker, managed services (Neon, RDS, Cloud SQL, Supabase Postgres via direct connection string), or self-hosted.
+
+The factory in `backend/db/__init__.py` always returns `SQLAlchemyService`. All DB operations are wrapped with retry logic at the factory layer.
 
 This ensures:
 - No direct DB coupling in business logic
-- Environment-specific behavior isolated to the implementation layer
-- Easy extension for future backends
+- Consistent behavior across development, test, and production
+- Hybrid retrieval (pgvector + PostgreSQL full-text) works in all environments
 
-**Document deletion:** Removing a document and its rows in `document_chunks` must be atomic so a failed mid-delete cannot leave orphaned chunks. `SQLAlchemyService.delete_document()` runs both deletes in a single DB transaction. `SupabaseService` calls the Postgres RPC `delete_document_atomic` (see `backend/db/init/003_atomic_delete.sql`), which performs the same two deletes in one transaction. The factory continues to choose the implementation by environment; the public `delete_document` API is unchanged.
+**Document deletion:** Removing a document and its rows in `document_chunks` is atomic — `SQLAlchemyService.delete_document()` runs both deletes in a single ORM transaction, preventing orphaned chunks on failure. The legacy `delete_document_atomic` RPC (`backend/db/init/003_atomic_delete.sql`) is retained in the database schema for backward compatibility but is not called by current runtime code.
 
 ---
 
@@ -87,13 +87,15 @@ Switching embedding providers requires a fresh database (`docker compose down -v
 
 ## Development vs Production
 
-| Environment | Database                  | Implementation    |
-| ----------- | ------------------------- | ----------------- |
-| Development | PostgreSQL (local Docker) | SQLAlchemyService |
-| Production  | Supabase (PostgreSQL)     | SupabaseService   |
+| Environment | Database                                    | Implementation    |
+| ----------- | ------------------------------------------- | ----------------- |
+| Development | PostgreSQL (local Docker via DATABASE_URL)  | SQLAlchemyService |
+| Test        | PostgreSQL (local Docker via DATABASE_URL)  | SQLAlchemyService |
+| Production  | PostgreSQL/pgvector (any host, DATABASE_URL) | SQLAlchemyService |
 
-SQLite was intentionally removed to ensure production parity, consistent
-vector behavior, and identical query semantics across environments.
+`APP_ENV` controls auth bypass, docs suppression, queue backend defaults, and production behavior — but no longer selects the database implementation. `DATABASE_URL` is the single configuration point for the database in all environments.
+
+SQLite was intentionally excluded to ensure production parity, consistent vector behavior, and identical query semantics across environments.
 
 ---
 
@@ -230,7 +232,6 @@ All external I/O is wrapped with retry logic via `backend/utils/retry.py`.
 | LLM HTTP client | 60s | `HttpOptions(timeout=LLM_HTTP_TIMEOUT_MS)` |
 | SQLAlchemy pool | 30s checkout | `pool_timeout` on engine |
 | SQLAlchemy queries | 30s | `command_timeout` on asyncpg |
-| Supabase HTTP | 30s | `ClientOptions` timeouts |
 | Health checks | 10s (embed), 15s (LLM) | `asyncio.wait_for` |
 
 ---

@@ -14,8 +14,6 @@ if str(BACKEND_DIR) not in sys.path:
 # (Docker) already injects APP_ENV=test via docker-compose.yml, so this
 # only changes the local-pytest path.
 os.environ.setdefault("APP_ENV", "test")
-os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
-os.environ.setdefault("SUPABASE_KEY", "test-key-123")
 os.environ.setdefault("GEN_AI_KEY", "test-genai-key")
 os.environ.setdefault("LOG_LEVEL", "DEBUG")
 os.environ.setdefault(
@@ -35,8 +33,6 @@ if not env_file.exists():
         "\n".join(
             [
                 "APP_ENV=test",
-                "SUPABASE_URL=https://test.supabase.co",
-                "SUPABASE_KEY=test-key-123",
                 "GEN_AI_KEY=test-genai-key",
                 "LOG_LEVEL=DEBUG",
                 "DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/postgres",

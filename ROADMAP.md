@@ -67,7 +67,7 @@ A focused stabilization pass based on a backend audit conducted ahead of Phase 3
 - Embedding validation — no silent dimension fallbacks
 - Logging safety improvements — no sensitive payload leakage
 - Queue consistency improvements and documentation alignment
-- Supabase delete atomicity (transaction/RPC-based)
+- Atomic document deletion via SQLAlchemy ORM transactions
 - Expanded test coverage for core flows
 - Config and `.env` alignment with runtime behavior
 

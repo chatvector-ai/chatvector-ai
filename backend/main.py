@@ -34,7 +34,15 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.start_time = time.time()
-    
+
+    if not config.DATABASE_URL:
+        raise RuntimeError(
+            "DATABASE_URL is not set. "
+            "Set DATABASE_URL to a PostgreSQL connection string with pgvector enabled "
+            "(e.g. postgresql+asyncpg://user:pass@host:5432/dbname). "
+            "See backend/.env.example for configuration options."
+        )
+
     if config.QUEUE_BACKEND == "redis":
         from core.clients import redis_client
         try:

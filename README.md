@@ -153,9 +153,9 @@ Phases 1, 2, and 2.5 are complete. Phase 3 is actively underway — most backend
 
 ### Data Layer
 
-- **PostgreSQL + pgvector** — vector similarity search
-- **SQLAlchemy** (development) / **Supabase** (production)
-- **Strategy pattern** — swap backends without touching business logic
+- **PostgreSQL + pgvector** — vector similarity search via SQLAlchemy in all environments
+- `DATABASE_URL` controls the target database — local Docker, Neon, RDS, Cloud SQL, Supabase Postgres, etc.
+- **Strategy pattern** — DB operations isolated behind a factory; business logic is database-agnostic
 
 ### Reference Frontend (Non-Core)
 

@@ -165,10 +165,9 @@ async def new_operation(self, param: str) -> str:
     pass
 ```
 
-### 2. Implement in both services
+### 2. Implement in the service
 
-- `db/sqlalchemy_service.py` (development)
-- `db/supabase_service.py` (production)
+- `db/sqlalchemy_service.py` (all environments)
 
 ### 3. Use via factory
 
@@ -178,7 +177,7 @@ import db
 result = await db.new_operation("test")
 ```
 
-The factory automatically selects the correct environment, applies
+The factory always returns `SQLAlchemyService`, applies
 retry logic with timeouts and jitter, and handles logging.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for full details on the
