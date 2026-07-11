@@ -9,6 +9,7 @@ import {
   formatCitationLine,
   formatResponseMetadata,
 } from "../../lib/citations";
+import RetrievalInspector from "../RetrievalInspector";
 
 type Props = {
   messages: Message[];
@@ -141,6 +142,18 @@ export default function MessageList({ messages, inflight, bottomRef }: Props) {
               )}
               {msg.sender === "ai" && metadata && detailsVisible && (
                 <p className="mt-2 text-xs text-muted">{metadata}</p>
+              )}
+              {msg.sender === "ai" && detailsVisible && (
+                <RetrievalInspector
+                  data={{
+                    question: msg.question,
+                    retrieval_debug: msg.retrieval_debug,
+                    sources: msg.sources,
+                    chunks: msg.chunks,
+                    model: msg.model,
+                    latency_ms: msg.latency_ms,
+                  }}
+                />
               )}
             </div>
           </div>

@@ -162,6 +162,8 @@ export function useChat(sessionId: string | null) {
           id: base + 1,
           sender: "ai",
           text: response.answer,
+          question: response.question,
+          retrieval_debug: response.retrieval_debug,
           sources: response.sources,
           chunks: response.chunks,
           latency_ms: response.latency_ms,
