@@ -261,6 +261,31 @@ successful `complete` event.
 **Latency note:** `latency_ms` in the `complete` event measures LLM generation
 wall time for the stream, not retrieval or embedding time.
 
+### Citation score types
+
+Chat and batch responses include citation metadata on each `sources[]` item:
+
+| Field | Description |
+|---|---|
+| `score` | Numeric relevance value from the final ranking stage (unchanged). |
+| `score_type` | Label describing what `score` means. |
+
+Supported `score_type` values:
+
+| Value | Meaning | Higher is better? | Typical range |
+|---|---|---|---|
+| `vector` | Cosine similarity from pgvector (`1 - distance`) | Yes | Roughly `0.0`–`1.0` for normalized embeddings |
+| `hybrid_rrf` | Reciprocal Rank Fusion score combining vector + keyword ranks | Yes | Small positive values (rank-based, not a probability) |
+| `reranked` | Combined retrieval + lexical overlap score from the reranker | Yes | Roughly `0.0`–`1.0` depending on upstream scores |
+
+**Important:** scores from different `score_type` values are **not directly comparable**.
+A `vector` score of `0.82` and a `hybrid_rrf` score of `0.03` do not indicate
+equivalent relevance. Compare scores only within the same `score_type`.
+
+When reranking is enabled (`ENABLE_RERANKING=true`), final citations use
+`score_type: "reranked"`. When hybrid retrieval is active, citations use
+`hybrid_rrf` unless reranking runs afterward.
+
 ---
 
 ```env
