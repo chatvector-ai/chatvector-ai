@@ -94,6 +94,7 @@ def success_sse_lines() -> list[str]:
                         "page_number": 1,
                         "chunk_index": 0,
                         "score": 0.91,
+                        "score_type": "reranked",
                     }
                 ],
                 "latency_ms": 321,
@@ -130,6 +131,7 @@ class StreamChatTests(unittest.TestCase):
         self.assertEqual(events[2].latency_ms, 321)
         self.assertEqual(events[2].model, "gemini-2.5-flash")
         self.assertEqual(events[2].sources[0].file_name, "guide.pdf")
+        self.assertEqual(events[2].sources[0].score_type, "reranked")
 
     def test_iter_stream_chat_events_ignores_legacy_done(self) -> None:
         """Legacy ``done`` events should be ignored for compatibility."""

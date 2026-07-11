@@ -19,6 +19,7 @@ class ChatSource:
     page_number: int | None
     chunk_index: int | None
     score: float | None = None
+    score_type: str | None = None
 
     @classmethod
     def from_dict(cls, payload: JSONMapping) -> "ChatSource":
@@ -28,6 +29,7 @@ class ChatSource:
             page_number=_optional_int(payload.get("page_number")),
             chunk_index=_optional_int(payload.get("chunk_index")),
             score=_optional_float(payload.get("score")),
+            score_type=_optional_str(payload.get("score_type")),
         )
 
     def to_dict(self) -> JSONDict:
@@ -39,6 +41,8 @@ class ChatSource:
         }
         if self.score is not None:
             d["score"] = self.score
+        if self.score_type is not None:
+            d["score_type"] = self.score_type
         return d
 
 

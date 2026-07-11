@@ -138,6 +138,7 @@ class ChatVectorClientTests(unittest.TestCase):
                         "page_number": 1,
                         "chunk_index": 0,
                         "score": 0.95,
+                        "score_type": "vector",
                     }
                 ],
             },
@@ -151,6 +152,7 @@ class ChatVectorClientTests(unittest.TestCase):
         self.assertEqual(len(result.sources), 1)
         self.assertEqual(result.sources[0].file_name, "guide.pdf")
         self.assertEqual(result.sources[0].score, 0.95)
+        self.assertEqual(result.sources[0].score_type, "vector")
         self.assertEqual(result.latency_ms, 0)
         self.assertEqual(result.model, "")
 
@@ -177,6 +179,7 @@ class ChatVectorClientTests(unittest.TestCase):
                                 "page_number": 2,
                                 "chunk_index": 1,
                                 "score": 0.85,
+                                "score_type": "hybrid_rrf",
                             }
                         ],
                     },
@@ -208,6 +211,7 @@ class ChatVectorClientTests(unittest.TestCase):
         self.assertEqual(batch.failure_count, 1)
         self.assertEqual(batch.results[0].answer, "Summary")
         self.assertEqual(batch.results[1].error, {"code": "query_processing_failed", "message": "boom"})
+        self.assertEqual(batch.results[0].sources[0].score_type, "hybrid_rrf")
         self.assertEqual(batch.results[0].latency_ms, 0)
         self.assertEqual(batch.results[0].model, "")
 

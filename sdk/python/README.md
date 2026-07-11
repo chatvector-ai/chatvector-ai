@@ -138,6 +138,10 @@ The SDK yields typed `token` and `complete` events. Backend `error` events are
 converted into structured SDK exceptions. Legacy `[DONE]` completion markers are
 ignored for backward compatibility.
 
+Each `sources[]` item may include `score` and `score_type` (`vector`,
+`hybrid_rrf`, or `reranked`). Scores are only comparable within the same
+`score_type`; see `DEVELOPMENT.md` for semantics.
+
 ## Error Handling
 
 All SDK methods raise typed exceptions:
