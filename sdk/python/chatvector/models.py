@@ -230,7 +230,61 @@ class SessionListResponse:
 
     def to_dict(self) -> JSONDict:
         """Convert the model back to a JSON-serializable dictionary."""
-        return {"sessions": [session.to_dict() for session in self.sessions]}
+        return {"sessions": [session.to_dict() for session in self.sessions]        }
+
+
+@dataclass(slots=True)
+class StreamChatEvent:
+    """One event emitted by ``ChatVectorClient.stream_chat()``."""
+
+    type: Literal["token", "complete"]
+    content: str | None = None
+    session_id: str | None = None
+    sources: list[ChatSource] = field(default_factory=list)
+    latency_ms: int = 0
+    model: str = ""
+
+    @classmethod
+    def token(cls, content: str) -> "StreamChatEvent":
+        """Build a token event."""
+        return cls(type="token", content=content)
+
+    @classmethod
+    def complete(
+        cls,
+        *,
+        session_id: str | None,
+        sources: list[ChatSource],
+        latency_ms: int,
+        model: str,
+    ) -> "StreamChatEvent":
+        """Build a structured completion event."""
+        return cls(
+            type="complete",
+            session_id=session_id,
+            sources=list(sources),
+            latency_ms=latency_ms,
+            model=model,
+        )
+
+
+@dataclass(slots=True)
+class StreamErrorEvent:
+    """Structured error payload from a streaming ``error`` SSE event."""
+
+    code: str
+    message: str
+    raw: JSONDict = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, payload: JSONMapping) -> "StreamErrorEvent":
+        """Build an error event model from an SSE payload."""
+        raw = dict(payload)
+        return cls(
+            code=str(payload.get("code", "")),
+            message=str(payload.get("message", "")),
+            raw=raw,
+        )
 
 
 @dataclass(slots=True)
