@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { sendMessage, sendBatchMessage, ChatError, getDocumentStatus } from "./api";
+import { sendMessage, sendBatchMessage, sendSynthesizedBatchMessage, ChatError, getDocumentStatus } from "./api";
 
 const MOCK_RESPONSE = {
   question: "What is RAG?",
@@ -238,6 +238,74 @@ describe("sendBatchMessage", () => {
       name: "ChatError",
       code: "unexpected",
     });
+  });
+});
+
+describe("sendSynthesizedBatchMessage", () => {
+  const originalFetch = globalThis.fetch;
+
+  const SYNTHESIZED_RESPONSE = {
+    count: 1,
+    success_count: 1,
+    failure_count: 0,
+    results: [
+      {
+        status: "ok",
+        question: "Cross-doc question?",
+        doc_ids: ["doc-1", "doc-2", "doc-3"],
+        chunks: 5,
+        answer: "Combined synthesized answer.",
+        sources: [
+          { file_name: "a.pdf", page_number: 1, chunk_index: 0, score: 0.88 },
+          { file_name: "b.pdf", page_number: 2, chunk_index: 1, score: 0.74 },
+        ],
+        latency_ms: 2400,
+        model: "gemini-2.5-flash",
+        session_id: "sess-1",
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("sends one query item with all doc_ids and returns parsed results", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify(SYNTHESIZED_RESPONSE), { status: 200 })
+    );
+
+    const result = await sendSynthesizedBatchMessage("Cross-doc question?", [
+      "doc-1",
+      "doc-2",
+      "doc-3",
+    ]);
+
+    expect(result).toEqual(SYNTHESIZED_RESPONSE);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/chat/batch"),
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Id": "test-session-id",
+        },
+        body: JSON.stringify({
+          queries: [
+            {
+              question: "Cross-doc question?",
+              doc_ids: ["doc-1", "doc-2", "doc-3"],
+              match_count: 5,
+            },
+          ],
+          session_id: "test-session-id",
+        }),
+      })
+    );
   });
 });
 
