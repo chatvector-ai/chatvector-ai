@@ -17,6 +17,7 @@ export default function ChatPage() {
     input,
     setInput,
     inflight,
+    streaming,
     attachment,
     removeError,
     sendDisabled,
@@ -27,6 +28,7 @@ export default function ChatPage() {
     handleBeforeUpload,
     handleUploadAccepted,
     handleRemoveAttachment,
+    stopStreaming,
   } = useChat(activeSessionId);
 
   if (!isLoaded) {
@@ -98,13 +100,14 @@ export default function ChatPage() {
         )}
 
         <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden">
-          <MessageList messages={messages} inflight={inflight} bottomRef={bottomRef} />
+          <MessageList messages={messages} inflight={inflight} streaming={streaming} bottomRef={bottomRef} />
 
           <ChatInput
             input={input}
             setInput={setInput}
             sendDisabled={sendDisabled}
             inflight={inflight}
+            streaming={streaming}
             attachment={attachment}
             removeError={removeError}
             poll={poll}
@@ -112,6 +115,7 @@ export default function ChatPage() {
             handleKeyDown={handleKeyDown}
             handleRemoveAttachment={handleRemoveAttachment}
             onUploadClick={() => setShowModal(true)}
+            stopStreaming={stopStreaming}
           />
         </div>
       </div>

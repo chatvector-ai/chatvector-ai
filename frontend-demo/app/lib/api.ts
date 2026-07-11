@@ -1,4 +1,7 @@
 import { getSessionId } from "./session";
+import { parseSSEStream, type StreamEvent } from "./stream";
+
+export type { StreamEvent } from "./stream";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -39,6 +42,8 @@ export type Message = {
   latency_ms?: number;
   model?: string;
   error?: { code: string; message: string };
+  /** True while real SSE tokens are in flight for this message. */
+  isStreaming?: boolean;
 };
 
 export type ChatResponse = {
@@ -83,6 +88,18 @@ export class ChatError extends Error {
   ) {
     super(message);
     this.name = "ChatError";
+  }
+}
+
+/**
+ * Thrown when the backend returns 400 with `streaming_disabled`.
+ * The caller should catch this and fall back to the sync `sendMessage()` path.
+ */
+export class StreamingDisabledError extends Error {
+  readonly code = "streaming_disabled" as const;
+  constructor() {
+    super("Streaming responses are currently disabled.");
+    this.name = "StreamingDisabledError";
   }
 }
 
@@ -153,6 +170,92 @@ export async function sendMessage(
 
   const response = (await res.json()) as ChatResponse;
   return response;
+}
+
+/**
+ * Send a chat question via `POST /chat/stream` and return an async generator
+ * that yields SSE `StreamEvent` objects as they arrive.
+ *
+ * Throws `StreamingDisabledError` when the backend has streaming turned off
+ * (HTTP 400, `streaming_disabled`), allowing the caller to fall back to the
+ * synchronous `sendMessage()` path transparently.
+ *
+ * @param signal  Optional `AbortSignal` from an `AbortController` to cancel
+ *                the stream (e.g. a "Stop generating" button).
+ */
+export async function* sendMessageStream(
+  question: string,
+  docId: string,
+  matchCount = 5,
+  sessionIdOverride?: string | null,
+  signal?: AbortSignal,
+): AsyncGenerator<StreamEvent> {
+  const sessionId = sessionIdOverride !== undefined ? sessionIdOverride : getSessionId();
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...authHeaders(),
+  };
+  const body: Record<string, string | number> = {
+    question,
+    doc_id: docId,
+    match_count: matchCount,
+  };
+
+  if (sessionId !== null) {
+    headers["X-Session-Id"] = sessionId;
+    body.session_id = sessionId;
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/chat/stream`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal,
+    });
+  } catch (e) {
+    // AbortError should propagate so callers can distinguish cancellation.
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
+    throw new ChatError(
+      "backend_unreachable",
+      "Cannot reach the server. Check your connection."
+    );
+  }
+
+  // Handle streaming_disabled: 400 with { detail: { code: "streaming_disabled" } }
+  if (res.status === 400) {
+    try {
+      const errBody = await res.json();
+      if (errBody?.detail?.code === "streaming_disabled") {
+        throw new StreamingDisabledError();
+      }
+    } catch (e) {
+      if (e instanceof StreamingDisabledError) throw e;
+    }
+    throw new ChatError("unexpected", `Server error (${res.status}). Please try again.`);
+  }
+
+  if (res.status === 404) {
+    throw new ChatError(
+      "no_document",
+      "Document not found. It may have been deleted."
+    );
+  }
+
+  if (!res.ok) {
+    throw new ChatError(
+      "unexpected",
+      `Server error (${res.status}). Please try again.`
+    );
+  }
+
+  if (!res.body) {
+    throw new ChatError("unexpected", "No response body for stream.");
+  }
+
+  yield* parseSSEStream(res.body, signal);
 }
 
 export async function deleteDocument(

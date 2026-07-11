@@ -13,13 +13,16 @@ import {
 type Props = {
   messages: Message[];
   inflight: boolean;
+  streaming: boolean;
   bottomRef: RefObject<HTMLDivElement | null>;
 };
 
 // Welcome message (id: 1) and transport errors (no sources/chunks) skip animation.
+// Streamed messages also skip the fake animation — they render tokens in real time.
 function shouldAnimate(msg: Message): boolean {
   if (msg.sender !== "ai") return false;
   if (msg.id === 1) return false;
+  if (msg.isStreaming !== undefined) return false; // real streaming — no fake animation
   if (msg.sources === undefined && msg.chunks === undefined && !msg.error) return false;
   return true;
 }
@@ -35,7 +38,7 @@ function charInterval(textLength: number): number {
     : BASE_INTERVAL_MS;
 }
 
-export default function MessageList({ messages, inflight, bottomRef }: Props) {
+export default function MessageList({ messages, inflight, streaming, bottomRef }: Props) {
   const [animatingId, setAnimatingId] = useState<number | null>(null);
   const [displayedText, setDisplayedText] = useState("");
   const [animDone, setAnimDone] = useState(true);
@@ -86,12 +89,25 @@ export default function MessageList({ messages, inflight, bottomRef }: Props) {
     };
   }, []);
 
+  // Auto-scroll to bottom when streaming tokens arrive.
+  useEffect(() => {
+    if (streaming) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, streaming, bottomRef]);
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 space-y-4">
       {messages.map((msg) => {
-        const isAnimating = msg.id === animatingId;
+        const isRealStreaming = msg.isStreaming === true;
+        const wasStreamed = msg.isStreaming !== undefined;
+        const isAnimating = !wasStreamed && msg.id === animatingId;
         const text = isAnimating ? displayedText : msg.text;
-        const detailsVisible = isAnimating ? animDone : true;
+        const detailsVisible = isRealStreaming
+          ? false // hide details while streaming tokens
+          : isAnimating
+            ? animDone
+            : true;
         const metadata = formatResponseMetadata({
           chunks: msg.chunks,
           model: msg.model,
@@ -124,7 +140,19 @@ export default function MessageList({ messages, inflight, bottomRef }: Props) {
                   {softFailureMessage(msg.error)}
                 </p>
               )}
-              {text}
+              {/* Streaming: show text with blinking cursor */}
+              {isRealStreaming ? (
+                text ? (
+                  <span>
+                    {text}
+                    <span className="inline-block w-[2px] h-[1em] bg-accent animate-pulse ml-0.5 align-text-bottom" />
+                  </span>
+                ) : (
+                  <span className="text-muted animate-pulse">Streaming...</span>
+                )
+              ) : (
+                text
+              )}
               {msg.sender === "ai" && msg.sources && msg.sources.length > 0 && detailsVisible && (
                 <div className="mt-2 flex flex-col gap-1">
                   {deduplicatedSources(msg.sources).map((source, index) => (
@@ -146,7 +174,7 @@ export default function MessageList({ messages, inflight, bottomRef }: Props) {
           </div>
         );
       })}
-      {inflight && (
+      {inflight && !streaming && (
         <div className="flex items-end gap-2">
           <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center bg-accent text-background">
             <Bot size={16} />

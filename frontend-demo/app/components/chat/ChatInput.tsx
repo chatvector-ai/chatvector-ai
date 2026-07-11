@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef } from "react";
-import { Send } from "lucide-react";
+import { Send, Square } from "lucide-react";
 import UploadButton from "../UploadButton";
 import AttachmentChip from "../AttachmentChip";
 import type { AttachmentState } from "../../lib/api";
@@ -15,6 +15,7 @@ type Props = {
   setInput: (v: string) => void;
   sendDisabled: boolean;
   inflight: boolean;
+  streaming: boolean;
   attachment: AttachmentState | null;
   removeError: string | null;
   poll: ReturnType<typeof useDocumentPolling>;
@@ -22,6 +23,7 @@ type Props = {
   handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   handleRemoveAttachment: () => void;
   onUploadClick: () => void;
+  stopStreaming: () => void;
 };
 
 export default function ChatInput({
@@ -29,6 +31,7 @@ export default function ChatInput({
   setInput,
   sendDisabled,
   inflight,
+  streaming,
   attachment,
   removeError,
   poll,
@@ -36,6 +39,7 @@ export default function ChatInput({
   handleKeyDown,
   handleRemoveAttachment,
   onUploadClick,
+  stopStreaming,
 }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -99,28 +103,40 @@ export default function ChatInput({
             aria-label="Message"
             className="min-h-[44px] max-h-[220px] flex-1 resize-none overflow-y-auto bg-transparent py-2.5 text-sm leading-snug text-foreground outline-none placeholder:text-muted disabled:opacity-50"
           />
-          <button
-            type="button"
-            onClick={() => void handleSend()}
-            disabled={sendDisabled}
-            aria-label="Send message"
-            title={
-              inflight
-                ? "Waiting for response..."
-                : attachment?.status === "processing"
-                  ? "Document still processing..."
-                  : !input.trim()
-                    ? "Type a message to send"
-                    : undefined
-            }
-            className={`w-8 h-8 rounded-lg flex items-center justify-center transition ${
-              sendDisabled
-                ? "bg-surface cursor-not-allowed opacity-50"
-                : "bg-accent hover:bg-accent/80 cursor-pointer text-background"
-            }`}
-          >
-            <Send size={15} />
-          </button>
+          {streaming ? (
+            <button
+              type="button"
+              onClick={stopStreaming}
+              aria-label="Stop generating"
+              title="Stop generating"
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition bg-red-500/80 hover:bg-red-500 cursor-pointer text-white"
+            >
+              <Square size={13} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleSend()}
+              disabled={sendDisabled}
+              aria-label="Send message"
+              title={
+                inflight
+                  ? "Waiting for response..."
+                  : attachment?.status === "processing"
+                    ? "Document still processing..."
+                    : !input.trim()
+                      ? "Type a message to send"
+                      : undefined
+              }
+              className={`w-8 h-8 rounded-lg flex items-center justify-center transition ${
+                sendDisabled
+                  ? "bg-surface cursor-not-allowed opacity-50"
+                  : "bg-accent hover:bg-accent/80 cursor-pointer text-background"
+              }`}
+            >
+              <Send size={15} />
+            </button>
+          )}
         </div>
         <p className="text-center text-xs text-muted mt-2">
           ChatVector may make mistakes. Always verify important information.

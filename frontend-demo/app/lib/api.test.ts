@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { sendMessage, sendBatchMessage, sendSynthesizedBatchMessage, ChatError, getDocumentStatus } from "./api";
+import { sendMessage, sendMessageStream, sendBatchMessage, sendSynthesizedBatchMessage, ChatError, StreamingDisabledError, getDocumentStatus } from "./api";
 
 const MOCK_RESPONSE = {
   question: "What is RAG?",
@@ -445,5 +445,133 @@ describe("getDocumentStatus", () => {
       stage: "queued",
       queue_position: 1,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sendMessageStream
+// ---------------------------------------------------------------------------
+
+/** Create a ReadableStream that emits raw SSE text. */
+function createSSEStream(events: string): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(events));
+      controller.close();
+    },
+  });
+}
+
+describe("sendMessageStream", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("yields token, complete, and done events from a successful stream", async () => {
+    const sseBody = [
+      'event: token\ndata: "Hello"\n\n',
+      'event: token\ndata: " world"\n\n',
+      'event: complete\ndata: {"type":"complete","sources":[],"latency_ms":200,"model":"m"}\n\n',
+      'event: done\ndata: [DONE]\n\n',
+    ].join("");
+
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(createSSEStream(sseBody), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      })
+    );
+
+    const events = [];
+    for await (const event of sendMessageStream("q", "doc-123")) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      { type: "token", text: "Hello" },
+      { type: "token", text: " world" },
+      { type: "complete", sources: [], latency_ms: 200, model: "m" },
+      { type: "done" },
+    ]);
+  });
+
+  it("sends correct headers and body", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(createSSEStream("event: done\ndata: [DONE]\n\n"), {
+        status: 200,
+      })
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    for await (const _ of sendMessageStream("What is RAG?", "doc-123")) {
+      // consume
+    }
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/chat/stream"),
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Id": "test-session-id",
+        },
+        body: JSON.stringify({
+          question: "What is RAG?",
+          doc_id: "doc-123",
+          match_count: 5,
+          session_id: "test-session-id",
+        }),
+      })
+    );
+  });
+
+  it("throws StreamingDisabledError on 400 with streaming_disabled", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: { code: "streaming_disabled", message: "Streaming disabled." },
+        }),
+        { status: 400 }
+      )
+    );
+
+    const gen = sendMessageStream("q", "doc-123");
+    await expect(gen.next()).rejects.toThrow(StreamingDisabledError);
+  });
+
+  it("throws ChatError no_document on 404", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(null, { status: 404 })
+    );
+
+    const gen = sendMessageStream("q", "bad-id");
+    await expect(gen.next()).rejects.toThrow(ChatError);
+    const gen2 = sendMessageStream("q", "bad-id");
+    await expect(gen2.next()).rejects.toMatchObject({ code: "no_document" });
+  });
+
+  it("throws ChatError backend_unreachable on network failure", async () => {
+    vi.mocked(globalThis.fetch).mockRejectedValue(new TypeError("fetch failed"));
+
+    const gen = sendMessageStream("q", "doc-123");
+    await expect(gen.next()).rejects.toThrow(ChatError);
+    const gen2 = sendMessageStream("q", "doc-123");
+    await expect(gen2.next()).rejects.toMatchObject({ code: "backend_unreachable" });
+  });
+
+  it("throws ChatError unexpected on 500", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(null, { status: 500 })
+    );
+
+    const gen = sendMessageStream("q", "doc-123");
+    await expect(gen.next()).rejects.toThrow(ChatError);
   });
 });
