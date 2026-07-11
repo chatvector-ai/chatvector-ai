@@ -3,7 +3,12 @@
 import type { RefObject } from "react";
 import { useState, useEffect, useRef } from "react";
 import { Bot, User } from "lucide-react";
-import type { ChatSource, Message } from "../../lib/api";
+import { softFailureMessage, type Message } from "../../lib/api";
+import {
+  deduplicatedSources,
+  formatCitationLine,
+  formatResponseMetadata,
+} from "../../lib/citations";
 
 type Props = {
   messages: Message[];
@@ -11,21 +16,11 @@ type Props = {
   bottomRef: RefObject<HTMLDivElement | null>;
 };
 
-function deduplicatedSources(sources: ChatSource[]): ChatSource[] {
-  const seen = new Set<string>();
-  return sources.filter((s) => {
-    const key = `${s.file_name}::${s.page_number ?? "null"}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-// Welcome message (id: 1) and error messages (no sources/chunks) skip animation.
+// Welcome message (id: 1) and transport errors (no sources/chunks) skip animation.
 function shouldAnimate(msg: Message): boolean {
   if (msg.sender !== "ai") return false;
   if (msg.id === 1) return false;
-  if (msg.sources === undefined && msg.chunks === undefined) return false;
+  if (msg.sources === undefined && msg.chunks === undefined && !msg.error) return false;
   return true;
 }
 
@@ -96,7 +91,12 @@ export default function MessageList({ messages, inflight, bottomRef }: Props) {
       {messages.map((msg) => {
         const isAnimating = msg.id === animatingId;
         const text = isAnimating ? displayedText : msg.text;
-        const sourcesVisible = isAnimating ? animDone : true;
+        const detailsVisible = isAnimating ? animDone : true;
+        const metadata = formatResponseMetadata({
+          chunks: msg.chunks,
+          model: msg.model,
+          latency_ms: msg.latency_ms,
+        });
 
         return (
           <div
@@ -119,21 +119,28 @@ export default function MessageList({ messages, inflight, bottomRef }: Props) {
                   : "bg-accent text-background rounded-br-none"
               }`}
             >
+              {msg.sender === "ai" && msg.error && detailsVisible && (
+                <p className="mb-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-500">
+                  {softFailureMessage(msg.error)}
+                </p>
+              )}
               {text}
-              {msg.sender === "ai" && msg.sources && msg.sources.length > 0 && sourcesVisible && (
+              {msg.sender === "ai" && msg.sources && msg.sources.length > 0 && detailsVisible && (
                 <div className="mt-2 flex flex-col gap-1">
-                  {deduplicatedSources(msg.sources).map((s, i) => (
-                    <span key={i} className="text-sm text-muted">
-                      {s.file_name}
-                      {s.page_number != null ? ` · p.${s.page_number}` : ""}
+                  {deduplicatedSources(msg.sources).map((source, index) => (
+                    <span key={index} className="text-sm text-muted">
+                      {formatCitationLine(source)}
                     </span>
                   ))}
                 </div>
               )}
-              {msg.sender === "ai" && msg.chunks === 0 && sourcesVisible && (
+              {msg.sender === "ai" && msg.chunks === 0 && detailsVisible && (
                 <p className="mt-1 text-sm text-muted italic">
                   No relevant content found in this document.
                 </p>
+              )}
+              {msg.sender === "ai" && metadata && detailsVisible && (
+                <p className="mt-2 text-xs text-muted">{metadata}</p>
               )}
             </div>
           </div>
