@@ -9,13 +9,18 @@ import ThemeToggle from "./ThemeToggle";
 
 const GITHUB_REPO = "https://github.com/chatvector-ai/chatvector-ai";
 
-const MAIN_NAV_LINKS = [
-  { label: "About", href: "/about" },
+const ABOUT_LINK = { label: "About", href: "/about" } as const;
+
+const DEMO_LINKS = [
   { label: "Chat", href: "/chat" },
   { label: "Batch", href: "/batch" },
   { label: "Status", href: "/status" },
-  { label: "Contributors", href: "/contributors" },
 ] as const;
+
+const CONTRIBUTORS_LINK = {
+  label: "Contributors",
+  href: "/contributors",
+} as const;
 
 const DOC_LINKS = [
   { label: "Getting Started", href: "/getting-started" },
@@ -25,16 +30,21 @@ const DOC_LINKS = [
   { label: "Contributing", href: "/contributing" },
 ] as const;
 
-function isDocsActive(pathname: string | null): boolean {
+function isNavGroupActive(
+  pathname: string | null,
+  links: ReadonlyArray<{ href: string }>,
+): boolean {
   if (!pathname) return false;
-  return DOC_LINKS.some((l) => pathname.startsWith(l.href));
+  return links.some((link) => pathname.startsWith(link.href));
 }
 
 function NavLinks({
+  links,
   onNavigate,
   pathname,
   centerOnMobile = false,
 }: {
+  links: ReadonlyArray<{ label: string; href: string }>;
   onNavigate?: () => void;
   pathname: string | null;
   /** Stack + center link text (hamburger menu on small screens only). */
@@ -42,7 +52,7 @@ function NavLinks({
 }) {
   return (
     <>
-      {MAIN_NAV_LINKS.map(({ label, href }) => {
+      {links.map(({ label, href }) => {
         const isActive = pathname === href;
         return (
           <li
@@ -87,11 +97,14 @@ function GitHubNavLink() {
 export default function Navigation() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [demoOpen, setDemoOpen] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
   /** Desktop flyout: sync aria-expanded with hover / focus-within */
+  const [demoFlyoutOpen, setDemoFlyoutOpen] = useState(false);
   const [docsFlyoutOpen, setDocsFlyoutOpen] = useState(false);
 
-  const docsActive = isDocsActive(pathname);
+  const demoActive = isNavGroupActive(pathname, DEMO_LINKS);
+  const docsActive = isNavGroupActive(pathname, DOC_LINKS);
 
   return (
     <header
@@ -127,7 +140,54 @@ export default function Navigation() {
         </Link>
 
         <ul className="m-0 hidden list-none flex-1 flex-row flex-wrap items-center justify-center gap-6 p-0 md:flex lg:gap-8">
-          <NavLinks pathname={pathname} />
+          <NavLinks links={[ABOUT_LINK]} pathname={pathname} />
+          <li
+            className="group relative"
+            onMouseEnter={() => setDemoFlyoutOpen(true)}
+            onMouseLeave={() => setDemoFlyoutOpen(false)}
+            onFocusCapture={() => setDemoFlyoutOpen(true)}
+            onBlurCapture={(e) => {
+              const next = e.relatedTarget;
+              if (next instanceof Node && e.currentTarget.contains(next))
+                return;
+              setDemoFlyoutOpen(false);
+            }}
+          >
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={demoFlyoutOpen}
+              aria-controls="demo-menu"
+              className={`flex cursor-pointer text-[1.15rem] items-center gap-1 border-0 bg-transparent p-0 text-base no-underline transition-colors duration-200 ${
+                demoActive ? "text-accent" : "text-foreground hover:text-accent"
+              }`}
+            >
+              Demo
+              <ChevronDown
+                aria-hidden
+                className="size-[1em] shrink-0 transition-transform duration-200 group-hover:rotate-180 group-focus-within:rotate-180"
+              />
+            </button>
+            <div className="pointer-events-none invisible absolute left-0 top-full z-50 pt-2 opacity-0 transition-[opacity,visibility] duration-200 group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:opacity-100">
+              <div
+                id="demo-menu"
+                className="min-w-[180px] rounded-xl border border-border bg-surface py-2"
+                role="menu"
+              >
+                {DEMO_LINKS.map(({ label, href }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    role="menuitem"
+                    className="block px-4 py-2 text-base text-muted no-underline transition-colors hover:text-foreground"
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </li>
+          <NavLinks links={[CONTRIBUTORS_LINK]} pathname={pathname} />
           <li
             className="group relative"
             onMouseEnter={() => setDocsFlyoutOpen(true)}
@@ -195,6 +255,56 @@ export default function Navigation() {
         <div className="flex flex-col items-center gap-4 border-t border-border p-4 md:hidden">
           <ul className="m-0 flex w-full list-none flex-col items-center gap-4 p-0">
             <NavLinks
+              links={[ABOUT_LINK]}
+              pathname={pathname}
+              centerOnMobile
+              onNavigate={() => setMobileOpen(false)}
+            />
+            <li className="w-full text-center">
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={demoOpen}
+                aria-controls="demo-menu-mobile"
+                onClick={() => setDemoOpen((o) => !o)}
+                className={`inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-base no-underline transition-colors duration-200 ${
+                  demoActive
+                    ? "text-accent"
+                    : "text-foreground hover:text-accent"
+                }`}
+              >
+                Demo
+                <ChevronDown
+                  aria-hidden
+                  className={`size-[1em] shrink-0 transition-transform duration-200 ${
+                    demoOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {demoOpen ? (
+                <ul
+                  id="demo-menu-mobile"
+                  className="m-0 mt-3 flex list-none flex-col items-stretch gap-2 p-0 pl-4"
+                >
+                  {DEMO_LINKS.map(({ label, href }) => (
+                    <li key={href} className="w-full text-center">
+                      <Link
+                        href={href}
+                        onClick={() => {
+                          setMobileOpen(false);
+                          setDemoOpen(false);
+                        }}
+                        className="block px-4 py-2 text-base text-foreground no-underline transition-colors hover:text-accent"
+                      >
+                        {label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+            <NavLinks
+              links={[CONTRIBUTORS_LINK]}
               pathname={pathname}
               centerOnMobile
               onNavigate={() => setMobileOpen(false)}
