@@ -292,6 +292,10 @@ python -m backend.cli create-tenant-key --tenant "My Org" --tenant-id my-org
 
 The raw key is printed once and never stored. Set it in all API clients as the Bearer token.
 
+**Auth non-goals:** ChatVector does not provide user login/signup, OAuth, RBAC, billing, admin dashboards, or an API-key management UI. Keys are created via CLI (`python -m backend.cli create-tenant-key`) or direct DB updates; optional `external_user_id` mapping for developer-side identity is on the roadmap.
+
+**Session persistence:** Chat message turns are stored in the `chat_messages` table (PostgreSQL) and survive restarts. Session metadata — the in-memory registry in `backend/services/session_service.py` (`_SESSIONS`), including `document_ids` bound to a session — is **process-local**. It is lost on restart and not shared across API workers (e.g. `docker-compose.prod.yml` runs `--workers 2`). Integrators should treat session IDs as durable for message history but not assume document bindings survive redeploys until durable session metadata ships.
+
 ---
 
 ## Security Hardening
@@ -362,6 +366,14 @@ is still retried after TTL expires. Each result includes `cached` and
 
 ## Vector Search Design
 
+**Retrieval pipeline (shipped):**
+
+- **Scopes** — `session` (default: documents bound to the session) or `tenant` (all tenant documents)
+- **Hybrid retrieval** — pgvector cosine similarity + PostgreSQL full-text search, merged via Reciprocal Rank Fusion (RRF); toggle with `HYBRID_RETRIEVAL_ENABLED`
+- **Reranking** — deterministic similarity + lexical-overlap baseline reranker after fusion
+- **Query transformations** — optional rewrite, expand, and stepback steps using session history context
+- **Citation metadata** — each source includes collapsed `score` and `score_type` (`vector`, `hybrid_rrf`, or `reranked`); per-component score breakdown is not yet exposed
+
 - PostgreSQL with `pgvector` extension
 - Embedding dimension: auto-detected from the configured provider/model (e.g. Gemini → 3072, OpenAI → 1536, Ollama nomic-embed-text → 768)
 - Cosine similarity search via `<=>` operator
@@ -430,6 +442,8 @@ with ChatVectorClient("http://localhost:8000", api_key="cv_live_...") as client:
 - Typed exception hierarchy: `ChatVectorAuthError`, `ChatVectorRateLimitError`,
   `ChatVectorTimeoutError`, `ChatVectorAPIError`
 - Context manager support
+
+**Current gaps:** no async client; no ingestion SSE client (document status stream is HTTP/SSE only); no per-component retrieval score breakdown in SDK models.
 
 Install: `pip install ./sdk/python` — see [sdk/python/README.md](sdk/python/README.md)
 

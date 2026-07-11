@@ -12,7 +12,9 @@ This folder contains the ChatVector frontend demo. It is a Next.js app for tryin
 
 The header groups **Demo** (Chat, Batch, Status) and **Docs** (Getting Started, Architecture, SDK, Roadmap, Contributing) links.
 
-**Streaming status:** ingestion progress uses SSE (`/documents/{id}/status/stream`) with polling fallback. Chat in this demo still uses non-streaming `POST /chat` — backend `/chat/stream` and the Python SDK streaming client are available for integrators.
+**Streaming status:** ingestion progress uses SSE (`/documents/{id}/status/stream`) with polling fallback. While a document is `queued`, the backend may return `queue_position` (1 = next to process); the demo shows this on attachment chips when position is greater than 1.
+
+Chat in this demo still uses non-streaming `POST /chat` — backend `/chat/stream` and the Python SDK streaming client are available for integrators. The chat UI simulates typing with a character-by-character animation in `MessageList.tsx`; this is **not** real SSE token streaming.
 
 ## Prerequisites
 

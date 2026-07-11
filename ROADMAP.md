@@ -102,6 +102,8 @@ This phase introduces the primary architectural shift. Phase 3B and 3C work buil
 - Explicit session management endpoints: create, list, get, delete
 - Frontend anonymous sessions and session sidebar
 
+> **Session durability note:** `chat_messages` rows are persisted to PostgreSQL and survive restarts. Session metadata — including `document_ids` bound to a session — is held in an in-memory registry (`session_service._SESSIONS`) and is **not** durable across process restarts or shared across API workers. Chat history remains available after restart, but session-scoped document bindings may be lost until sessions are recreated.
+
 **Context injection for answer generation**
 
 - Recent conversation history loaded into the LLM context window
@@ -152,7 +154,11 @@ This phase introduces the primary architectural shift. Phase 3B and 3C work buil
 
 **Frontend demo chat SSE**
 
-- Backend `/chat/stream` is ready; the demo chat page still uses non-streaming `POST /chat`
+- Backend `/chat/stream` is ready; the demo chat page still uses non-streaming `POST /chat` with a simulated character-by-character typing animation
+
+**Durable session metadata**
+
+- Postgres-backed session registry and `document_ids` bindings (messages are already persisted; metadata is process-local today)
 
 **Distributed rate limiting**
 
@@ -239,7 +245,9 @@ Build on the platform foundation to improve response quality and expand develope
 **Inspection and observability tooling**
 
 - Query transformation visualization (opt-in debug metadata beyond current `retrieval_debug` payloads)
+- Richer per-component retrieval score breakdown (today: collapsed `score` + `score_type` on citations)
 - Async Python SDK client
+- Ingestion SSE client in Python SDK (document status stream not exposed in SDK)
 
 ---
 
@@ -313,6 +321,8 @@ ChatVector is intentionally **not** building the following:
 | Billing or subscriptions | Out of scope for an open-source backend engine |
 | Collaborative workspaces | Different product category |
 | Admin dashboards | Not needed for a developer tool |
+| API-key lifecycle UI (rotation, revocation, user mapping) | CLI and DB updates only; programmatic tooling is roadmap |
+| OAuth, RBAC, or per-user login | API-key auth only; application-layer identity is the developer's responsibility |
 | Full SaaS product layer | Conflicts with backend-first positioning |
 | Elasticsearch dependency | pgvector + PostgreSQL full-text covers the same ground at this scale |
 
@@ -332,7 +342,8 @@ Progress toward the Phase 3 north star:
 - ✅ Python SDK with sessions, streaming, and retrieval scope support
 - ✅ SQLAlchemy/PostgreSQL as the only database backend (`DATABASE_URL` in all environments)
 - ✅ Frontend demo: chat, batch compare/synthesize, status, retrieval controls, retrieval inspector
-- ⏳ Frontend demo chat SSE streaming (backend ready; UI still uses `POST /chat`)
+- ⏳ Frontend demo chat SSE streaming (backend ready; UI still uses `POST /chat` with simulated typing)
+- ⏳ Durable Postgres-backed session metadata (messages persisted; session registry is in-memory)
 - ⏳ Node.js/TypeScript SDK planned
 - ⏳ Redis-backed distributed rate-limit storage across workers
 - ⏳ Documentation site, examples, and advanced inspection tooling in progress
