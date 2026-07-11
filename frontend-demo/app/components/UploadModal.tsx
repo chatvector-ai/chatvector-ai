@@ -359,7 +359,7 @@ export default function UploadModal({
                   aria-hidden
                 />
               </div>
-              <p className="max-w-[280px] text-base font-medium text-red-400">
+              <p className="max-w-[280px] whitespace-pre-wrap text-base font-medium text-red-400">
                 {uploadErrorMessage ?? "Upload failed. Please try again."}
               </p>
               <button

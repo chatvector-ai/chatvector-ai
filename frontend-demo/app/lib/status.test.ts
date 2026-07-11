@@ -104,7 +104,32 @@ describe("getSystemStatus", () => {
       name: "StatusFetchError",
       kind: "http_error",
       httpStatus: 503,
-      message: expect.stringContaining("HTTP 503"),
+      message: expect.stringContaining("Service unavailable"),
+    });
+  });
+
+  it("surfaces structured backend error messages for JSON error responses", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: {
+            code: "rate_limited",
+            message: "Too many requests. Please slow down.",
+          },
+        }),
+        {
+          status: 503,
+          statusText: "Service Unavailable",
+          headers: { "Content-Type": "application/json" },
+        }
+      )
+    );
+
+    await expect(getSystemStatus()).rejects.toMatchObject({
+      name: "StatusFetchError",
+      kind: "http_error",
+      httpStatus: 503,
+      message: expect.stringContaining("Too many requests. Please slow down."),
     });
   });
 

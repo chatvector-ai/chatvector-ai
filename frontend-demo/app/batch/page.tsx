@@ -396,9 +396,9 @@ export default function BatchPage() {
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-500">
-              <AlertCircle size={16} className="shrink-0" />
-              {error}
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-500">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span className="whitespace-pre-wrap">{error}</span>
             </div>
           )}
 

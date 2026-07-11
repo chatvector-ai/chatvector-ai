@@ -201,18 +201,16 @@ export function useChat(sessionId: string | null, retrievalSettings: RetrievalSe
   const handleBeforeUpload = async () => {
     if (!attachment) return;
     const out = await deleteDocument(attachment.documentId);
-    if (out === "gone") {
+    if (out.status === "gone") {
       removeUploadedDocument(attachment.documentId);
       setAttachment(null);
       setRemoveError(null);
       return;
     }
-    if (out === "conflict") {
-      throw new Error(
-        "Wait for the current document to finish processing, or remove it, before uploading another."
-      );
+    if (out.status === "conflict") {
+      throw new Error(out.message);
     }
-    throw new Error("Could not remove the previous document. Try again.");
+    throw new Error(out.message);
   };
 
   const handleUploadAccepted = (payload: {
@@ -240,16 +238,16 @@ export function useChat(sessionId: string | null, retrievalSettings: RetrievalSe
     setRemoveError(null);
     try {
       const out = await deleteDocument(attachment.documentId);
-      if (out === "gone") {
+      if (out.status === "gone") {
         removeUploadedDocument(attachment.documentId);
         setAttachment(null);
         return;
       }
-      if (out === "conflict") {
-        setRemoveError("Can't remove while the document is queued or processing.");
+      if (out.status === "conflict") {
+        setRemoveError(out.message);
         return;
       }
-      setRemoveError("Could not remove the document. Try again.");
+      setRemoveError(out.message);
     } catch {
       setRemoveError("Could not remove the document. Try again.");
     }
