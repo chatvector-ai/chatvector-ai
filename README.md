@@ -126,11 +126,12 @@ Phases 1, 2, and 2.5 are complete. Phase 3 platform work is largely shipped — 
 - ✅ Live system status page
 - ✅ Structured API error display and grouped Demo/Docs navigation
 - ✅ Session sidebar (client-side) and responsive design with dark/light theme
-- 🚧 Real-time chat SSE streaming in the demo UI (backend `/chat/stream` is ready; demo still uses `POST /chat`)
+- 🚧 Real-time chat SSE streaming in the demo UI (backend `/chat/stream` is ready; demo uses `POST /chat` with simulated typing in `MessageList.tsx`)
 
 **Active Phase 3 work:**
 - 🚧 Node.js/TypeScript SDK (planned)
 - 🚧 Redis-backed distributed rate-limit storage across workers
+- 🚧 Durable Postgres-backed session metadata (messages persisted; session registry is in-memory)
 - 🚧 Frontend demo chat SSE streaming wired to `/chat/stream`
 - 🚧 API-key lifecycle tooling beyond CLI create (rotation, expiration)
 

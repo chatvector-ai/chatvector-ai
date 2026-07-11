@@ -545,8 +545,14 @@ Navigation groups Demo and Docs links in the header. Structured API errors from
 the backend are surfaced in the UI.
 
 **Note:** Ingestion progress uses SSE (`/documents/{id}/status/stream`) with
-polling fallback. Chat in the demo still uses non-streaming `POST /chat` even
-though the backend `/chat/stream` endpoint and Python SDK streaming are available.
+polling fallback. While a document is `queued`, the backend may return
+`queue_position` (1 = next to process); the demo surfaces this on attachment
+chips when position is greater than 1.
+
+Chat in the demo still uses non-streaming `POST /chat` even though the backend
+`/chat/stream` endpoint and Python SDK streaming are available. The chat UI
+simulates typing with a character-by-character animation in
+`MessageList.tsx` — this is **not** real SSE token streaming.
 
 ### Prerequisites
 
