@@ -112,6 +112,32 @@ If `session_id` is omitted, the backend preserves its automatic session-creation
 behavior. Retrieval scope defaults to `"session"`; use `"tenant"` to search across
 all documents for the authenticated tenant.
 
+## Streaming Chat
+
+Stream token-by-token answers over Server-Sent Events without manually parsing SSE.
+
+```python
+from chatvector import ChatVectorClient
+
+with ChatVectorClient(base_url="http://localhost:8000", api_key="cv_live_...") as client:
+    for event in client.stream_chat(
+        question="Summarize this document",
+        doc_id="doc-1",
+        session_id="sess-1",
+        scope="session",
+        timeout=60,
+    ):
+        if event.type == "token":
+            print(event.content, end="")
+        elif event.type == "complete":
+            print(event.sources)
+            print(event.session_id, event.model, event.latency_ms)
+```
+
+The SDK yields typed `token` and `complete` events. Backend `error` events are
+converted into structured SDK exceptions. Legacy `[DONE]` completion markers are
+ignored for backward compatibility.
+
 ## Error Handling
 
 All SDK methods raise typed exceptions:
@@ -141,6 +167,7 @@ See the runnable scripts in [examples](./examples):
 - `check_status.py`
 - `batch_chat.py`
 - `session_chat.py`
+- `stream_chat.py`
 
 ## API Notes
 
