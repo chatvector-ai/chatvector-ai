@@ -1,4 +1,17 @@
+import {
+  clampMatchCount,
+  DEFAULT_MATCH_COUNT,
+  type RetrievalScope,
+} from "./retrievalSettings";
 import { getSessionId } from "./session";
+
+export type { RetrievalScope } from "./retrievalSettings";
+
+export type ChatCallOptions = {
+  matchCount?: number;
+  scope?: RetrievalScope;
+  sessionId?: string | null;
+};
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -123,10 +136,12 @@ export function softFailureMessage(error?: ChatResponse["error"]): string {
 export async function sendMessage(
   question: string,
   docId: string,
-  matchCount = 5,
-  sessionIdOverride?: string | null
+  options: ChatCallOptions = {}
 ): Promise<ChatResponse> {
-  const sessionId = sessionIdOverride !== undefined ? sessionIdOverride : getSessionId();
+  const sessionId =
+    options.sessionId !== undefined ? options.sessionId : getSessionId();
+  const matchCount = clampMatchCount(options.matchCount ?? DEFAULT_MATCH_COUNT);
+  const scope = options.scope ?? "session";
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -136,6 +151,7 @@ export async function sendMessage(
     question,
     doc_id: docId,
     match_count: matchCount,
+    scope,
   };
 
   if (sessionId !== null) {
@@ -302,18 +318,21 @@ export type BatchChatResponse = {
 export async function sendBatchMessage(
   question: string,
   docIds: string[],
-  matchCount = 5,
-  sessionIdOverride?: string | null
+  options: ChatCallOptions = {}
 ): Promise<BatchChatResponse> {
+  const matchCount = clampMatchCount(options.matchCount ?? DEFAULT_MATCH_COUNT);
+  const scope = options.scope ?? "session";
+
   return postBatchChat(
     {
+      scope,
       queries: docIds.map((docId) => ({
         question,
         doc_ids: [docId],
         match_count: matchCount,
       })),
     },
-    sessionIdOverride
+    options.sessionId
   );
 }
 
@@ -325,11 +344,14 @@ export async function sendBatchMessage(
 export async function sendSynthesizedBatchMessage(
   question: string,
   docIds: string[],
-  matchCount = 5,
-  sessionIdOverride?: string | null
+  options: ChatCallOptions = {}
 ): Promise<BatchChatResponse> {
+  const matchCount = clampMatchCount(options.matchCount ?? DEFAULT_MATCH_COUNT);
+  const scope = options.scope ?? "session";
+
   return postBatchChat(
     {
+      scope,
       queries: [
         {
           question,
@@ -338,7 +360,7 @@ export async function sendSynthesizedBatchMessage(
         },
       ],
     },
-    sessionIdOverride
+    options.sessionId
   );
 }
 

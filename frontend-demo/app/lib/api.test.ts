@@ -46,6 +46,52 @@ describe("sendMessage", () => {
           question: "What is RAG?",
           doc_id: "doc-123",
           match_count: 5,
+          scope: "session",
+          session_id: "test-session-id",
+        }),
+      })
+    );
+  });
+
+  it("passes custom scope and match_count when provided", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify(MOCK_RESPONSE), { status: 200 })
+    );
+
+    await sendMessage("What is RAG?", "doc-123", {
+      matchCount: 12,
+      scope: "tenant",
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/chat"),
+      expect.objectContaining({
+        body: JSON.stringify({
+          question: "What is RAG?",
+          doc_id: "doc-123",
+          match_count: 12,
+          scope: "tenant",
+          session_id: "test-session-id",
+        }),
+      })
+    );
+  });
+
+  it("clamps out-of-range match_count before sending", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify(MOCK_RESPONSE), { status: 200 })
+    );
+
+    await sendMessage("q", "doc-123", { matchCount: 99 });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        body: JSON.stringify({
+          question: "q",
+          doc_id: "doc-123",
+          match_count: 20,
+          scope: "session",
           session_id: "test-session-id",
         }),
       })
@@ -212,9 +258,34 @@ describe("sendBatchMessage", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
+          scope: "session",
           queries: [
             { question: "Summary?", doc_ids: ["doc-1"], match_count: 5 },
             { question: "Summary?", doc_ids: ["doc-2"], match_count: 5 },
+          ],
+          session_id: "test-session-id",
+        }),
+      })
+    );
+  });
+
+  it("sends batch-level scope when provided", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify(BATCH_RESPONSE), { status: 200 })
+    );
+
+    await sendBatchMessage("Summary?", ["doc-1"], {
+      matchCount: 8,
+      scope: "tenant",
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/chat/batch"),
+      expect.objectContaining({
+        body: JSON.stringify({
+          scope: "tenant",
+          queries: [
+            { question: "Summary?", doc_ids: ["doc-1"], match_count: 8 },
           ],
           session_id: "test-session-id",
         }),
@@ -295,6 +366,7 @@ describe("sendSynthesizedBatchMessage", () => {
           "X-Session-Id": "test-session-id",
         },
         body: JSON.stringify({
+          scope: "session",
           queries: [
             {
               question: "Cross-doc question?",
