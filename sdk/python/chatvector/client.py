@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import mimetypes
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 import httpx
 
 from ._retry import WantsRetry, retry_sync
+from ._sse import iter_stream_chat_events, map_stream_error, raise_for_stream_response
 from .exceptions import (
     ChatVectorAPIError,
     ChatVectorAuthError,
@@ -25,6 +27,7 @@ from .models import (
     RetrievalScope,
     Session,
     SessionListResponse,
+    StreamChatEvent,
 )
 
 JSONDict = dict[str, Any]
@@ -210,6 +213,71 @@ class ChatVectorClient:
             payload["scope"] = scope
         response_payload = self._request_json("POST", "chat", json=payload)
         return ChatResponse.from_dict(response_payload)
+
+    def stream_chat(
+        self,
+        question: str,
+        doc_id: str,
+        match_count: int = 5,
+        session_id: str | None = None,
+        scope: RetrievalScope | None = None,
+        timeout: float | httpx.Timeout | None = None,
+    ) -> Iterator[StreamChatEvent]:
+        """
+        Stream a chat answer as typed Server-Sent Events.
+
+        Args:
+            question: User question to answer.
+            doc_id: Document identifier to search against.
+            match_count: Number of matching chunks to retrieve.
+            session_id: Optional session identifier for conversation continuity.
+            scope: Retrieval scope — ``"session"`` (default) or ``"tenant"``.
+            timeout: Optional per-request timeout override.
+
+        Yields:
+            Token and completion events from the streaming API.
+
+        Raises:
+            ChatVectorAPIError: If the stream fails before or during delivery.
+        """
+        payload: JSONDict = {
+            "question": question,
+            "doc_id": doc_id,
+            "match_count": match_count,
+        }
+        if session_id is not None:
+            payload["session_id"] = session_id
+        if scope is not None:
+            payload["scope"] = scope
+
+        request_kwargs: JSONDict = {"json": payload}
+        if timeout is not None:
+            request_kwargs["timeout"] = timeout
+
+        return self._iter_stream_chat_events(request_kwargs)
+
+    def _iter_stream_chat_events(self, request_kwargs: JSONDict) -> Iterator[StreamChatEvent]:
+        """Open a streaming chat request and yield parsed SSE events."""
+        try:
+            with self._client.stream("POST", "chat/stream", **request_kwargs) as response:
+                raise_for_stream_response(response, self._map_http_error)
+                try:
+                    yield from iter_stream_chat_events(
+                        response.iter_lines(),
+                        map_error=map_stream_error,
+                    )
+                finally:
+                    response.close()
+        except httpx.TimeoutException as exc:
+            raise ChatVectorTimeoutError(self._msg_timeout_or_connection()) from exc
+        except (httpx.ConnectError, httpx.NetworkError, httpx.RemoteProtocolError) as exc:
+            raise ChatVectorTimeoutError(self._msg_timeout_or_connection()) from exc
+        except httpx.HTTPStatusError as exc:
+            raise self._map_http_error(exc.response) from exc
+        except httpx.RequestError as exc:
+            raise ChatVectorAPIError(
+                self._msg_unexpected(), details={"error": str(exc)}
+            ) from exc
 
     def batch_chat(
         self,

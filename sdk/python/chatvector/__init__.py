@@ -18,6 +18,8 @@ from .models import (
     RetrievalScope,
     Session,
     SessionListResponse,
+    StreamChatEvent,
+    StreamErrorEvent,
 )
 
 __all__ = [
@@ -36,4 +38,6 @@ __all__ = [
     "RetrievalScope",
     "Session",
     "SessionListResponse",
+    "StreamChatEvent",
+    "StreamErrorEvent",
 ]
