@@ -56,6 +56,7 @@ class _FakeChunk:
     chunk_index: Optional[int] = None
     document_id: Optional[str] = None
     similarity: Optional[float] = 0.85
+    score_type: Optional[str] = "vector"
 
 
 @pytest.mark.asyncio
@@ -105,8 +106,8 @@ async def test_answer_question_for_document_orchestrates_flow():
     assert result["latency_ms"] == 123
     assert result["model"] == "test-model"
     assert result["sources"] == [
-        {"file_name": "doc.pdf", "page_number": 1, "chunk_index": 0, "score": 0.85},
-        {"file_name": "doc.pdf", "page_number": 2, "chunk_index": 1, "score": 0.85},
+        {"file_name": "doc.pdf", "page_number": 1, "chunk_index": 0, "score": 0.85, "score_type": "vector"},
+        {"file_name": "doc.pdf", "page_number": 2, "chunk_index": 1, "score": 0.85, "score_type": "vector"},
     ]
     mock_embeddings.assert_awaited_once_with(["What is this about?"])
     mock_find.assert_awaited_once_with(
@@ -367,8 +368,8 @@ async def test_answer_question_for_document_includes_sources_with_correct_shape(
     assert result["status"] == "ok"
     assert result["doc_id"] == "doc-1"
     assert result["sources"] == [
-        {"file_name": "report.pdf", "page_number": 3, "chunk_index": 0, "score": 0.85},
-        {"file_name": "report.pdf", "page_number": 5, "chunk_index": 1, "score": 0.85},
+        {"file_name": "report.pdf", "page_number": 3, "chunk_index": 0, "score": 0.85, "score_type": "vector"},
+        {"file_name": "report.pdf", "page_number": 5, "chunk_index": 1, "score": 0.85, "score_type": "vector"},
     ]
 
 
@@ -402,7 +403,7 @@ async def test_answer_question_for_document_sources_none_fields_for_txt():
     assert result["status"] == "ok"
     assert result["doc_id"] == "doc-txt"
     assert result["sources"] == [
-        {"file_name": "notes.txt", "page_number": None, "chunk_index": 0, "score": 0.85},
+        {"file_name": "notes.txt", "page_number": None, "chunk_index": 0, "score": 0.85, "score_type": "vector"},
     ]
 
 
@@ -435,7 +436,7 @@ async def test_batch_answer_includes_sources_in_ok_responses():
 
     assert result[0]["status"] == "ok"
     assert result[0]["sources"] == [
-        {"file_name": "slides.pdf", "page_number": 2, "chunk_index": 0, "score": 0.85},
+        {"file_name": "slides.pdf", "page_number": 2, "chunk_index": 0, "score": 0.85, "score_type": "vector"},
     ]
 
 
@@ -630,6 +631,7 @@ async def test_stream_complete_event_includes_sources_and_session_id():
             "page_number": 3,
             "chunk_index": 0,
             "score": 0.85,
+            "score_type": "vector",
         }
     ]
     assert complete_data["model"] == "gemini-test"
