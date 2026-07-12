@@ -16,14 +16,6 @@ SQLAlchemy[asyncio]==2.0.36
 psycopg[binary]==3.3.2
 pgvector==0.4.2
 asyncpg
-postgrest==2.24.0
-
-# -------- Supabase --------
-supabase==2.24.0
-supabase-auth==2.24.0
-supabase-functions==2.24.0
-storage3==2.24.0
-realtime==2.24.0
 
 # -------- Google GenAI --------
 google-genai==1.6.0

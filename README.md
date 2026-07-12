@@ -85,9 +85,9 @@ ChatVector is designed for:
 
 ## 🚀 Current Status
 
-### Phases 1–2.5 Complete | Phase 3 In Progress
+### Phases 1–2.5 Complete | Phase 3 Mostly Shipped
 
-Phases 1, 2, and 2.5 are complete. Phase 3 is actively underway — most backend quality and provider work has shipped, but production API-key enforcement is still in progress. See [ROADMAP.md](ROADMAP.md) for the full breakdown.
+Phases 1, 2, and 2.5 are complete. Phase 3 platform work is largely shipped — API-key authentication, tenant isolation, Python SDK parity, hybrid retrieval, and the expanded frontend demo are in place. Remaining Phase 3 work is focused on ecosystem (Node/TypeScript SDK), distributed rate-limit storage, and frontend chat SSE streaming. See [ROADMAP.md](ROADMAP.md) for the full breakdown.
 
 **What's working today:**
 
@@ -95,40 +95,45 @@ Phases 1, 2, and 2.5 are complete. Phase 3 is actively underway — most backend
 - ✅ PDF and text document ingestion
 - ✅ Configurable chunking strategies (fixed, paragraph, semantic)
 - ✅ Vector embeddings + semantic search via pgvector
+- ✅ PostgreSQL/pgvector via SQLAlchemy in all environments (`DATABASE_URL`)
 - ✅ Hybrid retrieval (PostgreSQL full-text + vector, RRF fusion)
 - ✅ Baseline retrieval reranking (similarity + lexical overlap)
 - ✅ Session-scoped and tenant-wide retrieval modes
-- ✅ LLM-powered answers with source citations and relevance scores
-- ✅ Query transformations (rewrite, expand, stepback)
+- ✅ LLM-powered answers with source citations, relevance scores, and score types
+- ✅ Query transformations (rewrite, expand, stepback) with session-history context
 - ✅ Configurable response personas and system prompt
 - ✅ Session-based chat with persisted conversation history
-- ✅ SSE streaming chat (`/chat/stream`)
+- ✅ SSE streaming chat (`/chat/stream`) with structured `complete` events (citations, `latency_ms`, `model`)
 - ✅ Background ingestion queue with rate limiting, retry, and DLQ
 - ✅ Redis-backed ingestion queue (production default; in-memory fallback for local dev)
+- ✅ Bearer API-key authentication and strict tenant isolation in production
+- ✅ Per-tenant rate limiting on authenticated API routes
+- ✅ Development/test auth bypass with automatic `DEV_TENANT_ID` bootstrap
 - ✅ Structured logging with request ID tracing
 - ✅ Health checks with TTL caching on `/status`
-- ✅ Per-tenant rate limiting on all authenticated API routes
 - ✅ Security headers, CORS hardening, input validation
 - ✅ Production Compose config + GitHub Actions CI
 - ✅ Pluggable LLM providers (Gemini, OpenAI, Ollama, Anthropic Claude)
 - ✅ Pluggable embedding providers (Gemini, OpenAI, Ollama, Voyage AI)
 - ✅ Mixed-provider configurations (e.g. Claude + Voyage)
-- ✅ Response metadata: `latency_ms` and `model` on chat responses
-- ✅ Python client SDK (core synchronous workflows)
+- ✅ Response metadata: `latency_ms` and `model` on chat and batch responses
+- ✅ Python client SDK (upload, status, chat, batch, sessions, streaming, retrieval scopes)
 
 **Frontend Demo**
-- ✅ Document upload with live pipeline stage display and SSE progress
-- ✅ Real-time ingestion status polling
-- ✅ Full RAG chat with source citations and session sidebar
-- ✅ SSE streaming chat, batch query demo, and live system status page
-- ✅ Responsive design with dark developer aesthetic
+- ✅ Document upload with live pipeline stage display and ingestion SSE progress
+- ✅ RAG chat with source citations, retrieval controls, and retrieval inspector
+- ✅ Batch compare and batch synthesize demos
+- ✅ Live system status page
+- ✅ Structured API error display and grouped Demo/Docs navigation
+- ✅ Session sidebar (client-side) and responsive design with dark/light theme
+- 🚧 Real-time chat SSE streaming in the demo UI (backend `/chat/stream` is ready; demo uses `POST /chat` with simulated typing in `MessageList.tsx`)
 
 **Active Phase 3 work:**
-- 🚧 Production API-key authentication and strict tenant enforcement (plumbing scaffolded; validation not yet active)
-- 🚧 Redis-backed distributed rate limiting
-- 🚧 Python SDK parity (sessions, streaming, retrieval scopes)
 - 🚧 Node.js/TypeScript SDK (planned)
-- 🚧 Query transformation debug metadata and retrieval inspection tooling
+- 🚧 Redis-backed distributed rate-limit storage across workers
+- 🚧 Durable Postgres-backed session metadata (messages persisted; session registry is in-memory)
+- 🚧 Frontend demo chat SSE streaming wired to `/chat/stream`
+- 🚧 API-key lifecycle tooling beyond CLI create (rotation, expiration)
 
 ---
 
@@ -153,9 +158,9 @@ Phases 1, 2, and 2.5 are complete. Phase 3 is actively underway — most backend
 
 ### Data Layer
 
-- **PostgreSQL + pgvector** — vector similarity search
-- **SQLAlchemy** (development) / **Supabase** (production)
-- **Strategy pattern** — swap backends without touching business logic
+- **PostgreSQL + pgvector** — vector similarity search via SQLAlchemy in all environments
+- `DATABASE_URL` controls the target database — local Docker, Neon, RDS, Cloud SQL, Supabase Postgres, etc.
+- **Strategy pattern** — DB operations isolated behind a factory; business logic is database-agnostic
 
 ### Reference Frontend (Non-Core)
 
@@ -308,7 +313,7 @@ Frontend runs at http://localhost:3000
 
 ### Python SDK
 
-A synchronous Python client is available today. A Node.js/TypeScript SDK is planned for Phase 3.
+A synchronous Python client covers upload, status polling, non-streaming and streaming chat, batch chat, session management, and retrieval scope options. A Node.js/TypeScript SDK is planned for Phase 3.
 
 ```bash
 pip install ./sdk/python
@@ -316,16 +321,31 @@ pip install ./sdk/python
 ```python
 from chatvector import ChatVectorClient
 
-with ChatVectorClient("http://localhost:8000") as client:
+with ChatVectorClient("http://localhost:8000", api_key="cv_live_...") as client:
     doc = client.upload_document("report.pdf")
     client.wait_for_ready(doc.document_id, timeout=90)
-    answer = client.chat("What are the key findings?", doc.document_id)
+
+    session = client.create_session()
+    answer = client.chat(
+        "What are the key findings?",
+        doc.document_id,
+        session_id=session.id,
+        scope="session",
+    )
     print(answer.answer, answer.latency_ms, answer.model)
     for source in answer.sources:
-        print(source.file_name, source.page_number, source.score)
+        print(source.file_name, source.page_number, source.score, source.score_type)
+
+    for event in client.stream_chat("Summarize in one paragraph.", doc.document_id, session_id=session.id):
+        if event.type == "token":
+            print(event.content, end="")
+        elif event.type == "complete":
+            print(event.latency_ms, event.model, len(event.sources))
 ```
 
-Session management, streaming chat, and retrieval scope options are not yet exposed in the SDK. See [sdk/python/README.md](sdk/python/README.md) for details.
+In development (`APP_ENV=development`), the `api_key` parameter can be omitted — the backend bypasses authentication and attributes requests to `DEV_TENANT_ID`.
+
+See [sdk/python/README.md](sdk/python/README.md) for authentication, error handling, and runnable examples.
 
 ---
 

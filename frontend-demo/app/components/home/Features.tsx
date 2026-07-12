@@ -14,7 +14,7 @@ const FEATURES = [
     color: "var(--blue)",
     bg: "rgba(0,128,255,0.1)",
     title: "Semantic retrieval",
-    desc: "Dense vector search with optional MMR re-ranking for diverse, accurate hits.",
+    desc: "Hybrid vector + PostgreSQL full-text search with optional reranking for accurate hits.",
     tag: "retrieval",
   },
   {
@@ -45,8 +45,8 @@ const FEATURES = [
     icon: "⬡",
     color: "rgb(239, 68, 68)",
     bg: "rgba(239,68,68,0.1)",
-    title: "pgvector / Supabase storage",
-    desc: "Document embeddings stored in pgvector via Supabase. Reliable, SQL-native, no separate vector DB to manage.",
+    title: "PostgreSQL / pgvector storage",
+    desc: "Document embeddings stored in PostgreSQL via pgvector. SQL-native, no separate vector DB to manage.",
     tag: "storage",
   },
 ];

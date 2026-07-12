@@ -5,12 +5,15 @@ import { Loader2 } from "lucide-react";
 import UploadModal from "../components/UploadModal";
 import MessageList from "../components/chat/MessageList";
 import ChatInput from "../components/chat/ChatInput";
+import RetrievalSettingsPanel from "../components/RetrievalSettingsPanel";
 import { useChat } from "../lib/hooks/useChat";
+import { useRetrievalSettings } from "../lib/hooks/useRetrievalSettings";
 import { useSessionManager } from "../lib/hooks/useSessionManager";
 
 export default function ChatPage() {
   const [showModal, setShowModal] = useState(false);
   const { sessions, activeSessionId, createNewSession, switchSession, isLoaded } = useSessionManager();
+  const { settings, setScope, setMatchCount, loaded: retrievalLoaded } = useRetrievalSettings();
 
   const {
     messages,
@@ -29,9 +32,9 @@ export default function ChatPage() {
     handleUploadAccepted,
     handleRemoveAttachment,
     stopStreaming,
-  } = useChat(activeSessionId);
+  } = useChat(activeSessionId, settings);
 
-  if (!isLoaded) {
+  if (!isLoaded || !retrievalLoaded) {
     return (
       <div 
         className="flex h-full w-full flex-col items-center justify-center gap-3 bg-background text-muted"
@@ -101,6 +104,14 @@ export default function ChatPage() {
 
         <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden">
           <MessageList messages={messages} inflight={inflight} streaming={streaming} bottomRef={bottomRef} />
+
+          <div className="shrink-0 px-4 pb-2">
+            <RetrievalSettingsPanel
+              settings={settings}
+              onScopeChange={setScope}
+              onMatchCountChange={setMatchCount}
+            />
+          </div>
 
           <ChatInput
             input={input}

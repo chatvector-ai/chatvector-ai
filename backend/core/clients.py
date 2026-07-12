@@ -1,40 +1,8 @@
-from supabase import ClientOptions, create_client
 from redis.asyncio import Redis
 from core.config import config
 import logging
 
 logger = logging.getLogger(__name__)
-
-
-class _LazySupabaseClient:
-    """Lazy-initializing supabase client proxy.
-
-    Accessing any attribute will create the real client using values from
-    `backend/core/.env` or environment variables. This avoids creating the
-    client at import time (which causes the app to crash if creds are missing).
-    """
-    def __init__(self):
-        self._client = None
-
-    def _ensure_client(self):
-        if self._client is None:
-            if not config.SUPABASE_URL or not config.SUPABASE_KEY:
-                raise RuntimeError(
-                    "Supabase credentials are not set. Set SUPABASE_URL and SUPABASE_KEY in backend/core/.env or environment variables."
-                )
-            self._client = create_client(
-                config.SUPABASE_URL,
-                config.SUPABASE_KEY,
-                options=ClientOptions(
-                    postgrest_client_timeout=config.SUPABASE_HTTP_TIMEOUT_SEC,
-                    storage_client_timeout=config.SUPABASE_HTTP_TIMEOUT_SEC,
-                ),
-            )
-            logger.info("Supabase client initialized successfully.")
-
-    def __getattr__(self, name):
-        self._ensure_client()
-        return getattr(self._client, name)
 
 
 class _LazyRedisClient:
@@ -52,6 +20,4 @@ class _LazyRedisClient:
         return getattr(self._client, name)
 
 
-# Export objects for backwards compatibility and easy access
-supabase_client = _LazySupabaseClient()
 redis_client = _LazyRedisClient()

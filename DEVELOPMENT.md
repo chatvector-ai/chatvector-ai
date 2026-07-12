@@ -129,7 +129,8 @@ The database initializes automatically with:
 - `pgvector` extension
 - `documents` table
 - `document_chunks` table
-- `match_chunks` similarity function
+- Legacy SQL functions (`match_chunks`, `delete_document_atomic`) retained for
+  existing databases — not called by current SQLAlchemy runtime code
 
 Verify setup:
 
@@ -139,12 +140,8 @@ docker compose exec db psql -U postgres -d postgres
 \dx
 \dt
 
--- Dimension depends on the configured embedding model
--- (e.g. 3072 for Gemini, 1536 for OpenAI, 768 for Ollama nomic-embed-text)
-SELECT * FROM match_chunks(
-    array_fill(0::real, ARRAY[<EMBEDDING_DIM>])::vector,
-    1
-) LIMIT 0;
+-- Optional: confirm legacy match_chunks RPC exists (not used by runtime)
+SELECT proname FROM pg_proc WHERE proname = 'match_chunks';
 
 \q
 ```
@@ -165,10 +162,9 @@ async def new_operation(self, param: str) -> str:
     pass
 ```
 
-### 2. Implement in both services
+### 2. Implement in the service
 
-- `db/sqlalchemy_service.py` (development)
-- `db/supabase_service.py` (production)
+- `db/sqlalchemy_service.py` (all environments)
 
 ### 3. Use via factory
 
@@ -178,7 +174,7 @@ import db
 result = await db.new_operation("test")
 ```
 
-The factory automatically selects the correct environment, applies
+The factory always returns `SQLAlchemyService`, applies
 retry logic with timeouts and jitter, and handles logging.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for full details on the
@@ -386,8 +382,8 @@ Docker Compose expands `${VAR}` from your process environment or a
 | Variable              | Required     | Notes                                                           |
 | --------------------- | ------------ | --------------------------------------------------------------- |
 | `GEN_AI_KEY`          | **Required** | Google AI Studio / Gemini API key                               |
-| `DATABASE_URL`        | **Required** | `postgresql+asyncpg://…` pointing at your Postgres instance     |
-| `APP_ENV=production`  | **Required** | Disables `/docs`, enables JSON logging                          |
+| `DATABASE_URL`        | **Required** | `postgresql+asyncpg://…` pointing at PostgreSQL with pgvector enabled |
+| `APP_ENV=production`  | **Required** | Disables `/docs`, enforces Bearer API-key auth, Redis queue default |
 | `CORS_ORIGINS`        | **Required** | Comma-separated list of allowed browser origins                 |
 | `POSTGRES_USER`       | **Required** | Used by `db` service in `docker-compose.prod.yml`               |
 | `POSTGRES_PASSWORD`   | **Required** | As above                                                        |
@@ -534,7 +530,29 @@ cd backend && pytest tests/ -v --tb=short
 
 ## Frontend
 
-The frontend demo lives in `frontend-demo/` and is a Next.js app.
+The frontend demo lives in `frontend-demo/` and is a Next.js app. It is a
+**non-core reference UI** for exercising the backend — not a production client.
+
+### Demo pages
+
+| Page | Path | What it demonstrates |
+| --- | --- | --- |
+| Chat | `/chat` | Upload, session sidebar, retrieval controls, retrieval inspector, cited answers (`POST /chat`) |
+| Batch | `/batch` | Compare and synthesize modes against multiple documents |
+| Status | `/status` | Live backend health and system metrics |
+
+Navigation groups Demo and Docs links in the header. Structured API errors from
+the backend are surfaced in the UI.
+
+**Note:** Ingestion progress uses SSE (`/documents/{id}/status/stream`) with
+polling fallback. While a document is `queued`, the backend may return
+`queue_position` (1 = next to process); the demo surfaces this on attachment
+chips when position is greater than 1.
+
+Chat in the demo still uses non-streaming `POST /chat` even though the backend
+`/chat/stream` endpoint and Python SDK streaming are available. The chat UI
+simulates typing with a character-by-character animation in
+`MessageList.tsx` — this is **not** real SSE token streaming.
 
 ### Prerequisites
 

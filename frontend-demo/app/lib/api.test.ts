@@ -1,5 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { sendMessage, sendMessageStream, sendBatchMessage, sendSynthesizedBatchMessage, ChatError, StreamingDisabledError, getDocumentStatus } from "./api";
+import {
+  sendMessage,
+  sendMessageStream,
+  sendBatchMessage,
+  sendSynthesizedBatchMessage,
+  ChatError,
+  StreamingDisabledError,
+  getDocumentStatus,
+  uploadDocument,
+  deleteDocument,
+} from "./api";
+import { BackendApiError } from "./apiErrors";
 
 const MOCK_RESPONSE = {
   question: "What is RAG?",
@@ -46,6 +57,52 @@ describe("sendMessage", () => {
           question: "What is RAG?",
           doc_id: "doc-123",
           match_count: 5,
+          scope: "session",
+          session_id: "test-session-id",
+        }),
+      })
+    );
+  });
+
+  it("passes custom scope and match_count when provided", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify(MOCK_RESPONSE), { status: 200 })
+    );
+
+    await sendMessage("What is RAG?", "doc-123", {
+      matchCount: 12,
+      scope: "tenant",
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/chat"),
+      expect.objectContaining({
+        body: JSON.stringify({
+          question: "What is RAG?",
+          doc_id: "doc-123",
+          match_count: 12,
+          scope: "tenant",
+          session_id: "test-session-id",
+        }),
+      })
+    );
+  });
+
+  it("clamps out-of-range match_count before sending", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify(MOCK_RESPONSE), { status: 200 })
+    );
+
+    await sendMessage("q", "doc-123", { matchCount: 99 });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        body: JSON.stringify({
+          question: "q",
+          doc_id: "doc-123",
+          match_count: 20,
+          scope: "session",
           session_id: "test-session-id",
         }),
       })
@@ -115,25 +172,67 @@ describe("sendMessage", () => {
     expect(result.answer).toBe(MOCK_RESPONSE.answer);
   });
 
-  it("throws no_document on 404", async () => {
+  it("throws no_document on 404 with structured backend detail", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: {
+            code: "document_not_found",
+            message: "Document not found.",
+          },
+        }),
+        { status: 404 }
+      )
+    );
+
+    await expect(sendMessage("q", "bad-id")).rejects.toMatchObject({
+      code: "no_document",
+      message: "Document not found.",
+      backendCode: "document_not_found",
+    });
+  });
+
+  it("throws no_document with a friendly fallback on bodyless 404", async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(null, { status: 404 })
     );
 
-    await expect(sendMessage("q", "bad-id")).rejects.toThrow(ChatError);
     await expect(sendMessage("q", "bad-id")).rejects.toMatchObject({
       code: "no_document",
+      message: "Document not found. It may have been deleted.",
     });
   });
 
-  it("throws unexpected on 422", async () => {
+  it("throws api_error with validation field hints on 422", async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
-      new Response(null, { status: 422 })
+      new Response(
+        JSON.stringify({
+          detail: {
+            code: "validation_error",
+            message: "Request validation failed",
+            fields: [
+              {
+                loc: ["body", "question"],
+                msg: "ensure this value has at most 2000 characters",
+              },
+            ],
+          },
+        }),
+        { status: 422 }
+      )
     );
 
-    await expect(sendMessage("q", "bad-id")).rejects.toThrow(ChatError);
     await expect(sendMessage("q", "bad-id")).rejects.toMatchObject({
-      code: "unexpected",
+      code: "api_error",
+      backendCode: "validation_error",
+      message:
+        "Request validation failed\nquestion: ensure this value has at most 2000 characters",
+      fields: [
+        {
+          loc: ["body", "question"],
+          msg: "ensure this value has at most 2000 characters",
+        },
+      ],
     });
   });
 
@@ -146,14 +245,14 @@ describe("sendMessage", () => {
     });
   });
 
-  it("throws unexpected on 500", async () => {
+  it("throws api_error with a fallback message on 500", async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(null, { status: 500 })
     );
 
-    await expect(sendMessage("q", "doc-123")).rejects.toThrow(ChatError);
     await expect(sendMessage("q", "doc-123")).rejects.toMatchObject({
-      code: "unexpected",
+      code: "api_error",
+      message: "Server error (500). Please try again.",
     });
   });
 });
@@ -212,9 +311,34 @@ describe("sendBatchMessage", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
+          scope: "session",
           queries: [
             { question: "Summary?", doc_ids: ["doc-1"], match_count: 5 },
             { question: "Summary?", doc_ids: ["doc-2"], match_count: 5 },
+          ],
+          session_id: "test-session-id",
+        }),
+      })
+    );
+  });
+
+  it("sends batch-level scope when provided", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify(BATCH_RESPONSE), { status: 200 })
+    );
+
+    await sendBatchMessage("Summary?", ["doc-1"], {
+      matchCount: 8,
+      scope: "tenant",
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/chat/batch"),
+      expect.objectContaining({
+        body: JSON.stringify({
+          scope: "tenant",
+          queries: [
+            { question: "Summary?", doc_ids: ["doc-1"], match_count: 8 },
           ],
           session_id: "test-session-id",
         }),
@@ -231,12 +355,45 @@ describe("sendBatchMessage", () => {
     });
   });
 
-  it("throws unexpected on a 500 response", async () => {
+  it("throws rate_limited with the backend message on 429", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: {
+            code: "rate_limited",
+            message: "Too many requests. Please slow down.",
+          },
+        }),
+        { status: 429 }
+      )
+    );
+
+    await expect(sendBatchMessage("q", ["doc-1"])).rejects.toMatchObject({
+      name: "ChatError",
+      code: "rate_limited",
+      message: "Too many requests. Please slow down.",
+      backendCode: "rate_limited",
+    });
+  });
+
+  it("throws rate_limited with a friendly fallback on bodyless 429", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(null, { status: 429 })
+    );
+
+    await expect(sendBatchMessage("q", ["doc-1"])).rejects.toMatchObject({
+      code: "rate_limited",
+      message: "Too many requests — please wait a moment and try again.",
+    });
+  });
+
+  it("throws api_error with a fallback message on a 500 response", async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(null, { status: 500 }));
 
     await expect(sendBatchMessage("q", ["doc-1"])).rejects.toMatchObject({
       name: "ChatError",
-      code: "unexpected",
+      code: "api_error",
+      message: "Server error (500). Please try again.",
     });
   });
 });
@@ -295,6 +452,7 @@ describe("sendSynthesizedBatchMessage", () => {
           "X-Session-Id": "test-session-id",
         },
         body: JSON.stringify({
+          scope: "session",
           queries: [
             {
               question: "Cross-doc question?",
@@ -309,6 +467,115 @@ describe("sendSynthesizedBatchMessage", () => {
   });
 });
 
+describe("uploadDocument", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("throws BackendApiError with structured backend detail", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: {
+            code: "unsupported_file_type",
+            message: "Only PDF, TXT, and DOCX files are supported.",
+          },
+        }),
+        { status: 422 }
+      )
+    );
+
+    const file = new File(["content"], "test.exe", {
+      type: "application/octet-stream",
+    });
+
+    await expect(uploadDocument(file)).rejects.toMatchObject({
+      name: "BackendApiError",
+      message: "Only PDF, TXT, and DOCX files are supported.",
+      httpStatus: 422,
+      parsed: {
+        code: "unsupported_file_type",
+        message: "Only PDF, TXT, and DOCX files are supported.",
+      },
+    });
+    await expect(uploadDocument(file)).rejects.toBeInstanceOf(BackendApiError);
+  });
+
+  it("throws rate_limited with a friendly fallback on bodyless 429", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(null, { status: 429 })
+    );
+
+    const file = new File(["content"], "test.pdf", { type: "application/pdf" });
+
+    await expect(uploadDocument(file)).rejects.toMatchObject({
+      name: "BackendApiError",
+      message: "Too many requests — please wait a moment and try again.",
+      httpStatus: 429,
+    });
+  });
+});
+
+describe("deleteDocument", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("returns gone for 204 and 404 responses", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(null, { status: 204 })
+    );
+    await expect(deleteDocument("doc-1")).resolves.toEqual({ status: "gone" });
+
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(null, { status: 404 })
+    );
+    await expect(deleteDocument("doc-1")).resolves.toEqual({ status: "gone" });
+  });
+
+  it("returns conflict with structured backend detail on 409", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: {
+            code: "document_in_use",
+            message: "Document cannot be deleted while in 'processing' state.",
+          },
+        }),
+        { status: 409 }
+      )
+    );
+
+    await expect(deleteDocument("doc-1")).resolves.toEqual({
+      status: "conflict",
+      message: "Document cannot be deleted while in 'processing' state.",
+    });
+  });
+
+  it("returns error with a fallback message on unexpected failures", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(null, { status: 500 })
+    );
+
+    await expect(deleteDocument("doc-1")).resolves.toEqual({
+      status: "error",
+      message: "Could not remove the document. Try again.",
+    });
+  });
+});
+
 describe("getDocumentStatus", () => {
   const originalFetch = globalThis.fetch;
 
@@ -318,6 +585,17 @@ describe("getDocumentStatus", () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+  });
+
+  it("throws DocumentNotFoundError with a friendly fallback on bodyless 404", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(null, { status: 404 })
+    );
+
+    await expect(getDocumentStatus("/documents/doc-123/status")).rejects.toMatchObject({
+      name: "DocumentNotFoundError",
+      message: "Document not found.",
+    });
   });
 
   it("returns numeric chunk progress from polling responses", async () => {
@@ -526,6 +804,7 @@ describe("sendMessageStream", () => {
           question: "What is RAG?",
           doc_id: "doc-123",
           match_count: 5,
+          scope: "session",
           session_id: "test-session-id",
         }),
       })

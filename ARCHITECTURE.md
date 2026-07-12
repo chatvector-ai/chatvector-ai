@@ -14,6 +14,7 @@ System design details and architectural decisions for ChatVector.
 - [Prompt Configuration](#prompt-configuration)
 - [Retry Logic & Resilience](#retry-logic--resilience)
 - [Rate Limiting](#rate-limiting)
+- [Authentication & Multi-Tenancy](#authentication--multi-tenancy)
 - [Security Hardening](#security-hardening)
 - [Logging & Observability](#logging--observability)
 - [Health Checks](#health-checks)
@@ -42,19 +43,19 @@ The system is designed for:
 An abstract base class defines the contract:
 - `DatabaseService` (`db/base.py`)
 
-Two implementations:
-- `SQLAlchemyService` — development (local PostgreSQL via asyncpg)
-- `SupabaseService` — production (Supabase-hosted PostgreSQL)
+One implementation:
+- `SQLAlchemyService` — all environments (PostgreSQL/pgvector via asyncpg)
 
-Selected via an environment-aware factory in `backend/db/__init__.py`.
-All DB operations are wrapped with retry logic at the factory layer.
+`DATABASE_URL` controls the target PostgreSQL instance. Any PostgreSQL host with pgvector enabled is supported: local Docker, managed services (Neon, RDS, Cloud SQL, Supabase Postgres via direct connection string), or self-hosted.
+
+The factory in `backend/db/__init__.py` always returns `SQLAlchemyService`. All DB operations are wrapped with retry logic at the factory layer.
 
 This ensures:
 - No direct DB coupling in business logic
-- Environment-specific behavior isolated to the implementation layer
-- Easy extension for future backends
+- Consistent behavior across development, test, and production
+- Hybrid retrieval (pgvector + PostgreSQL full-text) works in all environments
 
-**Document deletion:** Removing a document and its rows in `document_chunks` must be atomic so a failed mid-delete cannot leave orphaned chunks. `SQLAlchemyService.delete_document()` runs both deletes in a single DB transaction. `SupabaseService` calls the Postgres RPC `delete_document_atomic` (see `backend/db/init/003_atomic_delete.sql`), which performs the same two deletes in one transaction. The factory continues to choose the implementation by environment; the public `delete_document` API is unchanged.
+**Document deletion:** Removing a document and its rows in `document_chunks` is atomic — `SQLAlchemyService.delete_document()` runs both deletes in a single ORM transaction, preventing orphaned chunks on failure. The legacy `delete_document_atomic` RPC (`backend/db/init/003_atomic_delete.sql`) is retained in the database schema for backward compatibility but is not called by current runtime code.
 
 ---
 
@@ -87,13 +88,15 @@ Switching embedding providers requires a fresh database (`docker compose down -v
 
 ## Development vs Production
 
-| Environment | Database                  | Implementation    |
-| ----------- | ------------------------- | ----------------- |
-| Development | PostgreSQL (local Docker) | SQLAlchemyService |
-| Production  | Supabase (PostgreSQL)     | SupabaseService   |
+| Environment | Database                                    | Implementation    |
+| ----------- | ------------------------------------------- | ----------------- |
+| Development | PostgreSQL (local Docker via DATABASE_URL)  | SQLAlchemyService |
+| Test        | PostgreSQL (local Docker via DATABASE_URL)  | SQLAlchemyService |
+| Production  | PostgreSQL/pgvector (any host, DATABASE_URL) | SQLAlchemyService |
 
-SQLite was intentionally removed to ensure production parity, consistent
-vector behavior, and identical query semantics across environments.
+`APP_ENV` controls auth bypass, docs suppression, queue backend defaults, and production behavior — but no longer selects the database implementation. `DATABASE_URL` is the single configuration point for the database in all environments.
+
+SQLite was intentionally excluded to ensure production parity, consistent vector behavior, and identical query semantics across environments.
 
 ---
 
@@ -230,7 +233,6 @@ All external I/O is wrapped with retry logic via `backend/utils/retry.py`.
 | LLM HTTP client | 60s | `HttpOptions(timeout=LLM_HTTP_TIMEOUT_MS)` |
 | SQLAlchemy pool | 30s checkout | `pool_timeout` on engine |
 | SQLAlchemy queries | 30s | `command_timeout` on asyncpg |
-| Supabase HTTP | 30s | `ClientOptions` timeouts |
 | Health checks | 10s (embed), 15s (LLM) | `asyncio.wait_for` |
 
 ---
@@ -258,8 +260,41 @@ All limits are configurable via env vars (`RATE_LIMIT_*`).
 Rate-limit events are logged with tenant ID and path — raw API keys are never logged.
 
 Storage is in-memory for single-instance deployments. Redis-backed
-rate limit storage will be introduced in Phase 3 alongside the Redis
-queue promotion.
+rate limit storage across multiple API workers remains planned for a
+future Phase 3 follow-up.
+
+---
+
+## Authentication & Multi-Tenancy
+
+Protected API routes require authentication via the `require_auth` FastAPI
+dependency (`backend/core/auth.py`).
+
+**Production (`APP_ENV=production`)**
+
+- Clients must send `Authorization: Bearer cv_live_<prefix>.<secret>`
+- API keys resolve to exactly one tenant via `validate_api_key`
+- Tenant identity comes from authentication — not from request bodies or query params
+- Missing, malformed, or revoked keys return `401` with structured error codes
+- Tenants and API keys are **not** auto-created in production
+
+**Development / test (`APP_ENV=development` or `test`)**
+
+- Authentication is bypassed; all requests are attributed to `DEV_TENANT_ID` (default: `dev`)
+- Startup automatically ensures the development tenant row exists (idempotent)
+- No API key is required locally
+
+**Bootstrap production credentials (run once per environment):**
+
+```bash
+python -m backend.cli create-tenant-key --tenant "My Org" --tenant-id my-org
+```
+
+The raw key is printed once and never stored. Set it in all API clients as the Bearer token.
+
+**Auth non-goals:** ChatVector does not provide user login/signup, OAuth, RBAC, billing, admin dashboards, or an API-key management UI. Keys are created via CLI (`python -m backend.cli create-tenant-key`) or direct DB updates; optional `external_user_id` mapping for developer-side identity is on the roadmap.
+
+**Session persistence:** Chat message turns are stored in the `chat_messages` table (PostgreSQL) and survive restarts. Session metadata — the in-memory registry in `backend/services/session_service.py` (`_SESSIONS`), including `document_ids` bound to a session — is **process-local**. It is lost on restart and not shared across API workers (e.g. `docker-compose.prod.yml` runs `--workers 2`). Integrators should treat session IDs as durable for message history but not assume document bindings survive redeploys until durable session metadata ships.
 
 ---
 
@@ -331,10 +366,23 @@ is still retried after TTL expires. Each result includes `cached` and
 
 ## Vector Search Design
 
+**Retrieval pipeline (shipped):**
+
+- **Scopes** — `session` (default: documents bound to the session) or `tenant` (all tenant documents)
+- **Hybrid retrieval** — pgvector cosine similarity + PostgreSQL full-text search, merged via Reciprocal Rank Fusion (RRF); toggle with `HYBRID_RETRIEVAL_ENABLED`
+- **Reranking** — deterministic similarity + lexical-overlap baseline reranker after fusion
+- **Query transformations** — optional rewrite, expand, and stepback steps using session history context
+- **Citation metadata** — each source includes collapsed `score` and `score_type` (`vector`, `hybrid_rrf`, or `reranked`); per-component score breakdown is not yet exposed
+
 - PostgreSQL with `pgvector` extension
 - Embedding dimension: auto-detected from the configured provider/model (e.g. Gemini → 3072, OpenAI → 1536, Ollama nomic-embed-text → 768)
 - Cosine similarity search via `<=>` operator
 - `ivfflat` indexing supported
+
+**Legacy SQL functions:** `match_chunks()` and `delete_document_atomic()` exist in
+`backend/db/init/` for databases that already applied those migrations. Current
+runtime code uses native SQLAlchemy/pgvector queries and ORM transactions — these
+RPCs are not called. Safe to leave installed; do not rely on them for new deployments.
 
 ### Schema
 ```sql
@@ -366,26 +414,38 @@ CREATE TABLE document_chunks (
 ## Python Client SDK
 
 A lightweight Python SDK wraps the HTTP API for clean programmatic access.
+
 ```python
 from chatvector import ChatVectorClient
 
-with ChatVectorClient("http://localhost:8000") as client:
+with ChatVectorClient("http://localhost:8000", api_key="cv_live_...") as client:
     doc = client.upload_document("report.pdf")
     client.wait_for_ready(doc.document_id, timeout=90)
-    answer = client.chat("What are the key findings?", doc.document_id)
-    print(answer.answer)
+
+    session = client.create_session()
+    answer = client.chat("What are the key findings?", doc.document_id, session_id=session.id)
+    print(answer.answer, answer.latency_ms, answer.model)
+
+    for event in client.stream_chat("Summarize briefly.", doc.document_id, session_id=session.id):
+        if event.type == "complete":
+            print(event.sources, event.latency_ms)
 ```
 
 **Features:**
-- Typed dataclass response models
+- Upload, status polling, `wait_for_ready`, non-streaming chat, batch chat
+- Session management (`create_session`, `list_sessions`, `delete_session`)
+- Streaming chat (`stream_chat`) with typed `token` and `complete` events
+- Retrieval scope options (`session` / `tenant`)
+- Typed dataclass response models with citation `score` and `score_type`
 - Retry with exponential backoff and jitter
 - `Retry-After` header respected on 429 responses
 - Typed exception hierarchy: `ChatVectorAuthError`, `ChatVectorRateLimitError`,
   `ChatVectorTimeoutError`, `ChatVectorAPIError`
 - Context manager support
-- `wait_for_ready()` polling helper
 
-Install: `pip install ./sdk/python`
+**Current gaps:** no async client; no ingestion SSE client (document status stream is HTTP/SSE only); no per-component retrieval score breakdown in SDK models.
+
+Install: `pip install ./sdk/python` — see [sdk/python/README.md](sdk/python/README.md)
 
 ---
 
@@ -395,8 +455,9 @@ Install: `pip install ./sdk/python`
 Local development mirrors production database behavior exactly.
 
 ### 2. Environment Isolation
-Environment selection happens at the factory layer — business logic
-never makes environment decisions directly.
+Environment-specific behavior (auth bypass, queue backend, docs exposure)
+is resolved at configuration and middleware layers — business logic never
+branches on deployment mode directly.
 
 ### 3. Abstraction Boundaries
 No direct DB calls outside `db/__init__.py`. No direct HTTP calls
@@ -421,7 +482,8 @@ The current architecture supports these extensions without major refactors:
 
 - ~~Pluggable LLM & embedding providers~~ (done — see LLM & Embedding Providers)
 - ~~Redis-backed queue~~ (done — production default when `APP_ENV=production`; in-memory for local dev)
-- ~~Streaming LLM responses~~ (done — SSE at `/chat/stream`)
-- **Authentication & multi-tenancy** — Phase 3 in progress (plumbing scaffolded; API-key enforcement not yet active)
+- ~~Streaming LLM responses~~ (done — SSE at `/chat/stream` with structured `complete` events)
+- ~~Authentication & multi-tenancy~~ (done — Bearer API-key auth, tenant isolation, per-tenant rate limits)
+- ~~Python SDK parity~~ (done — sessions, streaming, retrieval scopes)
 - **Specialized pipelines** — legal, academic, code document handling
 - **Read replicas** — supported by existing DB abstraction layer

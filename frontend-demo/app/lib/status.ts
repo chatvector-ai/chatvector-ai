@@ -1,4 +1,9 @@
 import { API_BASE, authHeaders } from "./api";
+import {
+  formatBackendErrorMessage,
+  isGenericBackendError,
+  parseBackendErrorBody,
+} from "./apiErrors";
 
 export type ComponentHealth = {
   status: "ok" | "error";
@@ -237,8 +242,14 @@ export async function getSystemStatus(): Promise<SystemStatus> {
         body: parsed,
       });
     }
+    const backendError = parseBackendErrorBody(parsed);
+    const backendMessage = isGenericBackendError(backendError)
+      ? null
+      : formatBackendErrorMessage(backendError);
     throw new StatusFetchError(
-      `The backend returned an error response.\n\nHTTP ${res.status} · ${res.statusText || "Request failed"}.`,
+      backendMessage
+        ? `The backend returned an error response.\n\n${backendMessage}`
+        : `The backend returned an error response.\n\nHTTP ${res.status} · ${res.statusText || "Request failed"}.`,
       "http_error",
       { httpStatus: res.status, contentType: contentType ?? undefined }
     );

@@ -220,6 +220,11 @@ def _build_sources(chunks: list) -> list[dict]:
     return sources
 
 
+def _is_compare_style_batch_query(doc_ids: list[str]) -> bool:
+    """Single-document batch items are compare-style and isolate from session history."""
+    return len(doc_ids) == 1
+
+
 def _format_sse_event(event: str, data: dict | str) -> str:
     payload = json.dumps(data) if isinstance(data, dict) else data
     return f"event: {event}\ndata: {payload}\n\n"
@@ -674,9 +679,10 @@ async def answer_questions_for_documents_batch(
             matching_chunks = await _finalize_retrieved_chunks(
                 query["question"], all_chunks, query["match_count"]
             )
-            
+
+            is_compare_style = _is_compare_style_batch_query(query["doc_ids"])
             query_session_context = session_context
-            if preloaded_history:
+            if preloaded_history and not is_compare_style:
                 from copy import deepcopy
                 query_session_context = deepcopy(session_context) if session_context else SessionContext()
                 query_session_context.chat_history = preloaded_history
@@ -700,7 +706,7 @@ async def answer_questions_for_documents_batch(
                     "session_id": session_id,
                 }
 
-            if session_id:
+            if session_id and not is_compare_style:
                 try:
                     import db
                     await db.store_chat_message(

@@ -67,7 +67,7 @@ A focused stabilization pass based on a backend audit conducted ahead of Phase 3
 - Embedding validation — no silent dimension fallbacks
 - Logging safety improvements — no sensitive payload leakage
 - Queue consistency improvements and documentation alignment
-- Supabase delete atomicity (transaction/RPC-based)
+- Atomic document deletion via SQLAlchemy ORM transactions
 - Expanded test coverage for core flows
 - Config and `.env` alignment with runtime behavior
 
@@ -75,7 +75,7 @@ A focused stabilization pass based on a backend audit conducted ahead of Phase 3
 
 ---
 
-## 🚧 Phase 3 — Platform Evolution (In Progress)
+## 🚧 Phase 3 — Platform Evolution (Mostly Shipped)
 
 ### North Star
 
@@ -83,7 +83,7 @@ Transform ChatVector into a **multi-tenant, session-aware document intelligence 
 
 **Core Principle:** Simple by default, powerful when explicitly enabled.
 
-> **Current status:** Most Phase 3B backend quality and provider work has shipped. Phase 3A session, streaming, and queue foundations are in place. Authentication and tenant-aware plumbing are scaffolded, but production API-key validation and strict tenant enforcement remain active Phase 3 work. The project should not yet be described as a fully secure, multi-tenant API.
+> **Current status:** Phase 3A and 3B backend platform work is largely complete — API-key authentication, tenant isolation, sessions, streaming, hybrid retrieval, Python SDK parity, and the expanded frontend demo are shipped. Remaining work is ecosystem expansion (Node/TypeScript SDK), distributed rate-limit storage, frontend chat SSE wiring, and API-key lifecycle tooling.
 
 ---
 
@@ -102,6 +102,8 @@ This phase introduces the primary architectural shift. Phase 3B and 3C work buil
 - Explicit session management endpoints: create, list, get, delete
 - Frontend anonymous sessions and session sidebar
 
+> **Session durability note:** `chat_messages` rows are persisted to PostgreSQL and survive restarts. Session metadata — including `document_ids` bound to a session — is held in an in-memory registry (`session_service._SESSIONS`) and is **not** durable across process restarts or shared across API workers. Chat history remains available after restart, but session-scoped document bindings may be lost until sessions are recreated.
+
 **Context injection for answer generation**
 
 - Recent conversation history loaded into the LLM context window
@@ -109,11 +111,27 @@ This phase introduces the primary architectural shift. Phase 3B and 3C work buil
 - LLM receives: top-k retrieved chunks + a bounded recent message window
 - Prevents token explosion and retrieval quality degradation over long sessions
 
+**Query transformation with session history**
+
+- When `QUERY_TRANSFORMATION_ENABLED=true`, rewrite/expand/stepback strategies receive a bounded window of recent session messages
+- History informs both query transformation and answer-generation context
+
 **Streaming LLM responses**
 
 - SSE endpoint at `/chat/stream` for provider token streaming
+- Structured final `complete` event with citations, `latency_ms`, and `model`
 - Session messages persisted after stream completes
 - Ingestion progress over SSE with persistent pipeline UI in the frontend demo
+
+**API authentication & multi-tenancy**
+
+- Bearer API-key parsing and validation (`Authorization: Bearer <API_KEY>`)
+- Secure API-key storage, lookup, and API key → tenant resolution
+- Rejection of missing or invalid keys in production
+- Strict tenant scoping on documents, sessions, chunks, ingestion jobs, and delete operations
+- Per-tenant rate limiting on authenticated API routes (in-memory `slowapi`; Redis-backed storage deferred)
+- Development/test auth bypass with automatic `DEV_TENANT_ID` tenant bootstrap on startup
+- Production tenant/key creation via `python -m backend.cli create-tenant-key`
 
 **Redis queue as production default**
 
@@ -121,27 +139,30 @@ This phase introduces the primary architectural shift. Phase 3B and 3C work buil
 - In-memory queue retained as development fallback
 - Documentation and configuration aligned
 
+**Database backend standardization**
+
+- Supabase HTTP client/RPC backend removed
+- SQLAlchemy/PostgreSQL via `DATABASE_URL` is the only supported database backend in all environments
+- Managed/cloud Postgres (Neon, RDS, Cloud SQL, Supabase Postgres via direct connection) supported through standard connection strings
+
 #### ⏳ Remaining
 
-**API authentication & multi-tenancy**
+**API-key lifecycle tooling**
 
-Routes depend on `require_auth`, but enforcement is not yet complete:
-
-- Bearer API-key parsing and validation (`Authorization: Bearer <API_KEY>`)
-- Secure API-key storage, lookup, and API key → tenant resolution
-- Rejection of missing or invalid keys
-- Strict tenant scoping on documents, sessions, chunks, ingestion jobs, and delete operations
-- Per-tenant rate limiting on authenticated API routes
-- API-key lifecycle tooling (generation, rotation, revocation, expiration)
+- Programmatic rotation, expiration, and revocation workflows beyond CLI create and DB status updates
 - Optional `external_user_id` field for developer-side user mapping
 
-**Context injection — query transformation**
+**Frontend demo chat SSE**
 
-- Conversation history is not yet passed into query rewriting/expansion (history informs answer generation only)
+- Backend `/chat/stream` is ready; the demo chat page still uses non-streaming `POST /chat` with a simulated character-by-character typing animation
 
-**Streaming contract**
+**Durable session metadata**
 
-- Structured final SSE event with citations, `latency_ms`, and `model` metadata
+- Postgres-backed session registry and `document_ids` bindings (messages are already persisted; metadata is process-local today)
+
+**Distributed rate limiting**
+
+- Redis-backed rate-limit storage across multiple API workers (current `slowapi` storage is in-memory per process)
 
 ---
 
@@ -190,13 +211,27 @@ Build on the platform foundation to improve response quality and expand develope
 
 **Response and citation metadata**
 
-- Relevance scores on source citations
+- Relevance scores and `score_type` on source citations (`vector`, `hybrid_rrf`, `reranked`)
 - `latency_ms` and `model` fields on non-streaming `/chat` and `/chat/batch` responses
+- Structured streaming `complete` events with the same metadata
+
+**Python SDK**
+
+- Upload, status polling, `wait_for_ready`, non-streaming chat, batch chat
+- Session management (`create_session`, `list_sessions`, `delete_session`)
+- Streaming chat (`stream_chat`) with typed `token` and `complete` events
+- Retrieval scope options (`session` / `tenant`)
+- Typed responses, structured errors, relevance scores, model/latency metadata
 
 **Frontend demo improvements**
 
+- Chat with retrieval controls and retrieval inspector
+- Batch compare and batch synthesize modes
 - Live system status page
-- Batch query demo
+- Structured API error display
+- Grouped Demo and Docs navigation
+- Shared components and loading skeletons
+- Ingestion SSE progress (document status stream)
 
 #### ⏳ Remaining
 
@@ -207,20 +242,12 @@ Build on the platform foundation to improve response quality and expand develope
 - Session-aware chat support
 - Published to npm
 
-**Python SDK parity**
-
-The Python SDK supports core synchronous workflows (upload, status polling, `wait_for_ready`, non-streaming chat, batch chat, typed responses, structured errors, relevance scores, model/latency metadata, queue position). It does not yet cover:
-
-- Session management methods
-- Streaming chat
-- Ingestion SSE
-- Retrieval scope options
-- Async client
-
 **Inspection and observability tooling**
 
-- Query transformation visualization (opt-in debug metadata)
-- Full retrieval inspection panel (component scores, rerank ordering)
+- Query transformation visualization (opt-in debug metadata beyond current `retrieval_debug` payloads)
+- Richer per-component retrieval score breakdown (today: collapsed `score` + `score_type` on citations)
+- Async Python SDK client
+- Ingestion SSE client in Python SDK (document status stream not exposed in SDK)
 
 ---
 
@@ -294,6 +321,8 @@ ChatVector is intentionally **not** building the following:
 | Billing or subscriptions | Out of scope for an open-source backend engine |
 | Collaborative workspaces | Different product category |
 | Admin dashboards | Not needed for a developer tool |
+| API-key lifecycle UI (rotation, revocation, user mapping) | CLI and DB updates only; programmatic tooling is roadmap |
+| OAuth, RBAC, or per-user login | API-key auth only; application-layer identity is the developer's responsibility |
 | Full SaaS product layer | Conflicts with backend-first positioning |
 | Elasticsearch dependency | pgvector + PostgreSQL full-text covers the same ground at this scale |
 
@@ -305,10 +334,16 @@ Progress toward the Phase 3 north star:
 
 - ✅ Stateful document conversations with persisted session memory
 - ✅ Streaming chat and ingestion progress (SSE)
+- ✅ Structured streaming `complete` events with citations, `latency_ms`, and `model`
 - ✅ Hybrid retrieval, baseline reranking, and configurable retrieval scopes
 - ✅ Provider flexibility across Gemini, OpenAI, Ollama, Claude, and Voyage embeddings
-- ✅ Response personas, citation relevance scores, and response metadata (`latency_ms`, `model`)
-- ⚠️ Authentication plumbing exists; production API-key enforcement is still in progress
-- ⚠️ Python SDK exists but needs parity with sessions, streaming, and retrieval scopes
+- ✅ Response personas, citation relevance scores/score types, and response metadata (`latency_ms`, `model`)
+- ✅ Bearer API-key authentication and strict tenant isolation in production
+- ✅ Python SDK with sessions, streaming, and retrieval scope support
+- ✅ SQLAlchemy/PostgreSQL as the only database backend (`DATABASE_URL` in all environments)
+- ✅ Frontend demo: chat, batch compare/synthesize, status, retrieval controls, retrieval inspector
+- ⏳ Frontend demo chat SSE streaming (backend ready; UI still uses `POST /chat` with simulated typing)
+- ⏳ Durable Postgres-backed session metadata (messages persisted; session registry is in-memory)
 - ⏳ Node.js/TypeScript SDK planned
-- ⏳ Documentation, examples, and inspection tooling in progress
+- ⏳ Redis-backed distributed rate-limit storage across workers
+- ⏳ Documentation site, examples, and advanced inspection tooling in progress

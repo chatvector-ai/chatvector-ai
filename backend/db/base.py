@@ -7,7 +7,7 @@ SCORE_TYPE_HYBRID_RRF = "hybrid_rrf"
 SCORE_TYPE_RERANKED = "reranked"
 
 # Abstract base class that defines WHAT database operations we need.
-# All DB services (sqlalchemy, supabase, etc.) must implement these methods.
+# All DB service implementations must satisfy this interface.
 
 
 @dataclass

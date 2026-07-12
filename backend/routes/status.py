@@ -93,35 +93,6 @@ async def _database_connected_and_document_count() -> tuple[bool, int | None]:
             logger.exception("Unexpected error during database health check")
             return False, None
 
-    from db.supabase_service import SupabaseService
-
-    if isinstance(service, SupabaseService):
-
-        async def _ping_and_count():
-            from core.clients import supabase_client
-
-            def _op():
-                return (
-                    supabase_client.table("documents")
-                    .select("id", count="exact")
-                    .limit(0)
-                    .execute()
-                )
-
-            return await service._run_io(_op, "status_documents_count")
-
-        try:
-            result = await _ping_and_count()
-            raw = getattr(result, "count", None)
-            if raw is not None:
-                return True, int(raw)
-            if result.data is not None:
-                return True, len(result.data)
-            return True, 0
-        except Exception:
-            logger.exception("Supabase health check failed")
-            return False, None
-
     logger.error("Unknown database service type for status: %s", type(service))
     return False, None
 

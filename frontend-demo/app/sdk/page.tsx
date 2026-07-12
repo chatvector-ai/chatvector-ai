@@ -215,20 +215,72 @@ export default function SdkPage() {
           <section>
             <Kicker spacing="lg">authentication</Kicker>
             <p className="mb-3 text-foreground/90">
-              If your backend is configured with a bearer token, pass it at
-              client initialization:
+              Production backends require a Bearer API key on every request.
+              Pass it at client initialization:
             </p>
             <CodeBlock
               code={`client = ChatVectorClient(
-    base_url="http://localhost:8000",
-    api_key="your-bearer-token"
+    base_url="https://api.example.com",
+    api_key="cv_live_yourprefix.yoursecret"
 )`}
               language="python"
             />
             <p className="mt-3 text-foreground/90">
-              The token is optional. Omit it if your backend does not require
-              authentication.
+              Generate a key with the backend CLI (run once per environment):
             </p>
+            <CodeBlock
+              code='python -m backend.cli create-tenant-key --tenant "My Org" --tenant-id my-org'
+              language="bash"
+            />
+            <p className="mt-3 text-foreground/90">
+              In development mode (`APP_ENV=development`), authentication is
+              bypassed and the `api_key` parameter can be omitted.
+            </p>
+          </section>
+
+          <section>
+            <Kicker spacing="lg">sessions &amp; retrieval scope</Kicker>
+            <p className="mb-3 text-foreground/90">
+              Create sessions, scope retrieval to session documents or the full
+              tenant, and manage session lifecycle without raw HTTP calls:
+            </p>
+            <CodeBlock
+              code={`session = client.create_session()
+answer = client.chat(
+    "Summarize this document",
+    doc_id="doc-1",
+    session_id=session.id,
+    scope="session",
+)
+tenant_answer = client.chat(
+    "What do we know across all documents?",
+    doc_id="doc-1",
+    session_id=session.id,
+    scope="tenant",
+)
+client.delete_session(session.id)`}
+              language="python"
+            />
+          </section>
+
+          <section>
+            <Kicker spacing="lg">streaming chat</Kicker>
+            <p className="mb-3 text-foreground/90">
+              Stream token-by-token answers and receive a structured final event
+              with citations, latency, and model metadata:
+            </p>
+            <CodeBlock
+              code={`for event in client.stream_chat(
+    "Summarize in one paragraph.",
+    doc_id="doc-1",
+    session_id=session.id,
+):
+    if event.type == "token":
+        print(event.content, end="")
+    elif event.type == "complete":
+        print(event.latency_ms, event.model, event.sources)`}
+              language="python"
+            />
           </section>
 
           <section>
@@ -300,6 +352,16 @@ export default function SdkPage() {
                   file: "batch_chat.py",
                   href: "https://github.com/chatvector-ai/chatvector-ai/blob/main/sdk/python/examples/batch_chat.py",
                   desc: "Send multiple questions against the same document in sequence.",
+                },
+                {
+                  file: "session_chat.py",
+                  href: "https://github.com/chatvector-ai/chatvector-ai/blob/main/sdk/python/examples/session_chat.py",
+                  desc: "Create a session, chat with retrieval scope options, and clean up.",
+                },
+                {
+                  file: "stream_chat.py",
+                  href: "https://github.com/chatvector-ai/chatvector-ai/blob/main/sdk/python/examples/stream_chat.py",
+                  desc: "Stream tokens and read the structured complete event.",
                 },
               ].map(({ file, href, desc }) => (
                 <li key={file} className="flex gap-3">

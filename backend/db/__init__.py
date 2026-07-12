@@ -2,14 +2,15 @@
 Database Service Factory
 ========================
 
-Unified DB interface with environment-based backend selection and retry wrappers.
+Unified DB interface wrapping SQLAlchemyService with retry logic.
+SQLAlchemyService is the only supported backend; DATABASE_URL controls
+the target PostgreSQL/pgvector instance.
 """
 
 import logging
 import threading
 from contextlib import asynccontextmanager
 
-from core.config import config
 from utils.retry import retry_async
 from .base import ChunkMatch, ChunkRecord
 from .tenant_scope import require_tenant_id
@@ -22,26 +23,12 @@ db_service = None
 _thread_local = threading.local()
 
 
-def _uses_local_sqlalchemy() -> bool:
-    """Use SQLAlchemy against DATABASE_URL in development and in CI tests.
-
-    Pytest sets APP_ENV=test with a local DATABASE_URL; without this, get_db_service
-    would select Supabase and integration tests would call HTTP with placeholder creds.
-    """
-    env = config.APP_ENV.lower()
-    if env == "development":
-        return True
-    if env == "test" and config.DATABASE_URL:
-        return True
-    return False
-
-
 def get_db_service():
-    """Return singleton DB service, preferring thread-local override.
+    """Return the singleton SQLAlchemyService, preferring a thread-local override.
 
     RQ worker threads install a thread-local override via
-    :func:`worker_db_context` so their SQLAlchemy async engine is
-    bound to the worker's own event loop, not the main thread's.
+    :func:`worker_db_context` so their async engine is bound to the
+    worker's own event loop, not the main thread's.
     """
     thread_local_service = getattr(_thread_local, "db_service_override", None)
     if thread_local_service is not None:
@@ -52,40 +39,21 @@ def get_db_service():
     if db_service is not None:
         return db_service
 
-    if _uses_local_sqlalchemy():
-        from .sqlalchemy_service import SQLAlchemyService
+    from .sqlalchemy_service import SQLAlchemyService
 
-        db_service = SQLAlchemyService()
-        logger.info(
-            "Using SQLAlchemy database service (%s)",
-            "development" if config.APP_ENV.lower() == "development" else "test",
-        )
-    else:
-        from .supabase_service import SupabaseService
-
-        db_service = SupabaseService()
-        logger.info("Using Supabase database service (production)")
-
+    db_service = SQLAlchemyService()
+    logger.info("Using SQLAlchemy database service")
     return db_service
 
 
 @asynccontextmanager
 async def worker_db_context():
-    """Install a fresh DB service on the current thread for RQ workers.
+    """Install a fresh SQLAlchemyService on the current thread for RQ workers.
 
-    When using SQLAlchemy (development or tests with DATABASE_URL),
-    a new :class:`SQLAlchemyService` is
-    created so its async engine is bound to the worker thread's event
-    loop rather than the main thread's.  The engine is disposed on exit.
-
-    In production (Supabase), the global singleton is returned as-is
-    because ``SupabaseService`` uses synchronous httpx under the hood
-    and does not have the event loop binding issue.
+    A new :class:`SQLAlchemyService` is created so its async engine is
+    bound to the worker thread's event loop rather than the main thread's.
+    The engine is disposed on exit.
     """
-    if not _uses_local_sqlalchemy():
-        yield get_db_service()
-        return
-
     from .sqlalchemy_service import SQLAlchemyService
 
     service = SQLAlchemyService()

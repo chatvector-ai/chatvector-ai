@@ -24,8 +24,9 @@ export default function GettingStartedPage() {
             </p>
             <ul className="mt-4 space-y-3 text-[0.98rem] leading-[1.7] text-foreground/90">
               <li>FastAPI backend with RAG ingestion and retrieval.</li>
-              <li>PostgreSQL + pgvector for semantic search.</li>
-              <li>Next.js demo UI for uploads, chat, and citations.</li>
+              <li>PostgreSQL + pgvector via SQLAlchemy (`DATABASE_URL`).</li>
+              <li>Next.js demo UI for uploads, chat, batch queries, and citations.</li>
+              <li>Development mode bypasses API-key auth — production requires Bearer tokens.</li>
             </ul>
           </div>
         </div>

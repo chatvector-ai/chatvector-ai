@@ -1065,3 +1065,165 @@ async def test_batch_history_tenant_isolation():
     mock_hist.assert_awaited()
     call_kwargs = mock_hist.call_args.kwargs
     assert call_kwargs["tenant_id"] == "tenant-batch"
+
+
+# ---------------------------------------------------------------------------
+# Compare batch session isolation (Issue #345)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_compare_batch_ignores_polluted_session_history_in_llm_context():
+    """Compare items must answer from retrieved chunks only, not prior session turns."""
+    polluted_history = [
+        {"role": "user", "content": "What is the PTO policy?"},
+        {
+            "role": "assistant",
+            "content": "Employees receive 15 days of paid time off annually.",
+        },
+    ]
+    sales_chunks = [
+        _FakeChunk(
+            id="c1",
+            chunk_text="NexaCorp client accounts include Apex Manufacturing.",
+            file_name="nexacorp3.txt",
+            page_number=1,
+            chunk_index=0,
+            document_id="sales-doc",
+        ),
+    ]
+    captured_contexts: list[str] = []
+
+    async def capture_generate(question, context):
+        captured_contexts.append(context)
+        return ("Client account info.", 50, "test-model")
+
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch(
+            "services.chat_service._retrieve_chunks_for_documents",
+            new=AsyncMock(return_value=sales_chunks),
+        ),
+        patch(
+            "services.chat_service.generate_answer",
+            new=AsyncMock(side_effect=capture_generate),
+        ),
+        patch("db.get_session_history", new=AsyncMock(return_value=polluted_history)),
+        patch("db.store_chat_message", new=AsyncMock()) as mock_store,
+    ):
+        await answer_questions_for_documents_batch(
+            [
+                {
+                    "question": "What is the PTO policy?",
+                    "doc_ids": ["sales-doc"],
+                    "session_id": "sess-polluted",
+                }
+            ],
+            auth=TEST_AUTH,
+        )
+
+    assert len(captured_contexts) == 1
+    context = captured_contexts[0]
+    assert "[Session History]" not in context
+    assert "paid time off" not in context.lower()
+    assert "Apex Manufacturing" in context
+    mock_store.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_synthesize_batch_still_injects_session_history_into_llm_context():
+    """Multi-document batch items may still use session history for context."""
+    history = [{"role": "assistant", "content": "Prior synthesized answer."}]
+    chunks = [
+        _FakeChunk(
+            id="c1",
+            chunk_text="Cross-document context.",
+            file_name="a.pdf",
+            page_number=1,
+            chunk_index=0,
+            document_id="doc-a",
+        ),
+    ]
+    captured_contexts: list[str] = []
+
+    async def capture_generate(question, context):
+        captured_contexts.append(context)
+        return ("combined answer", 40, "test-model")
+
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch(
+            "services.chat_service._retrieve_chunks_for_documents",
+            new=AsyncMock(return_value=chunks),
+        ),
+        patch(
+            "services.chat_service.generate_answer",
+            new=AsyncMock(side_effect=capture_generate),
+        ),
+        patch("db.get_session_history", new=AsyncMock(return_value=history)),
+        patch("db.store_chat_message", new=AsyncMock()) as mock_store,
+    ):
+        await answer_questions_for_documents_batch(
+            [
+                {
+                    "question": "Summarize across docs",
+                    "doc_ids": ["doc-a", "doc-b"],
+                    "session_id": "sess-synth",
+                }
+            ],
+            auth=TEST_AUTH,
+        )
+
+    assert len(captured_contexts) == 1
+    context = captured_contexts[0]
+    assert "[Session History]" in context
+    assert "Prior synthesized answer." in context
+    assert mock_store.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_single_chat_still_uses_session_history_with_polluted_context():
+    """Regression: regular /chat multi-turn behavior is unchanged."""
+    polluted_history = [
+        {"role": "assistant", "content": "Earlier handbook answer about PTO."},
+    ]
+    doc_chunks = [
+        _FakeChunk(
+            id="c1",
+            chunk_text="Sales reference content.",
+            file_name="sales.txt",
+            page_number=1,
+            chunk_index=0,
+            document_id="doc-1",
+        ),
+    ]
+    captured_contexts: list[str] = []
+
+    async def capture_generate(question, context):
+        captured_contexts.append(context)
+        return ("answer", 30, "test-model")
+
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch(
+            "services.chat_service._retrieve_chunks_for_documents",
+            new=AsyncMock(return_value=doc_chunks),
+        ),
+        patch(
+            "services.chat_service.generate_answer",
+            new=AsyncMock(side_effect=capture_generate),
+        ),
+        patch("db.get_session_history", new=AsyncMock(return_value=polluted_history)),
+        patch("db.store_chat_message", new=AsyncMock()) as mock_store,
+    ):
+        await answer_question_for_document(
+            question="Follow-up question",
+            doc_id="doc-1",
+            session_id="sess-chat",
+            auth=TEST_AUTH,
+        )
+
+    assert len(captured_contexts) == 1
+    assert "[Session History]" in captured_contexts[0]
+    assert "Earlier handbook answer about PTO." in captured_contexts[0]
+    assert mock_store.await_count == 2

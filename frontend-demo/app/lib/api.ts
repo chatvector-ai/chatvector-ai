@@ -1,7 +1,29 @@
+import {
+  backendApiErrorFromResponse,
+  formatBackendErrorMessage,
+  isGenericBackendError,
+  parseBackendErrorBody,
+  type BackendErrorField,
+} from "./apiErrors";
+import {
+  clampMatchCount,
+  DEFAULT_MATCH_COUNT,
+  type RetrievalScope,
+} from "./retrievalSettings";
 import { getSessionId } from "./session";
 import { parseSSEStream, type StreamEvent } from "./stream";
 
 export type { StreamEvent } from "./stream";
+
+export type { RetrievalScope } from "./retrievalSettings";
+export type { BackendErrorField } from "./apiErrors";
+export { BackendApiError } from "./apiErrors";
+
+export type ChatCallOptions = {
+  matchCount?: number;
+  scope?: RetrievalScope;
+  sessionId?: string | null;
+};
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -30,6 +52,23 @@ export type ChatSource = {
   page_number: number | null;
   chunk_index: number | null;
   score?: number | null;
+  score_type?: string | null;
+};
+
+/** Opt-in retrieval debug metadata when the backend exposes it. */
+export type RetrievalDebugMetadata = {
+  original_query?: string;
+  transformed_queries?: string[];
+  transformation_strategy?: string;
+};
+
+export type RetrievalInspectorData = {
+  question?: string;
+  retrieval_debug?: RetrievalDebugMetadata;
+  sources?: ChatSource[];
+  chunks?: number;
+  model?: string;
+  latency_ms?: number;
 };
 
 export type Message = {
@@ -37,6 +76,8 @@ export type Message = {
   sender: "user" | "ai";
   text: string;
   document_id?: string;
+  question?: string;
+  retrieval_debug?: RetrievalDebugMetadata;
   sources?: ChatSource[];
   chunks?: number;
   latency_ms?: number;
@@ -54,6 +95,7 @@ export type ChatResponse = {
   doc_id?: string;
   latency_ms?: number;
   model?: string;
+  retrieval_debug?: RetrievalDebugMetadata;
   status?: "ok" | "error";
   error?: { code: ChatErrorCode | string; message: string };
 };
@@ -83,8 +125,12 @@ export class ChatError extends Error {
       | "no_document"
       | "backend_unreachable"
       | "unexpected"
+      | "api_error"
+      | "rate_limited"
       | ChatErrorCode,
-    message: string
+    message: string,
+    public readonly fields?: BackendErrorField[],
+    public readonly backendCode?: string
   ) {
     super(message);
     this.name = "ChatError";
@@ -107,6 +153,20 @@ function isChatErrorCode(code: unknown): code is ChatErrorCode {
   return typeof code === "string" && code in CHAT_ERROR_MESSAGES;
 }
 
+const DOCUMENT_NOT_FOUND_MESSAGE =
+  "Document not found. It may have been deleted.";
+const RATE_LIMITED_MESSAGE =
+  "Too many requests — please wait a moment and try again.";
+const DELETE_CONFLICT_MESSAGE =
+  "Can't remove while the document is queued or processing.";
+const DELETE_ERROR_MESSAGE = "Could not remove the document. Try again.";
+
+function httpErrorFallback(res: Response): string | undefined {
+  if (res.status === 404) return DOCUMENT_NOT_FOUND_MESSAGE;
+  if (res.status === 429) return RATE_LIMITED_MESSAGE;
+  return undefined;
+}
+
 export function softFailureMessage(error?: ChatResponse["error"]): string {
   if (!error) {
     return CHAT_ERROR_MESSAGES.llm_unexpected;
@@ -117,13 +177,43 @@ export function softFailureMessage(error?: ChatResponse["error"]): string {
   return error.message || CHAT_ERROR_MESSAGES.llm_unexpected;
 }
 
+async function throwChatHttpError(res: Response): Promise<never> {
+  const apiError = await backendApiErrorFromResponse(res, httpErrorFallback(res));
+  const { parsed } = apiError;
+
+  if (res.status === 404) {
+    throw new ChatError(
+      "no_document",
+      apiError.message,
+      parsed.fields,
+      parsed.code
+    );
+  }
+  if (res.status === 429 || parsed.code === "rate_limited") {
+    throw new ChatError(
+      "rate_limited",
+      apiError.message,
+      parsed.fields,
+      parsed.code
+    );
+  }
+  throw new ChatError(
+    "api_error",
+    apiError.message,
+    parsed.fields,
+    parsed.code
+  );
+}
+
 export async function sendMessage(
   question: string,
   docId: string,
-  matchCount = 5,
-  sessionIdOverride?: string | null
+  options: ChatCallOptions = {}
 ): Promise<ChatResponse> {
-  const sessionId = sessionIdOverride !== undefined ? sessionIdOverride : getSessionId();
+  const sessionId =
+    options.sessionId !== undefined ? options.sessionId : getSessionId();
+  const matchCount = clampMatchCount(options.matchCount ?? DEFAULT_MATCH_COUNT);
+  const scope = options.scope ?? "session";
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -133,6 +223,7 @@ export async function sendMessage(
     question,
     doc_id: docId,
     match_count: matchCount,
+    scope,
   };
 
   if (sessionId !== null) {
@@ -154,18 +245,8 @@ export async function sendMessage(
     );
   }
 
-  if (res.status === 404) {
-    throw new ChatError(
-      "no_document",
-      "Document not found. It may have been deleted."
-    );
-  }
-
   if (!res.ok) {
-    throw new ChatError(
-      "unexpected",
-      `Server error (${res.status}). Please try again.`
-    );
+    await throwChatHttpError(res);
   }
 
   const response = (await res.json()) as ChatResponse;
@@ -186,11 +267,13 @@ export async function sendMessage(
 export async function* sendMessageStream(
   question: string,
   docId: string,
-  matchCount = 5,
-  sessionIdOverride?: string | null,
+  options: ChatCallOptions = {},
   signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
-  const sessionId = sessionIdOverride !== undefined ? sessionIdOverride : getSessionId();
+  const sessionId =
+    options.sessionId !== undefined ? options.sessionId : getSessionId();
+  const matchCount = clampMatchCount(options.matchCount ?? DEFAULT_MATCH_COUNT);
+  const scope = options.scope ?? "session";
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -200,6 +283,7 @@ export async function* sendMessageStream(
     question,
     doc_id: docId,
     match_count: matchCount,
+    scope,
   };
 
   if (sessionId !== null) {
@@ -234,21 +318,10 @@ export async function* sendMessageStream(
     } catch (e) {
       if (e instanceof StreamingDisabledError) throw e;
     }
-    throw new ChatError("unexpected", `Server error (${res.status}). Please try again.`);
-  }
-
-  if (res.status === 404) {
-    throw new ChatError(
-      "no_document",
-      "Document not found. It may have been deleted."
-    );
   }
 
   if (!res.ok) {
-    throw new ChatError(
-      "unexpected",
-      `Server error (${res.status}). Please try again.`
-    );
+    await throwChatHttpError(res);
   }
 
   if (!res.body) {
@@ -258,22 +331,34 @@ export async function* sendMessageStream(
   yield* parseSSEStream(res.body, signal);
 }
 
+export type DeleteDocumentResult =
+  | { status: "gone" }
+  | { status: "conflict"; message: string }
+  | { status: "error"; message: string };
+
 export async function deleteDocument(
   documentId: string
-): Promise<"gone" | "conflict" | "error"> {
+): Promise<DeleteDocumentResult> {
   const res = await fetch(`${API_BASE}/documents/${documentId}`, {
     method: "DELETE",
     headers: authHeaders(),
   });
-  if (res.status === 204 || res.status === 404) return "gone";
-  if (res.status === 409) return "conflict";
-  return "error";
+  if (res.status === 204 || res.status === 404) return { status: "gone" };
+  if (res.status === 409) {
+    const apiError = await backendApiErrorFromResponse(
+      res,
+      DELETE_CONFLICT_MESSAGE
+    );
+    return { status: "conflict", message: apiError.message };
+  }
+  const apiError = await backendApiErrorFromResponse(res, DELETE_ERROR_MESSAGE);
+  return { status: "error", message: apiError.message };
 }
 
 export class DocumentNotFoundError extends Error {
   readonly code = "document_not_found" as const;
-  constructor() {
-    super("Document not found.");
+  constructor(message = "Document not found.") {
+    super(message);
     this.name = "DocumentNotFoundError";
   }
 }
@@ -327,8 +412,25 @@ export async function getDocumentStatus(
   statusEndpoint: string
 ): Promise<DocumentStatusPayload> {
   const res = await fetch(`${API_BASE}${statusEndpoint}`, { headers: authHeaders() });
-  if (res.status === 404) throw new DocumentNotFoundError();
-  if (!res.ok) throw new Error(`Status check failed: ${res.status}`);
+  if (res.status === 404) {
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      /* ignore non-JSON 404 bodies */
+    }
+    const parsed = parseBackendErrorBody(body);
+    const message = isGenericBackendError(parsed)
+      ? "Document not found."
+      : formatBackendErrorMessage(parsed);
+    throw new DocumentNotFoundError(message);
+  }
+  if (!res.ok) {
+    throw await backendApiErrorFromResponse(
+      res,
+      `Status check failed: ${res.status}`
+    );
+  }
   const data = (await res.json()) as Record<string, unknown>;
   const status = String(data?.status ?? "");
   const stageRaw = data?.stage;
@@ -365,6 +467,7 @@ export type BatchResultItem = {
   sources?: ChatSource[];
   latency_ms?: number;
   model?: string;
+  retrieval_debug?: RetrievalDebugMetadata;
   session_id?: string;
   error?: { code: string; message: string };
 };
@@ -384,18 +487,21 @@ export type BatchChatResponse = {
 export async function sendBatchMessage(
   question: string,
   docIds: string[],
-  matchCount = 5,
-  sessionIdOverride?: string | null
+  options: ChatCallOptions = {}
 ): Promise<BatchChatResponse> {
+  const matchCount = clampMatchCount(options.matchCount ?? DEFAULT_MATCH_COUNT);
+  const scope = options.scope ?? "session";
+
   return postBatchChat(
     {
+      scope,
       queries: docIds.map((docId) => ({
         question,
         doc_ids: [docId],
         match_count: matchCount,
       })),
     },
-    sessionIdOverride
+    options.sessionId
   );
 }
 
@@ -407,11 +513,14 @@ export async function sendBatchMessage(
 export async function sendSynthesizedBatchMessage(
   question: string,
   docIds: string[],
-  matchCount = 5,
-  sessionIdOverride?: string | null
+  options: ChatCallOptions = {}
 ): Promise<BatchChatResponse> {
+  const matchCount = clampMatchCount(options.matchCount ?? DEFAULT_MATCH_COUNT);
+  const scope = options.scope ?? "session";
+
   return postBatchChat(
     {
+      scope,
       queries: [
         {
           question,
@@ -420,7 +529,7 @@ export async function sendSynthesizedBatchMessage(
         },
       ],
     },
-    sessionIdOverride
+    options.sessionId
   );
 }
 
@@ -458,18 +567,8 @@ async function postBatchChat(
     );
   }
 
-  if (res.status === 429) {
-    throw new ChatError(
-      "unexpected",
-      "Too many requests — please wait a moment and try again."
-    );
-  }
-
   if (!res.ok) {
-    throw new ChatError(
-      "unexpected",
-      `Server error (${res.status}). Please try again.`
-    );
+    await throwChatHttpError(res);
   }
 
   return (await res.json()) as BatchChatResponse;
@@ -494,19 +593,10 @@ export async function uploadDocument(
   });
   
   if (!res.ok) {
-    if (res.status === 429) {
-      throw new Error("Too many requests — please wait a moment and try again.");
-    }
-    let message = "Upload failed. Please try again.";
-    try {
-      const errBody = await res.json();
-      const detail = errBody?.detail;
-      if (typeof detail?.message === "string") message = detail.message;
-      else if (typeof detail === "string") message = detail;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(message);
+    throw await backendApiErrorFromResponse(
+      res,
+      res.status === 429 ? RATE_LIMITED_MESSAGE : "Upload failed. Please try again."
+    );
   }
   const data = await res.json();
   const documentId = data?.document_id as string | undefined;

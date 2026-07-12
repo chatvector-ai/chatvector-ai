@@ -142,6 +142,30 @@ Each `sources[]` item may include `score` and `score_type` (`vector`,
 `hybrid_rrf`, or `reranked`). Scores are only comparable within the same
 `score_type`; see `DEVELOPMENT.md` for semantics.
 
+Non-streaming `chat()` responses include `latency_ms` and `model` on the
+`ChatResponse` dataclass (same fields as the `complete` event in streaming).
+
+## Batch Chat
+
+Run multiple queries in one request. Each query can target a different document.
+
+```python
+from chatvector import ChatVectorClient, BatchChatQuery
+
+with ChatVectorClient(base_url="http://localhost:8000", api_key="cv_live_...") as client:
+    result = client.batch_chat(
+        queries=[
+            BatchChatQuery(question="Key risks?", doc_id="doc-1"),
+            BatchChatQuery(question="Revenue drivers?", doc_id="doc-2"),
+        ],
+        session_id="sess-1",
+        scope="session",
+    )
+
+    for item in result.results:
+        print(item.question, item.answer, item.latency_ms)
+```
+
 ## Error Handling
 
 All SDK methods raise typed exceptions:
@@ -176,3 +200,9 @@ See the runnable scripts in [examples](./examples):
 ## API Notes
 
 The backend currently exposes document upload at `/upload`. The SDK targets `/ingest` as the forward-facing contract and transparently falls back to `/upload` for compatibility with the current repository backend.
+
+## Current Gaps
+
+- **No async client** — synchronous `httpx` only
+- **No ingestion SSE client** — use `wait_for_ready()` polling or call `/documents/{id}/status/stream` directly
+- **No per-component retrieval scores** — citations expose collapsed `score` + `score_type` only

@@ -41,12 +41,12 @@ export default function WhatIs() {
     {
       num: "02",
       title: "Index",
-      desc: "Embeddings stored in pgvector via Supabase. Fast, reliable, SQL-native.",
+      desc: "Embeddings stored in PostgreSQL/pgvector via SQLAlchemy. Fast, reliable, SQL-native.",
     },
     {
       num: "03",
       title: "Retrieve",
-      desc: "Semantic search with MMR re-ranking for diversity.",
+      desc: "Hybrid vector + full-text search with optional reranking.",
     },
     {
       num: "04",

@@ -29,6 +29,9 @@ CREATE TABLE document_chunks (
 );
 
 -- Vector search function
+-- LEGACY: This RPC is retained for databases that already have it installed.
+-- It is NOT called by any current runtime code path. SQLAlchemyService performs
+-- vector search using native pgvector operators. Safe to leave in place.
 CREATE OR REPLACE FUNCTION match_chunks(
   query_embedding vector,
   match_count int DEFAULT 5,

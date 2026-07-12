@@ -16,6 +16,7 @@ import {
   saveUploadedDocument,
   removeUploadedDocument,
 } from "../documentStore";
+import type { RetrievalSettings } from "../retrievalSettings";
 
 const welcomeMessages: Message[] = [
   {
@@ -25,7 +26,7 @@ const welcomeMessages: Message[] = [
   },
 ];
 
-export function useChat(sessionId: string | null) {
+export function useChat(sessionId: string | null, retrievalSettings: RetrievalSettings) {
   const [messages, setMessages] = useState<Message[]>(welcomeMessages);
   const [input, setInput] = useState("");
   const [attachment, setAttachment] = useState<AttachmentState | null>(null);
@@ -373,6 +374,11 @@ export function useChat(sessionId: string | null) {
       abortControllerRef.current = controller;
 
       const aiMsgId = base + 1;
+      const chatOptions = {
+        matchCount: retrievalSettings.matchCount,
+        scope: retrievalSettings.scope,
+        sessionId,
+      };
 
       // Add empty AI message with isStreaming flag.
       setMessages((prev) => [
@@ -385,8 +391,7 @@ export function useChat(sessionId: string | null) {
         const generator = sendMessageStream(
           text,
           attachment.documentId,
-          5,
-          sessionId,
+          chatOptions,
           controller.signal,
         );
         await consumeStream(generator, aiMsgId);
@@ -398,13 +403,15 @@ export function useChat(sessionId: string | null) {
           // Remove the empty streaming message, we'll add a proper one.
           setMessages((prev) => prev.filter((m) => m.id !== aiMsgId));
 
-          const response = await sendMessage(text, attachment.documentId, 5, sessionId);
+          const response = await sendMessage(text, attachment.documentId, chatOptions);
           setMessages((prev) => [
             ...prev,
             {
               id: aiMsgId,
               sender: "ai",
               text: response.answer,
+              question: response.question,
+              retrieval_debug: response.retrieval_debug,
               sources: response.sources,
               chunks: response.chunks,
               latency_ms: response.latency_ms,
@@ -457,18 +464,16 @@ export function useChat(sessionId: string | null) {
   const handleBeforeUpload = async () => {
     if (!attachment) return;
     const out = await deleteDocument(attachment.documentId);
-    if (out === "gone") {
+    if (out.status === "gone") {
       removeUploadedDocument(attachment.documentId);
       setAttachment(null);
       setRemoveError(null);
       return;
     }
-    if (out === "conflict") {
-      throw new Error(
-        "Wait for the current document to finish processing, or remove it, before uploading another."
-      );
+    if (out.status === "conflict") {
+      throw new Error(out.message);
     }
-    throw new Error("Could not remove the previous document. Try again.");
+    throw new Error(out.message);
   };
 
   const handleUploadAccepted = (payload: {
@@ -496,16 +501,16 @@ export function useChat(sessionId: string | null) {
     setRemoveError(null);
     try {
       const out = await deleteDocument(attachment.documentId);
-      if (out === "gone") {
+      if (out.status === "gone") {
         removeUploadedDocument(attachment.documentId);
         setAttachment(null);
         return;
       }
-      if (out === "conflict") {
-        setRemoveError("Can't remove while the document is queued or processing.");
+      if (out.status === "conflict") {
+        setRemoveError(out.message);
         return;
       }
-      setRemoveError("Could not remove the document. Try again.");
+      setRemoveError(out.message);
     } catch {
       setRemoveError("Could not remove the document. Try again.");
     }
