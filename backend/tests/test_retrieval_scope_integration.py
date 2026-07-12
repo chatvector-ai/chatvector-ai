@@ -4,7 +4,6 @@ import pytest
 
 from core.auth import AuthContext
 from core.session import Session
-from services import session_service
 from services.chat_service import (
     answer_question_for_document,
     answer_question_stream_for_document,

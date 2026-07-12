@@ -412,7 +412,7 @@ async def test_cross_tenant_session_returns_404():
     """get_session returns 404 when the session belongs to a different tenant."""
     from routes.sessions import get_session
 
-    with patch("routes.sessions.session_service.get_session", return_value=None):
+    with patch("routes.sessions.session_service.get_session", new=AsyncMock(return_value=None)):
         with pytest.raises(HTTPException) as exc:
             await get_session("session-other", auth=AuthContext(tenant_id="tenant-a"))
 
@@ -430,10 +430,10 @@ async def test_tenant_scoped_session_listing():
         Session(id="s2", tenant_id="tenant-a"),
     ]
 
-    with patch("routes.sessions.session_service.list_sessions", return_value=tenant_sessions) as mock_list:
+    with patch("routes.sessions.session_service.list_sessions", new=AsyncMock(return_value=tenant_sessions)) as mock_list:
         result = await list_sessions(auth=AuthContext(tenant_id="tenant-a"))
 
-    mock_list.assert_called_once_with(tenant_id="tenant-a")
+    mock_list.assert_awaited_once_with(tenant_id="tenant-a")
     assert isinstance(result, SessionListResponse)
     assert len(result.sessions) == 2
     assert all(s.tenant_id == "tenant-a" for s in result.sessions)
