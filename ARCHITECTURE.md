@@ -294,7 +294,7 @@ The raw key is printed once and never stored. Set it in all API clients as the B
 
 **Auth non-goals:** ChatVector does not provide user login/signup, OAuth, RBAC, billing, admin dashboards, or an API-key management UI. Keys are created via CLI (`python -m backend.cli create-tenant-key`) or direct DB updates; optional `external_user_id` mapping for developer-side identity is on the roadmap.
 
-**Session persistence:** Chat message turns are stored in the `chat_messages` table (PostgreSQL) and survive restarts. Session metadata — the in-memory registry in `backend/services/session_service.py` (`_SESSIONS`), including `document_ids` bound to a session — is **process-local**. It is lost on restart and not shared across API workers (e.g. `docker-compose.prod.yml` runs `--workers 2`). Integrators should treat session IDs as durable for message history but not assume document bindings survive redeploys until durable session metadata ships.
+**Session persistence:** All session state is now fully durable. Chat message turns are stored in `chat_messages`. Session metadata (`id`, `tenant_id`, `created_at`, `last_active`) is stored in the `sessions` table and document bindings are stored in `session_documents` — both introduced by migration `007_sessions.sql`. `backend/services/session_service.py` reads and writes exclusively through `SQLAlchemyService`; the previous in-memory `_SESSIONS` dict has been removed. Sessions survive backend restarts and are shared across all Uvicorn workers (`docker-compose.prod.yml` runs `--workers 2`).
 
 ---
 

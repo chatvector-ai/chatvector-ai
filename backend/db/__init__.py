@@ -335,6 +335,33 @@ async def get_session_history(
     )
 
 
+async def create_session_record(session_id: str, tenant_id) -> "Session":
+    from core.session import Session  # noqa: F401 (re-exported)
+
+    service = get_db_service()
+    return await service.create_session_record(session_id, tenant_id)
+
+
+async def get_session_record(session_id: str, tenant_id) -> "Session | None":
+    service = get_db_service()
+    return await service.get_session_record(session_id, tenant_id)
+
+
+async def list_session_records(tenant_id) -> list:
+    service = get_db_service()
+    return await service.list_session_records(tenant_id)
+
+
+async def delete_session_record(session_id: str, tenant_id) -> bool:
+    service = get_db_service()
+    return await service.delete_session_record(session_id, tenant_id)
+
+
+async def add_session_document(session_id: str, document_id: str) -> None:
+    service = get_db_service()
+    await service.add_session_document(session_id, document_id)
+
+
 __all__ = [
     "get_db_service",
     "create_document",
@@ -350,6 +377,11 @@ __all__ = [
     "fail_stale_documents_global",
     "store_chat_message",
     "get_session_history",
+    "create_session_record",
+    "get_session_record",
+    "list_session_records",
+    "delete_session_record",
+    "add_session_document",
     "ChunkMatch",
     "ChunkRecord",
     "db_service",

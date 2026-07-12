@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from core.auth import AuthContext
-from services import session_service
+from core.session import Session
 from services.chat_service import (
     answer_question_for_document,
     answer_question_stream_for_document,
@@ -14,10 +14,8 @@ from services.tenant_registry import clear_tenant_registry, register_tenant_docu
 
 @pytest.fixture(autouse=True)
 def _reset_registries():
-    session_service._SESSIONS.clear()
     clear_tenant_registry()
     yield
-    session_service._SESSIONS.clear()
     clear_tenant_registry()
 
 
@@ -30,10 +28,12 @@ def _disable_query_transformation(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_session_scope_searches_registered_session_document():
-    session = session_service.create_session(session_id="sess-1", tenant_id="tenant-a")
-    session_service.register_session_document(session.id, "doc-in-session", "tenant-a")
+    session = Session(id="sess-1", tenant_id="tenant-a", document_ids=["doc-in-session"])
 
     with patch(
+        "services.chat_service.get_session",
+        new=AsyncMock(return_value=session),
+    ), patch(
         "services.chat_service.get_embeddings",
         new=AsyncMock(return_value=[[0.1, 0.2]]),
     ), patch(
@@ -58,10 +58,12 @@ async def test_session_scope_searches_registered_session_document():
 
 @pytest.mark.asyncio
 async def test_session_scope_blocks_document_outside_session():
-    session = session_service.create_session(session_id="sess-2", tenant_id="tenant-a")
-    session_service.register_session_document(session.id, "doc-allowed", "tenant-a")
+    session = Session(id="sess-2", tenant_id="tenant-a", document_ids=["doc-allowed"])
 
     with patch(
+        "services.chat_service.get_session",
+        new=AsyncMock(return_value=session),
+    ), patch(
         "services.chat_service.get_embeddings",
         new=AsyncMock(return_value=[[0.1, 0.2]]),
     ), patch(
@@ -208,10 +210,12 @@ async def test_batch_level_scope_applied_when_items_omit_scope():
 @pytest.mark.asyncio
 async def test_stream_session_scope_blocks_document_outside_session():
     """Stream endpoint must respect session scope and block out-of-scope documents."""
-    session = session_service.create_session(session_id="stream-sess", tenant_id="tenant-a")
-    session_service.register_session_document(session.id, "doc-allowed", "tenant-a")
+    session = Session(id="stream-sess", tenant_id="tenant-a", document_ids=["doc-allowed"])
 
     with patch(
+        "services.chat_service.get_session",
+        new=AsyncMock(return_value=session),
+    ), patch(
         "services.chat_service.get_embeddings",
         new=AsyncMock(return_value=[[0.1, 0.2]]),
     ), patch(

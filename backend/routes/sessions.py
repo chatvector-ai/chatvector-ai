@@ -46,7 +46,7 @@ async def create_session(
 ):
     tenant_id = get_current_tenant(auth)
     try:
-        session = session_service.create_session(
+        session = await session_service.create_session(
             session_id=payload.session_id, tenant_id=tenant_id
         )
         return _format_session(session)
@@ -57,7 +57,7 @@ async def create_session(
 @router.get("/sessions", response_model=SessionListResponse)
 async def list_sessions(auth: AuthContext = Depends(require_auth)):
     tenant_id = get_current_tenant(auth)
-    sessions = session_service.list_sessions(tenant_id=tenant_id)
+    sessions = await session_service.list_sessions(tenant_id=tenant_id)
     return SessionListResponse(sessions=[_format_session(s) for s in sessions])
 
 
@@ -69,7 +69,7 @@ async def get_session(session_id: str, auth: AuthContext = Depends(require_auth)
     Note: Reading a session mutates its `last_active` timestamp to track recent activity.
     """
     tenant_id = get_current_tenant(auth)
-    session = session_service.get_session(session_id=session_id, tenant_id=tenant_id)
+    session = await session_service.get_session(session_id=session_id, tenant_id=tenant_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return _format_session(session)
@@ -78,6 +78,6 @@ async def get_session(session_id: str, auth: AuthContext = Depends(require_auth)
 @router.delete("/sessions/{session_id}", status_code=204)
 async def delete_session(session_id: str, auth: AuthContext = Depends(require_auth)):
     tenant_id = get_current_tenant(auth)
-    deleted = session_service.delete_session(session_id=session_id, tenant_id=tenant_id)
+    deleted = await session_service.delete_session(session_id=session_id, tenant_id=tenant_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")

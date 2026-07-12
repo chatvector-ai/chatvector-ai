@@ -67,3 +67,28 @@ class ChatMessage(Base):
     role = Column(String, nullable=False)
     content = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SessionRecord(Base):
+    """Durable session metadata stored in PostgreSQL."""
+
+    __tablename__ = "sessions"
+
+    id = Column(String(255), primary_key=True)
+    tenant_id = Column(String(255), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_active = Column(DateTime, default=datetime.utcnow)
+
+
+class SessionDocument(Base):
+    """Join table binding documents to sessions."""
+
+    __tablename__ = "session_documents"
+
+    session_id = Column(
+        String(255),
+        ForeignKey("sessions.id", ondelete="CASCADE"),
+        primary_key=True,
+        nullable=False,
+    )
+    document_id = Column(String(255), primary_key=True, nullable=False)

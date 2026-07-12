@@ -40,6 +40,7 @@ from services.ingestion_pipeline import (
     SemanticChunkingStrategy,
     UploadPipelineError,
     _build_chunk_records,
+    _classify_ingestion_error,
     _resolve_page_number,
 )
 from services.extraction_service import PageBoundary
@@ -535,3 +536,164 @@ async def test_validate_file_accepts_valid_cp1254_fallback():
     mock_file.content_type = "text/plain"
     pipeline = IngestionPipeline()
     pipeline.validate_file(mock_file, b"\xff\xfe")
+
+
+# ---------------------------------------------------------------------------
+# Error classification unit tests (Issue #394)
+# ---------------------------------------------------------------------------
+
+
+def test_classify_ingestion_error_maps_provider_auth_error():
+    from services.providers.base import ProviderAuthError
+
+    result = _classify_ingestion_error(ProviderAuthError("401: invalid key"), "embedding")
+    assert result["code"] == "embedding_invalid_api_key"
+    assert result["stage"] == "embedding"
+    assert "401" not in result["message"]
+    assert "invalid key" not in result["message"]
+
+
+def test_classify_ingestion_error_maps_provider_rate_limit_error():
+    from services.providers.base import ProviderRateLimitError
+
+    result = _classify_ingestion_error(ProviderRateLimitError("429: rate limited"), "embedding")
+    assert result["code"] == "embedding_rate_limited"
+    assert result["stage"] == "embedding"
+    assert "429" not in result["message"]
+
+
+def test_classify_ingestion_error_maps_provider_connection_error():
+    from services.providers.base import ProviderConnectionError
+
+    result = _classify_ingestion_error(ProviderConnectionError("Connection refused"), "embedding")
+    assert result["code"] == "provider_unreachable"
+    assert result["stage"] == "embedding"
+    assert "Connection refused" not in result["message"]
+
+
+def test_classify_ingestion_error_maps_provider_timeout_error():
+    from services.providers.base import ProviderTimeoutError
+
+    result = _classify_ingestion_error(ProviderTimeoutError("Request timed out"), "embedding")
+    assert result["code"] == "provider_timeout"
+    assert result["stage"] == "embedding"
+    assert "Request timed out" not in result["message"]
+
+
+def test_classify_ingestion_error_falls_back_for_unknown_exception():
+    result = _classify_ingestion_error(RuntimeError("something unexpected"), "storing")
+    assert result["code"] == "pipeline_error"
+    assert result["stage"] == "storing"
+    assert result["message"] == "An error occurred during document processing."
+    assert "something unexpected" not in result["message"]
+
+
+def test_classify_ingestion_error_preserves_upload_pipeline_error_fields():
+    exc = UploadPipelineError(
+        status_code=422,
+        code="no_text_extracted",
+        stage="extracting",
+        message="No extractable text was found in the uploaded document.",
+    )
+    result = _classify_ingestion_error(exc, "extracting")
+    assert result["code"] == "no_text_extracted"
+    assert result["stage"] == "extracting"
+    assert result["message"] == "No extractable text was found in the uploaded document."
+
+
+@pytest.mark.asyncio
+async def test_process_document_background_auth_error_sets_structured_code():
+    from services.providers.base import ProviderAuthError
+
+    pipeline = IngestionPipeline(splitter_cls=_SingleChunkSplitter)
+
+    with patch("services.ingestion_pipeline.db.update_document_status", new=AsyncMock()) as mock_update, \
+         patch("services.ingestion_pipeline.db.delete_document_chunks", new=AsyncMock()), \
+         patch(
+             "services.ingestion_pipeline.extract_text_with_metadata",
+             new=AsyncMock(return_value=("hello world", [])),
+         ), \
+         patch(
+             "services.ingestion_pipeline.get_embeddings",
+             new=AsyncMock(side_effect=ProviderAuthError("401: invalid key")),
+         ):
+
+        with pytest.raises(ProviderAuthError):
+            await pipeline.process_document_background(
+                doc_id="doc-auth",
+                file_name="test.pdf",
+                content_type="application/pdf",
+                file_bytes=b"%PDF-fake",
+                tenant_id="dev",
+            )
+
+    error = mock_update.await_args_list[-1].kwargs["error"]
+    assert error["code"] == "embedding_invalid_api_key"
+    assert error["stage"] == "embedding"
+    assert "401" not in error["message"]
+    assert mock_update.await_args_list[-1].kwargs["status"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_process_document_background_rate_limit_sets_structured_code():
+    from services.providers.base import ProviderRateLimitError
+
+    pipeline = IngestionPipeline(splitter_cls=_SingleChunkSplitter)
+
+    with patch("services.ingestion_pipeline.db.update_document_status", new=AsyncMock()) as mock_update, \
+         patch("services.ingestion_pipeline.db.delete_document_chunks", new=AsyncMock()), \
+         patch(
+             "services.ingestion_pipeline.extract_text_with_metadata",
+             new=AsyncMock(return_value=("hello world", [])),
+         ), \
+         patch(
+             "services.ingestion_pipeline.get_embeddings",
+             new=AsyncMock(side_effect=ProviderRateLimitError("429: quota exceeded")),
+         ):
+
+        with pytest.raises(ProviderRateLimitError):
+            await pipeline.process_document_background(
+                doc_id="doc-rate",
+                file_name="test.pdf",
+                content_type="application/pdf",
+                file_bytes=b"%PDF-fake",
+                tenant_id="dev",
+            )
+
+    error = mock_update.await_args_list[-1].kwargs["error"]
+    assert error["code"] == "embedding_rate_limited"
+    assert error["stage"] == "embedding"
+    assert "429" not in error["message"]
+    assert mock_update.await_args_list[-1].kwargs["status"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_process_document_background_unknown_exception_falls_back_to_generic():
+    pipeline = IngestionPipeline(splitter_cls=_SingleChunkSplitter)
+
+    with patch("services.ingestion_pipeline.db.update_document_status", new=AsyncMock()) as mock_update, \
+         patch("services.ingestion_pipeline.db.delete_document_chunks", new=AsyncMock()), \
+         patch(
+             "services.ingestion_pipeline.extract_text_with_metadata",
+             new=AsyncMock(return_value=("hello world", [])),
+         ), \
+         patch(
+             "services.ingestion_pipeline.get_embeddings",
+             new=AsyncMock(side_effect=RuntimeError("unexpected internal error")),
+         ):
+
+        with pytest.raises(RuntimeError):
+            await pipeline.process_document_background(
+                doc_id="doc-unknown",
+                file_name="test.pdf",
+                content_type="application/pdf",
+                file_bytes=b"%PDF-fake",
+                tenant_id="dev",
+            )
+
+    error = mock_update.await_args_list[-1].kwargs["error"]
+    assert error["code"] == "pipeline_error"
+    assert error["stage"] == "embedding"
+    assert error["message"] == "An error occurred during document processing."
+    assert "unexpected internal error" not in error["message"]
+    assert mock_update.await_args_list[-1].kwargs["status"] == "failed"

@@ -15,10 +15,13 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from core.auth import AuthContext, require_auth
+from core.session import Session
 from middleware.rate_limit import get_rate_limit_key, limiter
 from routes.chat import router as chat_router
 from routes.upload import router as upload_router
 from tests.request_utils import make_test_request
+
+_FAKE_SESSION = Session(id="rate-limit-session", tenant_id="dev")
 
 
 async def _rate_limit_exceeded_handler(
@@ -101,6 +104,8 @@ def test_post_chat_returns_429_after_limit_exceeded(client):
     with (
         patch("routes.chat.answer_question_for_document", new=AsyncMock(return_value={"answer": "ok", "chunks": 0})),
         patch("routes.chat.db.get_document", new=AsyncMock(return_value={"id": _CHAT_DOC_ID})),
+        patch("routes.chat.get_or_create_session", new=AsyncMock(return_value=_FAKE_SESSION)),
+        patch("routes.chat.register_session_document", new=AsyncMock()),
     ):
         for _ in range(_CHAT_WINDOW):
             assert client.post("/chat", json=payload).status_code == 200
@@ -130,6 +135,8 @@ def test_429_includes_retry_after_header(client):
     with (
         patch("routes.chat.answer_question_for_document", new=AsyncMock(return_value={"answer": "a", "chunks": 0})),
         patch("routes.chat.db.get_document", new=AsyncMock(return_value={"id": _CHAT_DOC_ID})),
+        patch("routes.chat.get_or_create_session", new=AsyncMock(return_value=_FAKE_SESSION)),
+        patch("routes.chat.register_session_document", new=AsyncMock()),
     ):
         for _ in range(_CHAT_WINDOW):
             client.post("/chat", json=payload)
@@ -144,6 +151,8 @@ def test_two_tenants_sharing_ip_have_separate_buckets(multi_tenant_client):
     with (
         patch("routes.chat.answer_question_for_document", new=AsyncMock(return_value={"answer": "ok", "chunks": 0})),
         patch("routes.chat.db.get_document", new=AsyncMock(return_value={"id": _CHAT_DOC_ID})),
+        patch("routes.chat.get_or_create_session", new=AsyncMock(return_value=_FAKE_SESSION)),
+        patch("routes.chat.register_session_document", new=AsyncMock()),
     ):
         for _ in range(_CHAT_WINDOW):
             assert (
@@ -176,6 +185,8 @@ def test_one_tenant_across_ips_shares_one_bucket(multi_tenant_client):
     with (
         patch("routes.chat.answer_question_for_document", new=AsyncMock(return_value={"answer": "ok", "chunks": 0})),
         patch("routes.chat.db.get_document", new=AsyncMock(return_value={"id": _CHAT_DOC_ID})),
+        patch("routes.chat.get_or_create_session", new=AsyncMock(return_value=_FAKE_SESSION)),
+        patch("routes.chat.register_session_document", new=AsyncMock()),
         patch(
             "middleware.rate_limit.get_remote_address",
             side_effect=["10.0.0.1", "10.0.0.2", "10.0.0.3"],
@@ -211,6 +222,8 @@ def test_endpoint_specific_limits_are_independent(multi_tenant_client):
         patch("routes.upload.ingestion_queue.enqueue", new=AsyncMock(return_value=1)),
         patch("routes.chat.answer_question_for_document", new=AsyncMock(return_value={"answer": "ok", "chunks": 0})),
         patch("routes.chat.db.get_document", new=AsyncMock(return_value={"id": _CHAT_DOC_ID})),
+        patch("routes.chat.get_or_create_session", new=AsyncMock(return_value=_FAKE_SESSION)),
+        patch("routes.chat.register_session_document", new=AsyncMock()),
     ):
         for _ in range(_UPLOAD_WINDOW):
             assert (

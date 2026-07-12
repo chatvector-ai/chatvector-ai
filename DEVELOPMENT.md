@@ -493,6 +493,18 @@ The column `content_tsv` is a generated `tsvector` from `chunk_text`; existing c
 are backfilled automatically. Hybrid retrieval requires the SQLAlchemy/PostgreSQL
 backend (`APP_ENV=development` or `APP_ENV=test` with `DATABASE_URL`).
 
+### Durable session storage (`sessions`, `session_documents`)
+
+If your Postgres volume was created before issue #386, apply the session persistence
+migration manually (fresh Docker volumes and CI apply all init scripts automatically):
+
+```bash
+docker compose exec db psql -U postgres -d postgres \
+    -f /docker-entrypoint-initdb.d/007_sessions.sql
+```
+
+Or paste the contents of `backend/db/init/007_sessions.sql` into `psql`.
+
 ### Ports
 
 - **8000** — HTTP API. Expose behind a reverse proxy or load balancer.

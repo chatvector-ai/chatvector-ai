@@ -16,16 +16,19 @@ async def test_chat_route_stores_history_on_success():
     payload = {"question": "q", "chunks": 1, "answer": "a", "session_id": "test-session", "status": "ok"}
     _DOC_ID_1 = "00000000-0000-0000-0000-000000000001"
 
+    class MockSession:
+        id = "test-session"
+        tenant_id = None
+
     with patch(
         "routes.chat.answer_question_for_document", new=AsyncMock(return_value=payload)
-    ), patch("routes.chat.get_or_create_session") as mock_get_session, \
-       patch("routes.chat.db.get_document", new=AsyncMock(return_value={"id": _DOC_ID_1})):
-        # Mock the session to return an object with id="test-session"
-        class MockSession:
-            id = "test-session"
-            tenant_id = None
-        mock_get_session.return_value = MockSession()
-        
+    ), patch(
+        "routes.chat.get_or_create_session", new=AsyncMock(return_value=MockSession())
+    ), patch(
+        "routes.chat.register_session_document", new=AsyncMock()
+    ), patch(
+        "routes.chat.db.get_document", new=AsyncMock(return_value={"id": _DOC_ID_1})
+    ):
         result = await chat(
             make_test_request("POST", "/chat"),
             ChatRequest(question="q", doc_id=_DOC_ID_1, session_id="test-session"),
@@ -107,6 +110,7 @@ async def test_stream_finalization_persistence():
     with patch("services.chat_service.transform_query", new=AsyncMock(return_value=["Q"])), \
          patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]*1536])), \
          patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])), \
+         patch("services.chat_service.get_session", new=AsyncMock(return_value=None)), \
          patch("services.chat_service.generate_answer_stream") as mock_stream, \
          patch("db.get_session_history", new=AsyncMock(return_value=[])) as mock_history, \
          patch("db.store_chat_message", new=AsyncMock()) as mock_store:

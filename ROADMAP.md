@@ -102,7 +102,7 @@ This phase introduces the primary architectural shift. Phase 3B and 3C work buil
 - Explicit session management endpoints: create, list, get, delete
 - Frontend anonymous sessions and session sidebar
 
-> **Session durability note:** `chat_messages` rows are persisted to PostgreSQL and survive restarts. Session metadata — including `document_ids` bound to a session — is held in an in-memory registry (`session_service._SESSIONS`) and is **not** durable across process restarts or shared across API workers. Chat history remains available after restart, but session-scoped document bindings may be lost until sessions are recreated.
+> **Session durability:** Both `chat_messages` and session metadata are fully persisted to PostgreSQL. Session metadata (`sessions` table) and document bindings (`session_documents` table) survive backend restarts and are shared across all API workers. Introduced by migration `007_sessions.sql`.
 
 **Context injection for answer generation**
 
@@ -156,9 +156,9 @@ This phase introduces the primary architectural shift. Phase 3B and 3C work buil
 
 - Backend `/chat/stream` is ready; the demo chat page still uses non-streaming `POST /chat` with a simulated character-by-character typing animation
 
-**Durable session metadata**
+**Durable session metadata** ✅
 
-- Postgres-backed session registry and `document_ids` bindings (messages are already persisted; metadata is process-local today)
+- Postgres-backed session registry (`sessions` table) and `document_ids` bindings (`session_documents` table) — migration `007_sessions.sql`; messages and session state all survive restarts
 
 **Distributed rate limiting**
 
@@ -343,7 +343,7 @@ Progress toward the Phase 3 north star:
 - ✅ SQLAlchemy/PostgreSQL as the only database backend (`DATABASE_URL` in all environments)
 - ✅ Frontend demo: chat, batch compare/synthesize, status, retrieval controls, retrieval inspector
 - ⏳ Frontend demo chat SSE streaming (backend ready; UI still uses `POST /chat` with simulated typing)
-- ⏳ Durable Postgres-backed session metadata (messages persisted; session registry is in-memory)
+- ✅ Durable Postgres-backed session metadata (sessions table + session_documents table; fully persistent)
 - ⏳ Node.js/TypeScript SDK planned
 - ⏳ Redis-backed distributed rate-limit storage across workers
 - ⏳ Documentation site, examples, and advanced inspection tooling in progress

@@ -71,10 +71,10 @@ async def chat(request: Request, payload: ChatRequest, auth: AuthContext = Depen
     await _assert_document_owned(doc_id_str, tenant_id)
 
     # Initialize or retrieve session
-    session = get_or_create_session(
+    session = await get_or_create_session(
         session_id=payload.session_id, tenant_id=tenant_id
     )
-    register_session_document(session.id, doc_id_str, tenant_id)
+    await register_session_document(session.id, doc_id_str, tenant_id)
     register_tenant_document(tenant_id, doc_id_str)
 
     return await answer_question_for_document(
@@ -122,10 +122,10 @@ async def chat_stream(request: Request, payload: ChatRequest, auth: AuthContext 
     await _assert_document_owned(doc_id_str, tenant_id)
 
     # Initialize or retrieve session
-    session = get_or_create_session(
+    session = await get_or_create_session(
         session_id=payload.session_id, tenant_id=tenant_id
     )
-    register_session_document(session.id, doc_id_str, tenant_id)
+    await register_session_document(session.id, doc_id_str, tenant_id)
     register_tenant_document(tenant_id, doc_id_str)
 
     return StreamingResponse(
@@ -161,7 +161,7 @@ async def chat_batch(request: Request, payload: ChatBatchRequest, auth: AuthCont
             # When unset, let the batch-level `scope` take effect in the service.
             if "scope" not in q.model_fields_set:
                 q_dict.pop("scope", None)
-            q_session = get_or_create_session(
+            q_session = await get_or_create_session(
                 session_id=q.session_id or batch_session_id,
                 tenant_id=tenant_id,
             )
@@ -169,7 +169,7 @@ async def chat_batch(request: Request, payload: ChatBatchRequest, auth: AuthCont
             for doc_id in q.doc_ids:
                 doc_id_str = str(doc_id)
                 await _assert_document_owned(doc_id_str, tenant_id)
-                register_session_document(q_session.id, doc_id_str, tenant_id)
+                await register_session_document(q_session.id, doc_id_str, tenant_id)
                 register_tenant_document(tenant_id, doc_id_str)
             processed_queries.append(q_dict)
 

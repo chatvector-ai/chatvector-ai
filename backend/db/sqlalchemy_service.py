@@ -12,8 +12,9 @@ from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from core.models import Document, DocumentChunk
+from core.models import Document, DocumentChunk, SessionRecord, SessionDocument
 from core.config import config
+from core.session import Session
 from db.base import ChunkMatch, ChunkRecord, DatabaseService
 from db.tenant_scope import require_tenant_id
 from services.retrieval_service import (
@@ -591,3 +592,123 @@ class SQLAlchemyService(DatabaseService):
                 }
                 for msg in reversed(messages)
             ]
+
+    # ── Session persistence ──────────────────────────────────────────────────
+
+    def _session_from_record(
+        self, record: SessionRecord, document_ids: list[str]
+    ) -> Session:
+        from datetime import timezone
+
+        def _to_aware(dt: datetime | None) -> datetime:
+            if dt is None:
+                return datetime.now(timezone.utc)
+            return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+        return Session(
+            id=record.id,
+            tenant_id=record.tenant_id,
+            created_at=_to_aware(record.created_at),
+            last_active=_to_aware(record.last_active),
+            document_ids=document_ids,
+        )
+
+    async def _load_session_document_ids(
+        self, db_session: AsyncSession, session_id: str
+    ) -> list[str]:
+        result = await db_session.execute(
+            select(SessionDocument.document_id).where(
+                SessionDocument.session_id == session_id
+            )
+        )
+        return [row[0] for row in result.all()]
+
+    async def create_session_record(
+        self, session_id: str, tenant_id: Optional[str]
+    ) -> Session:
+        async with self.async_session() as db_session:
+            record = SessionRecord(id=session_id, tenant_id=tenant_id)
+            db_session.add(record)
+            await db_session.commit()
+            await db_session.refresh(record)
+            logger.info(f"[PostgreSQL] Created session {session_id} (tenant={tenant_id})")
+            return self._session_from_record(record, [])
+
+    async def get_session_record(
+        self, session_id: str, tenant_id: Optional[str]
+    ) -> Optional[Session]:
+        async with self.async_session() as db_session:
+            result = await db_session.execute(
+                select(SessionRecord).where(SessionRecord.id == session_id)
+            )
+            record = result.scalar_one_or_none()
+            if record is None:
+                return None
+            if tenant_id and record.tenant_id and record.tenant_id != tenant_id:
+                logger.warning(
+                    f"Session {session_id} tenant mismatch: {record.tenant_id} vs {tenant_id}"
+                )
+                return None
+            # Touch last_active
+            await db_session.execute(
+                sql_update(SessionRecord)
+                .where(SessionRecord.id == session_id)
+                .values(last_active=datetime.utcnow())
+            )
+            await db_session.commit()
+            await db_session.refresh(record)
+            doc_ids = await self._load_session_document_ids(db_session, session_id)
+            return self._session_from_record(record, doc_ids)
+
+    async def list_session_records(self, tenant_id: Optional[str]) -> list[Session]:
+        async with self.async_session() as db_session:
+            stmt = select(SessionRecord)
+            if tenant_id:
+                stmt = stmt.where(SessionRecord.tenant_id == tenant_id)
+            result = await db_session.execute(stmt)
+            records = result.scalars().all()
+            sessions = []
+            for record in records:
+                doc_ids = await self._load_session_document_ids(db_session, record.id)
+                sessions.append(self._session_from_record(record, doc_ids))
+            return sessions
+
+    async def delete_session_record(
+        self, session_id: str, tenant_id: Optional[str]
+    ) -> bool:
+        async with self.async_session() as db_session:
+            result = await db_session.execute(
+                select(SessionRecord).where(SessionRecord.id == session_id)
+            )
+            record = result.scalar_one_or_none()
+            if record is None:
+                return False
+            if tenant_id and record.tenant_id and record.tenant_id != tenant_id:
+                logger.warning(
+                    f"delete_session_record: tenant mismatch for session {session_id}"
+                )
+                return False
+            await db_session.execute(
+                delete(SessionRecord).where(SessionRecord.id == session_id)
+            )
+            await db_session.commit()
+            logger.info(f"[PostgreSQL] Deleted session {session_id}")
+            return True
+
+    async def add_session_document(self, session_id: str, document_id: str) -> None:
+        async with self.async_session() as db_session:
+            existing = await db_session.execute(
+                select(SessionDocument).where(
+                    SessionDocument.session_id == session_id,
+                    SessionDocument.document_id == document_id,
+                )
+            )
+            if existing.scalar_one_or_none() is not None:
+                return
+            db_session.add(
+                SessionDocument(session_id=session_id, document_id=document_id)
+            )
+            await db_session.commit()
+            logger.debug(
+                f"[PostgreSQL] Bound document {document_id} to session {session_id}"
+            )

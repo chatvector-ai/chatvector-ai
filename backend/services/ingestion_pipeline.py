@@ -667,6 +667,53 @@ class UploadPipelineError(Exception):
         self.document_id = document_id
 
 
+def _classify_ingestion_error(exc: Exception, stage: str) -> dict:
+    """Map a pipeline exception to a structured status error dict with a stable code and user-safe message."""
+    from services.providers.base import (
+        ProviderAuthError,
+        ProviderConnectionError,
+        ProviderRateLimitError,
+        ProviderTimeoutError,
+    )
+
+    if isinstance(exc, UploadPipelineError):
+        return {"stage": exc.stage, "code": exc.code, "message": exc.message}
+
+    if isinstance(exc, ProviderAuthError):
+        return {
+            "stage": stage,
+            "code": "embedding_invalid_api_key",
+            "message": "The embedding API key is invalid or missing. Check your provider credentials.",
+        }
+
+    if isinstance(exc, ProviderRateLimitError):
+        return {
+            "stage": stage,
+            "code": "embedding_rate_limited",
+            "message": "The embedding provider is rate-limited or quota exceeded. Please try again later.",
+        }
+
+    if isinstance(exc, ProviderConnectionError):
+        return {
+            "stage": stage,
+            "code": "provider_unreachable",
+            "message": "Could not reach the embedding provider. Check your network and provider configuration.",
+        }
+
+    if isinstance(exc, ProviderTimeoutError):
+        return {
+            "stage": stage,
+            "code": "provider_timeout",
+            "message": "The embedding provider request timed out. Please try again later.",
+        }
+
+    return {
+        "stage": stage,
+        "code": "pipeline_error",
+        "message": "An error occurred during document processing.",
+    }
+
+
 class IngestionPipeline:
     def __init__(self, splitter_cls=None):
         self._splitter_cls = splitter_cls or RecursiveCharacterTextSplitter
@@ -775,20 +822,17 @@ class IngestionPipeline:
         self,
         doc_id: str,
         stage: str,
-        message: str,
+        exc: Exception,
         tenant_id: str,
     ) -> None:
         tenant_id = require_tenant_id(tenant_id, method="delete_document_chunks")
+        error = _classify_ingestion_error(exc, stage)
         try:
             await self._update_status(
                 doc_id=doc_id,
                 status="failed",
                 tenant_id=tenant_id,
-                error={
-                    "stage": stage,
-                    "code": "pipeline_error",
-                    "message": "An error occurred during document processing."
-                },
+                error=error,
             )
         except Exception as status_error:
             logger.error(f"Failed to mark document {doc_id} as failed: {status_error}")
@@ -894,7 +938,7 @@ class IngestionPipeline:
                 e.document_id = doc_id
 
             if doc_id:
-                await self._handle_error(doc_id=doc_id, stage=e.stage, message=e.message, tenant_id=tenant_id)
+                await self._handle_error(doc_id=doc_id, stage=e.stage, exc=e, tenant_id=tenant_id)
 
             logger.warning(
                 f"Upload validation/pipeline failed at stage={e.stage}: {e.message}"
@@ -903,7 +947,7 @@ class IngestionPipeline:
 
         except Exception as e:
             if doc_id:
-                await self._handle_error(doc_id=doc_id, stage=stage, message=str(e), tenant_id=tenant_id)
+                await self._handle_error(doc_id=doc_id, stage=stage, exc=e, tenant_id=tenant_id)
 
             logger.error(f"Upload failed at stage={stage} for file {safe_filename}: {e}")
             raise UploadPipelineError(
@@ -1004,7 +1048,7 @@ class IngestionPipeline:
             )
 
         except UploadPipelineError as e:
-            await self._handle_error(doc_id=doc_id, stage=e.stage, message=e.message, tenant_id=tenant_id)
+            await self._handle_error(doc_id=doc_id, stage=e.stage, exc=e, tenant_id=tenant_id)
             logger.warning(
                 f"Background pipeline failed at stage={e.stage} "
                 f"for document {doc_id}: {e.message}"
@@ -1012,7 +1056,7 @@ class IngestionPipeline:
             raise
 
         except Exception as e:
-            await self._handle_error(doc_id=doc_id, stage=stage, message=str(e), tenant_id=tenant_id)
+            await self._handle_error(doc_id=doc_id, stage=stage, exc=e, tenant_id=tenant_id)
             logger.error(
                 f"Background pipeline unexpected error at stage={stage} "
                 f"for document {doc_id}: {e}"

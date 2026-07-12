@@ -786,13 +786,15 @@ async def test_batch_includes_latency_and_model_per_query():
 @pytest.mark.asyncio
 async def test_latency_and_model_present_in_no_documents_in_scope_error():
     """latency_ms and model must be present even when retrieval scope returns no docs."""
-    import services.session_service as session_svc
     from core.auth import AuthContext
+    from core.session import Session
 
-    session = session_svc.create_session(tenant_id="tenant-x")
-    session_svc.register_session_document(session.id, "doc-allowed", "tenant-x")
+    session = Session(id="sess-tenant-x", tenant_id="tenant-x", document_ids=["doc-allowed"])
 
-    try:
+    with patch(
+        "services.chat_service.get_session",
+        new=AsyncMock(return_value=session),
+    ):
         result = await answer_question_for_document(
             question="Q?",
             doc_id="doc-not-in-scope",
@@ -800,8 +802,6 @@ async def test_latency_and_model_present_in_no_documents_in_scope_error():
             auth=AuthContext(tenant_id="tenant-x"),
             scope="session",
         )
-    finally:
-        session_svc._SESSIONS.pop(session.id, None)
 
     assert result["status"] == "error"
     assert result["error"]["code"] == "no_documents_in_scope"
@@ -814,11 +814,10 @@ async def test_latency_and_model_present_in_no_documents_in_scope_error():
 @pytest.mark.asyncio
 async def test_batch_latency_and_model_present_in_no_documents_in_scope_error():
     """Batch no_documents_in_scope results must include latency_ms and model."""
-    import services.session_service as session_svc
     from core.auth import AuthContext
+    from core.session import Session
 
-    session = session_svc.create_session(tenant_id="tenant-y")
-    session_svc.register_session_document(session.id, "doc-allowed", "tenant-y")
+    session = Session(id="sess-tenant-y", tenant_id="tenant-y", document_ids=["doc-allowed"])
 
     queries = [
         {
@@ -830,16 +829,16 @@ async def test_batch_latency_and_model_present_in_no_documents_in_scope_error():
         }
     ]
 
-    try:
-        with patch(
-            "services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])
-        ):
-            result = await answer_questions_for_documents_batch(
-                queries,
-                auth=AuthContext(tenant_id="tenant-y"),
-            )
-    finally:
-        session_svc._SESSIONS.pop(session.id, None)
+    with patch(
+        "services.chat_service.get_session",
+        new=AsyncMock(return_value=session),
+    ), patch(
+        "services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])
+    ):
+        result = await answer_questions_for_documents_batch(
+            queries,
+            auth=AuthContext(tenant_id="tenant-y"),
+        )
 
     assert result[0]["status"] == "error"
     assert result[0]["error"]["code"] == "no_documents_in_scope"

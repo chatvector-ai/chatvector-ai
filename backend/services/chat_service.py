@@ -150,7 +150,7 @@ async def _resolve_retrieval_doc_ids(
 
     session_doc_ids: list[str] = []
     if session_id:
-        session = get_session(session_id, tenant_id)
+        session = await get_session(session_id, tenant_id)
         if session:
             session_doc_ids = list(session.document_ids)
 

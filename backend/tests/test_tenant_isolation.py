@@ -577,66 +577,65 @@ def test_sdk_no_authorization_header_when_no_key():
 
 
 # ---------------------------------------------------------------------------
-# Session isolation  (unit — in-memory sessions, no DB needed)
+# Session isolation  (unit — mocked DB, no live connection needed)
 # ---------------------------------------------------------------------------
 
 
-def test_session_isolation_cross_tenant():
+@pytest.mark.asyncio
+async def test_session_isolation_cross_tenant():
     """Tenant B cannot retrieve or delete Tenant A's session."""
+    from unittest.mock import AsyncMock, patch
+    from core.session import Session
     from services.session_service import (
         create_session,
         delete_session,
         get_session,
         list_sessions,
-        _SESSIONS,
     )
 
-    _SESSIONS.clear()
-    try:
-        sess_a = create_session(tenant_id="tenant-a")
+    sess_a = Session(id="unit-sess-a", tenant_id="tenant-a")
 
-        # Tenant B cannot see Tenant A's session
-        result = get_session(sess_a.id, tenant_id="tenant-b")
+    # get_session_record returns None for wrong tenant (isolation enforced by DB layer)
+    with patch("db.get_session_record", new=AsyncMock(return_value=None)), \
+         patch("db.list_session_records", new=AsyncMock(return_value=[])), \
+         patch("db.delete_session_record", new=AsyncMock(return_value=False)):
+
+        result = await get_session(sess_a.id, tenant_id="tenant-b")
         assert result is None
 
-        # Tenant B's session list does not include Tenant A's session
-        sessions_b = list_sessions(tenant_id="tenant-b")
+        sessions_b = await list_sessions(tenant_id="tenant-b")
         assert all(s.id != sess_a.id for s in sessions_b)
 
-        # Tenant B's delete attempt does not remove Tenant A's session
-        delete_session(sess_a.id, tenant_id="tenant-b")
-        still_there = get_session(sess_a.id, tenant_id="tenant-a")
-        assert still_there is not None
-    finally:
-        _SESSIONS.clear()
+        deleted = await delete_session(sess_a.id, tenant_id="tenant-b")
+        assert deleted is False
 
 
-def test_session_tenant_a_can_access_own_session():
+@pytest.mark.asyncio
+async def test_session_tenant_a_can_access_own_session():
     """Tenant A can read and delete their own session."""
+    from unittest.mock import AsyncMock, patch
+    from core.session import Session
     from services.session_service import (
-        create_session,
         delete_session,
         get_session,
         list_sessions,
-        _SESSIONS,
     )
 
-    _SESSIONS.clear()
-    try:
-        sess = create_session(tenant_id="tenant-a")
+    sess = Session(id="unit-sess-own", tenant_id="tenant-a")
 
-        result = get_session(sess.id, tenant_id="tenant-a")
+    with patch("db.get_session_record", new=AsyncMock(return_value=sess)), \
+         patch("db.list_session_records", new=AsyncMock(return_value=[sess])), \
+         patch("db.delete_session_record", new=AsyncMock(return_value=True)):
+
+        result = await get_session(sess.id, tenant_id="tenant-a")
         assert result is not None
         assert result.id == sess.id
 
-        sessions = list_sessions(tenant_id="tenant-a")
+        sessions = await list_sessions(tenant_id="tenant-a")
         assert any(s.id == sess.id for s in sessions)
 
-        delete_session(sess.id, tenant_id="tenant-a")
-        gone = get_session(sess.id, tenant_id="tenant-a")
-        assert gone is None
-    finally:
-        _SESSIONS.clear()
+        deleted = await delete_session(sess.id, tenant_id="tenant-a")
+        assert deleted is True
 
 
 # ---------------------------------------------------------------------------
