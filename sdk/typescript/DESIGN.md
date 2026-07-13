@@ -106,8 +106,8 @@ changing their module system immediately:
   "engines": { "node": ">=22" },
   "exports": {
     ".": {
-      "browser": "./dist/browser-stub.js",
       "types": "./dist/index.d.ts",
+      "browser": "./dist/browser-stub.js",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     }
@@ -185,6 +185,11 @@ class ChatVectorClient {
 | `listSessions` | `GET /sessions` | direct, unpaginated backend response; no SDK pagination |
 | other session methods | `/sessions` and `/sessions/{sessionId}` | create, get, delete |
 
+The backend currently exposes only `POST /upload`; the `/ingest` route is a
+forward-compatibility shim matching the Python SDK. On today's backend every
+`uploadDocument` call will receive a 404 from `/ingest` and transparently fall
+back to `/upload`.
+
 ### Request lifecycle
 
 ```mermaid
@@ -252,29 +257,37 @@ raises `ChatVectorAPIError` with `code: "document_failed"` and the final
 
 The SDK serializes camelCase input to the currently deployed snake_case
 backend contract. It does not validate user text or UUIDs client-side beyond
-basic required-field checks; backend validation remains authoritative.
+basic required-field checks; backend validation remains authoritative. Limits
+documented below (`question` length, `matchCount` range, batch size) are
+informational; the backend enforces them.
+
+Every response type carries an optional `_raw` property with the full decoded
+JSON payload. This preserves forward-compatibility when the backend adds fields
+the SDK does not yet model (for example `retrieval_debug` on chat responses).
+The underscore prefix signals that `_raw` is not part of the stable response
+contract.
 
 ```ts
 type RetrievalScope = "session" | "tenant";
 
 type ChatRequest = {
-  question: string;
+  question: string;              // 1–2 000 characters
   docId: string;
-  matchCount?: number; // backend default 5, valid range 1..20
+  matchCount?: number;           // backend default 5, valid range 1–20
   sessionId?: string;
-  scope?: RetrievalScope; // backend default "session"
+  scope?: RetrievalScope;        // backend default "session"
 };
 
 type BatchChatQuery = {
-  question: string;
+  question: string;              // 1–2 000 characters
   docIds: string[];
-  matchCount?: number;
+  matchCount?: number;           // backend default 5, valid range 1–20
   sessionId?: string;
   scope?: RetrievalScope;
 };
 
 type BatchChatRequest = {
-  queries: BatchChatQuery[];
+  queries: BatchChatQuery[];     // 1–20 items
   sessionId?: string;
   scope?: RetrievalScope;
 };
@@ -293,6 +306,7 @@ type DocumentResponse = {
   message?: string;
   queuePosition?: number;
   statusEndpoint?: string;
+  _raw?: Record<string, unknown>;
 };
 
 type DocumentStatus = {
@@ -303,6 +317,7 @@ type DocumentStatus = {
   updatedAt?: string | null;
   error?: Record<string, unknown> | null;
   queuePosition?: number;
+  _raw?: Record<string, unknown>;
 };
 
 type ChatResponse = {
@@ -315,6 +330,7 @@ type ChatResponse = {
   model: string;
   status: "ok" | "error";
   error?: { code: string; message: string };
+  _raw?: Record<string, unknown>;
 };
 
 type BatchChatResult = {
@@ -327,6 +343,7 @@ type BatchChatResult = {
   error?: { code: string; message: string };
   latencyMs: number;
   model: string;
+  _raw?: Record<string, unknown>;
 };
 
 type BatchChatResponse = {
@@ -334,6 +351,7 @@ type BatchChatResponse = {
   successCount: number;
   failureCount: number;
   results: BatchChatResult[];
+  _raw?: Record<string, unknown>;
 };
 
 type Session = {
@@ -343,9 +361,13 @@ type Session = {
   lastActive: string;
   metadata: Record<string, unknown>;
   documentIds: string[];
+  _raw?: Record<string, unknown>;
 };
 
-type SessionListResponse = { sessions: Session[] };
+type SessionListResponse = {
+  sessions: Session[];
+  _raw?: Record<string, unknown>;
+};
 type CreateSessionInput = { sessionId?: string };
 type WaitForReadyOptions = RequestOptions & {
   timeoutMs?: number;
@@ -451,9 +473,13 @@ type RetryOptions = {
   stream after response bytes have started. The caller must explicitly make a
   new request if a mutating operation has an ambiguous outcome.
 
-This retains Python's status classifications and standard delay semantics,
-while avoiding mutating retry risk until the backend introduces an
-idempotency-key contract.
+This retains Python's retryable-status set (`{408, 429, 502, 503, 504}`) but
+improves on the Python backoff formula in two ways: full jitter prevents
+thundering-herd on shared infrastructure, and a `maxDelayMs` cap bounds the
+worst-case wait. The GET/HEAD restriction avoids mutating retry risk until the
+backend introduces an idempotency-key contract. The Python SDK retries all
+HTTP methods including POST, which can duplicate documents, sessions, or
+messages when the server processes the request but the response is lost.
 
 ## Observability
 
@@ -543,6 +569,24 @@ application backend, not a browser SDK:
    names only; do not include React, Next.js client code, hooks, or a UI.
 6. Show how the framework's downstream disconnect signal is connected to an
    `AbortController` and passed to the SDK as `RequestOptions.signal`.
+
+## Design decisions — deliberate deviations from the Python SDK
+
+This section records intentional divergences from the Python
+`ChatVectorClient`. They are not omissions; each was evaluated during design.
+
+| Area | Python SDK | TypeScript SDK | Rationale |
+| --- | --- | --- | --- |
+| Retry scope | All HTTP methods including POST | GET and HEAD only | No idempotency-key contract; retrying POST could duplicate documents, sessions, or messages |
+| Backoff formula | `max(base × 2^n, Retry-After)`, no jitter, no cap | `random(0..min(initial × 2^n, maxDelay))` with full jitter and `Retry-After` floor | Jitter prevents thundering herd; cap bounds worst-case wait |
+| `ChatResponse` fields | `question`, `chunks`, `answer`, `sources`, `latency_ms`, `model` | Adds `docId`, `status`, `error` | Backend returns these; callers can distinguish provider soft-errors and correlate responses |
+| `RateLimitError.retryAfterMs` | Not present | Included | Exposes parsed `Retry-After` for informed caller back-pressure |
+| Upload input | `file_path: str` only | `{ path }` or `{ data, fileName }` union | In-memory bytes and blobs are common in Node server pipelines |
+| Method signatures | Positional parameters | Single request-object | TypeScript lacks keyword arguments; an options object is idiomatic and forward-compatible |
+| `_raw` response field | `raw: dict` on every model | `_raw?: Record<string, unknown>` | Preserves full payload for forward-compatibility; underscore signals non-stable contract |
+| `Retry-After` parsing | Delta-seconds only | Delta-seconds and HTTP-date (best-effort) | Follows RFC 9110 §10.2.3; invalid or expired values are ignored |
+| Cancellation | Not supported | `AbortSignal` on every public method | Idiomatic in Node servers; downstream disconnect should propagate |
+| Observability | Python `logging` module | Silent; no console output | Avoids choosing a logging API; a structured hook is a future design |
 
 ## Explicit v0 non-goals
 
