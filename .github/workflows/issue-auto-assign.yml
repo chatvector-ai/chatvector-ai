@@ -13,6 +13,7 @@ jobs:
 
     steps:
       - name: Assign commenter when they ask to be added
+        id: assign
         uses: actions/github-script@v7
         with:
           script: |
@@ -91,7 +92,111 @@ jobs:
               owner,
               repo,
               issue_number: issue.number,
-              body: `@${username} You've been assigned to this issue — we here at ChatVector look forward to your 🔥🔥🔥 contributions! If you have questions, feel free to ask here or post in [Discussions](https://github.com/chatvector-ai/chatvector-ai/discussions/landing).`,
+              body: `@${username} You've been assigned to this issue — we here at ChatVector look forward to your 🔥🔥🔥 contributions! If you have questions, feel free to ask here or post in [General Chat & Casual Discussion](https://github.com/chatvector-ai/chatvector-ai/discussions/51).`,
             });
 
+            core.setOutput("assigned", "true");
+            core.setOutput("issue_number", String(issue.number));
             core.info(`Assigned ${username} to issue #${issue.number}.`);
+
+      - name: Move issue to In progress
+        if: steps.assign.outputs.assigned == 'true'
+        uses: actions/github-script@v7
+        env:
+          PROJECT_OWNER: chatvector-ai
+          PROJECT_NUMBER: "2"
+          PROJECT_TITLE: ChatVector-AI Development
+          STATUS_FIELD_NAME: Status
+          STATUS_VALUE_NAME: In progress
+        with:
+          github-token: ${{ secrets.PROJECTS_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const issueNumber = Number("${{ steps.assign.outputs.issue_number }}");
+
+            const projectOwner = process.env.PROJECT_OWNER;
+            const projectNumber = Number(process.env.PROJECT_NUMBER);
+            const projectTitle = process.env.PROJECT_TITLE;
+            const statusFieldName = process.env.STATUS_FIELD_NAME;
+            const statusValueName = process.env.STATUS_VALUE_NAME;
+
+            const { organization } = await github.graphql(
+              `query($owner: String!, $number: Int!) {
+                organization(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                    fields(first: 20) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options { id name }
+                        }
+                      }
+                    }
+                  }
+                }
+              }`,
+              { owner: projectOwner, number: projectNumber }
+            );
+
+            const project = organization.projectV2;
+            const statusField = project.fields.nodes.find(
+              (field) => field.name === statusFieldName
+            );
+            const statusOption = statusField?.options.find(
+              (option) => option.name.toLowerCase() === statusValueName.toLowerCase()
+            );
+
+            if (!statusField || !statusOption) {
+              core.warning(`Could not resolve project status option "${statusValueName}".`);
+              return;
+            }
+
+            const { repository: issueRepo } = await github.graphql(
+              `query($owner: String!, $repo: String!, $issue: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  issue(number: $issue) {
+                    projectItems(first: 10) {
+                      nodes {
+                        id
+                        project { title }
+                      }
+                    }
+                  }
+                }
+              }`,
+              { owner, repo, issue: issueNumber }
+            );
+
+            const projectItem = issueRepo.issue.projectItems.nodes.find(
+              (item) => item.project.title === projectTitle
+            );
+
+            if (!projectItem) {
+              core.info(`Issue #${issueNumber} is not on ${projectTitle}; skipping.`);
+              return;
+            }
+
+            await github.graphql(
+              `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                updateProjectV2ItemFieldValue(
+                  input: {
+                    projectId: $projectId
+                    itemId: $itemId
+                    fieldId: $fieldId
+                    value: { singleSelectOptionId: $optionId }
+                  }
+                ) {
+                  projectV2Item { id }
+                }
+              }`,
+              {
+                projectId: project.id,
+                itemId: projectItem.id,
+                fieldId: statusField.id,
+                optionId: statusOption.id,
+              }
+            );
+
+            core.info(`Set issue #${issueNumber} to "${statusValueName}".`);
