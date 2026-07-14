@@ -1,0 +1,146 @@
+name: PR Project Status
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+jobs:
+  set-in-review:
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      issues: read
+      organization-projects: write
+
+    steps:
+      - name: Move linked issues to In review
+        uses: actions/github-script@v7
+        env:
+          PROJECT_OWNER: chatvector-ai
+          PROJECT_NUMBER: "2"
+          STATUS_FIELD_NAME: Status
+          STATUS_VALUE_NAME: In review
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = context.payload.pull_request.number;
+
+            const { repository } = await github.graphql(
+              `query($owner: String!, $repo: String!, $pr: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $pr) {
+                    closingIssuesReferences(first: 20) {
+                      nodes { number }
+                    }
+                  }
+                }
+              }`,
+              { owner, repo, pr: prNumber }
+            );
+
+            const linkedIssues =
+              repository.pullRequest.closingIssuesReferences.nodes.map(
+                (node) => node.number
+              );
+
+            if (linkedIssues.length === 0) {
+              core.info("No linked issues found on PR; nothing to update.");
+              return;
+            }
+
+            const projectOwner = process.env.PROJECT_OWNER;
+            const projectNumber = Number(process.env.PROJECT_NUMBER);
+            const statusFieldName = process.env.STATUS_FIELD_NAME;
+            const statusValueName = process.env.STATUS_VALUE_NAME;
+
+            const { organization } = await github.graphql(
+              `query($owner: String!, $number: Int!) {
+                organization(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                    fields(first: 20) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options { id name }
+                        }
+                      }
+                    }
+                  }
+                }
+              }`,
+              { owner: projectOwner, number: projectNumber }
+            );
+
+            const project = organization.projectV2;
+            const statusField = project.fields.nodes.find(
+              (field) => field.name === statusFieldName
+            );
+
+            if (!statusField) {
+              core.setFailed(`Status field "${statusFieldName}" was not found on the project.`);
+              return;
+            }
+
+            const statusOption = statusField.options.find(
+              (option) => option.name.toLowerCase() === statusValueName.toLowerCase()
+            );
+
+            if (!statusOption) {
+              core.setFailed(`Status option "${statusValueName}" was not found on the project.`);
+              return;
+            }
+
+            for (const issueNumber of linkedIssues) {
+              const { repository: issueRepo } = await github.graphql(
+                `query($owner: String!, $repo: String!, $issue: Int!) {
+                  repository(owner: $owner, name: $repo) {
+                    issue(number: $issue) {
+                      projectItems(first: 10) {
+                        nodes {
+                          id
+                          project { title }
+                        }
+                      }
+                    }
+                  }
+                }`,
+                { owner, repo, issue: issueNumber }
+              );
+
+              const projectItem = issueRepo.issue.projectItems.nodes.find(
+                (item) => item.project.title === "ChatVector-AI Development"
+              );
+
+              if (!projectItem) {
+                core.info(`Issue #${issueNumber} is not on ChatVector-AI Development; skipping.`);
+                continue;
+              }
+
+              await github.graphql(
+                `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                  updateProjectV2ItemFieldValue(
+                    input: {
+                      projectId: $projectId
+                      itemId: $itemId
+                      fieldId: $fieldId
+                      value: { singleSelectOptionId: $optionId }
+                    }
+                  ) {
+                    projectV2Item { id }
+                  }
+                }`,
+                {
+                  projectId: project.id,
+                  itemId: projectItem.id,
+                  fieldId: statusField.id,
+                  optionId: statusOption.id,
+                }
+              );
+
+              core.info(`Set issue #${issueNumber} to "${statusValueName}".`);
+            }

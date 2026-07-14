@@ -1,0 +1,97 @@
+name: Issue Auto-Assign
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  assign-on-request:
+    if: github.event.issue.pull_request == null
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Assign commenter when they ask to be added
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const ASSIGNEE_REQUEST_PATTERNS = [
+              /\bassign\s+(this\s+)?to\s+me\b/i,
+              /\bassign\s+me\b/i,
+              /\bpls?\s+assign(\s+this)?(\s+to\s+me)?\b/i,
+              /\bplease\s+assign(\s+this)?(\s+to\s+me)?\b/i,
+              /\bi(?:'d|\s+would)\s+like\s+to\s+(?:work\s+on|take|tackle)\b/i,
+              /\bi(?:'m|\s+am)\s+(?:working\s+on|starting(?:\s+on|\s+with)?|taking)\s+(?:this|it)\b/i,
+              /\bi(?:'m|\s+am)\s+starting\s+today\b/i,
+            ];
+
+            const comment = context.payload.comment;
+            const issue = context.payload.issue;
+
+            if (comment.user.type === "Bot") {
+              core.info("Skipping bot comment.");
+              return;
+            }
+
+            if (issue.state !== "open") {
+              core.info("Issue is not open.");
+              return;
+            }
+
+            const body = comment.body ?? "";
+            const isAssignmentRequest = ASSIGNEE_REQUEST_PATTERNS.some((pattern) =>
+              pattern.test(body)
+            );
+
+            if (!isAssignmentRequest) {
+              core.info("Comment does not look like an assignment request.");
+              return;
+            }
+
+            const username = comment.user.login;
+            const alreadyAssigned = (issue.assignees ?? []).some(
+              (assignee) => assignee.login === username
+            );
+
+            if (alreadyAssigned) {
+              core.info(`${username} is already assigned.`);
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const assignable = await github.rest.issues
+              .checkUserCanBeAssignedToIssue({
+                owner,
+                repo,
+                issue_number: issue.number,
+                assignee: username,
+              })
+              .then(() => true)
+              .catch((error) => {
+                if (error.status === 404) {
+                  return false;
+                }
+                throw error;
+              });
+
+            if (!assignable) {
+              core.info(`${username} cannot be assigned to issue #${issue.number} yet.`);
+              return;
+            }
+
+            await github.rest.issues.addAssignees({
+              owner,
+              repo,
+              issue_number: issue.number,
+              assignees: [username],
+            });
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: issue.number,
+              body: `@${username} You've been assigned to this issue — thanks for picking it up! If you have questions, feel free to ask here.`,
+            });
+
+            core.info(`Assigned ${username} to issue #${issue.number}.`);

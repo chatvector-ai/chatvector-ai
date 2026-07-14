@@ -13,6 +13,21 @@ export default function ContributingPage() {
 
       <div className="mt-10 space-y-10">
         <section>
+          <Kicker spacing="sm">pick an issue and go</Kicker>
+          <div className="mb-6 border border-border border-l-[3px] border-l-accent bg-surface p-4">
+            <p className="text-[1rem] leading-[1.8] text-foreground">
+              Browse open issues, find something interesting, and start working on it. No
+              permission needed and no formal claim process — if you want to tackle an issue,
+              go for it and open a PR when you&apos;re done.
+            </p>
+            <p className="mt-4 text-[1rem] leading-[1.8] text-foreground">
+              Want to let other contributors know you&apos;re on it? Leave a quick comment on
+              the issue. That&apos;s helpful but totally optional.
+            </p>
+          </div>
+        </section>
+
+        <section>
           <Kicker spacing="sm">finding issues</Kicker>
           <div className="mb-6 border border-border border-l-[3px] border-l-accent bg-surface p-4">
             <p className="text-[1rem] leading-[1.8] text-foreground">
@@ -54,8 +69,13 @@ export default function ContributingPage() {
           <Kicker spacing="sm">pull request process</Kicker>
           <div className="mb-6 border border-border border-l-[3px] border-l-accent bg-surface p-4">
             <p className="text-[1rem] leading-[1.8] text-foreground">
-              Create a new branch, implement your changes, and open a pull request from your fork to the main repository.
-              Make sure to clearly describe what your PR does, how it was tested, and follow the checklist before submitting.
+              Create a new branch, implement your changes, and open a pull request from your fork
+              to the main repository. Describe what changed and how you tested it. If your work
+              relates to an issue, mentioning{" "}
+              <code className="rounded border border-border bg-surface px-1 py-0.5">
+                Closes #123
+              </code>{" "}
+              in the PR description helps track it on the project board — also optional.
             </p>
           </div>
         </section>

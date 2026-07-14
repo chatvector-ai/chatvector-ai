@@ -11,16 +11,23 @@ This guide will walk you through the process step-by-step.
 
 ### Start Here:
 
-1. **Check the issues tab: [`good first issue`](https://github.com/chatvector-ai/chatvector-ai/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)** - These are specially tagged for beginners
-2. **Check the [Project Board](https://github.com/orgs/chatvector-ai/projects/2)** - See what's being worked on
+1. **Browse open issues** — start with [`good first issue`](https://github.com/chatvector-ai/chatvector-ai/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22) if you want something beginner-friendly
+2. **Check the [Project Board](https://github.com/orgs/chatvector-ai/projects/2)** if you want a sense of what's in flight
 3. **Found a bug?** Open an issue and fix it!
 4. **Have an idea?** Start a [Discussion](https://github.com/chatvector-ai/chatvector-ai/discussions/landing) first
 
+### Pick an issue and go
+
+See something you want to work on? Go for it — no need to ask permission or assign yourself.
+
+If you want to let other contributors know you're on it, feel free to leave a quick comment on the issue. Totally optional.
+
+When you're done, open a PR from your fork. If the work relates to an issue, mentioning `Closes #123` in the PR description helps track it on the project board — also optional.
+
 ### Still Unsure?
 
-1. Comment on an issue
-2. Ask for help in - [Discussions](https://github.com/chatvector-ai/chatvector-ai/discussions/landing)
-3. We'll help you find the perfect first contribution
+1. Ask for help in [Discussions](https://github.com/chatvector-ai/chatvector-ai/discussions/landing)
+2. We'll help you find a good first contribution
 
 ### Frontend demo contributions
 
