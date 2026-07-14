@@ -128,13 +128,29 @@ async def _provision_tenant(prefix: str) -> tuple[str, str, str]:
     return tenant.id, raw_key, str(api_key.id)
 
 
+def _reset_db_singleton() -> None:
+    """Null the cached SQLAlchemyService so the next test binds an engine to its own loop.
+
+    pytest-asyncio creates a fresh event loop per test (function scope). The
+    ``db.db_service`` singleton caches an async engine bound to the first
+    loop that touched it, so subsequent tests reusing the cache hit
+    "another operation is in progress" / "event loop is closed" errors.
+    Follows the pattern used in ``test_factory.py``.
+    """
+    import db as db_module
+
+    db_module.db_service = None
+
+
 @pytest.fixture(autouse=True)
 def _production_mode(monkeypatch):
     """Force production authentication semantics for every smoke test."""
     monkeypatch.setattr("core.config.config.APP_ENV", "production")
     reset_session_factory()
+    _reset_db_singleton()
     yield
     reset_session_factory()
+    _reset_db_singleton()
 
 
 # ---------------------------------------------------------------------------
@@ -328,6 +344,46 @@ async def test_cross_tenant_document_status_returns_404():
     finally:
         await _cleanup_tenant(tenant_a_id)
         await _cleanup_tenant(tenant_b_id)
+
+
+# ---------------------------------------------------------------------------
+# Route-level 401 enforcement — full request path through TestClient
+# ---------------------------------------------------------------------------
+
+
+@_requires_db
+def test_sessions_route_rejects_missing_bearer_with_401():
+    """GET /sessions without an Authorization header yields 401 at the route layer."""
+    from fastapi.testclient import TestClient
+
+    from main import app
+
+    # Bare TestClient (no ``with``) skips app lifespan — we only need the
+    # middleware/dependency stack to enforce auth, not the ingestion queue
+    # or Redis connection that a production-mode lifespan would require.
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.get("/sessions")
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "missing_credentials"
+
+
+@_requires_db
+def test_document_status_route_rejects_invalid_bearer_with_401():
+    """GET /documents/<uuid>/status with an unknown Bearer key yields 401."""
+    from fastapi.testclient import TestClient
+
+    from main import app
+
+    doc_id = uuid4()
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.get(
+        f"/documents/{doc_id}/status",
+        headers={"Authorization": "Bearer cv_live_deadbeef.notarealsecret"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "invalid_api_key"
 
 
 @_requires_db
