@@ -91,7 +91,7 @@ jobs:
               owner,
               repo,
               issue_number: issue.number,
-              body: `@${username} You've been assigned to this issue — thanks for picking it up! If you have questions, feel free to ask here.`,
+              body: `@${username} You've been assigned to this issue — we here at ChatVector look forward to your 🔥🔥🔥 contributions! If you have questions, feel free to ask here or post in [Discussions](https://github.com/chatvector-ai/chatvector-ai/discussions/landing).`,
             });
 
             core.info(`Assigned ${username} to issue #${issue.number}.`);
