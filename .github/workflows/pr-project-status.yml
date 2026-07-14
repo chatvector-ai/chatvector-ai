@@ -1,7 +1,7 @@
 name: PR Project Status
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, edited, synchronize, reopened, ready_for_review]
 
 jobs:
@@ -17,14 +17,13 @@ jobs:
     steps:
       - name: Move linked issues to In review
         uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.PROJECTS_TOKEN }}
         env:
           PROJECT_OWNER: chatvector-ai
           PROJECT_NUMBER: "2"
           STATUS_FIELD_NAME: Status
           STATUS_VALUE_NAME: In review
         with:
+          github-token: ${{ secrets.PROJECTS_TOKEN }}
           script: |
             const { owner, repo } = context.repo;
             const prNumber = context.payload.pull_request.number;
