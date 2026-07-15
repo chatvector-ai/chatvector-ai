@@ -1,0 +1,24 @@
+{
+  "name": "@chatvector/example-fastify-proxy",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node --env-file=.env --import tsx src/server.ts",
+    "start": "node --env-file=.env --import tsx src/server.ts",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@chatvector/sdk": "file:../..",
+    "@fastify/multipart": "^9.0.0",
+    "fastify": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
