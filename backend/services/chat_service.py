@@ -9,7 +9,7 @@ from core.config import config
 from core.session import SessionContext
 from db import find_similar_chunks
 from services.context_service import build_context_from_chunks
-from services.query_service import transform_query
+from services.query_service import QueryTransformResult, transform_query
 from services.retrieval_service import (
     filter_doc_ids_for_tenant,
     parse_retrieval_scope,
@@ -236,14 +236,26 @@ def _build_stream_complete_payload(
     sources: list[dict],
     latency_ms: int,
     model: str,
+    retrieval_debug: dict | None = None,
 ) -> dict:
-    return {
+    payload = {
         "type": "complete",
         "session_id": session_id,
         "sources": sources,
         "latency_ms": latency_ms,
         "model": model,
     }
+    if retrieval_debug is not None:
+        payload["retrieval_debug"] = retrieval_debug
+    return payload
+
+
+def _maybe_retrieval_debug(
+    transform_result: QueryTransformResult, *, debug_retrieval: bool
+) -> dict | None:
+    if not debug_retrieval:
+        return None
+    return transform_result.to_retrieval_debug()
 
 
 def _build_stream_error_payload(*, code: str, message: str) -> dict:
@@ -263,6 +275,7 @@ async def answer_question_for_document(
     session_id: Optional[str] = None,
     session_context: Optional[SessionContext] = None,
     scope: Optional[str] = None,
+    debug_retrieval: bool = False,
 ) -> dict:
     """
     Orchestrate the chat flow for a single question/document pair.
@@ -307,7 +320,11 @@ async def answer_question_for_document(
     transformation_history = (
         history[: config.QUERY_TRANSFORMATION_HISTORY_WINDOW] if history else None
     )
-    transformed_queries = await transform_query(question, history=transformation_history)
+    transform_result = await transform_query(question, history=transformation_history)
+    transformed_queries = transform_result.queries
+    retrieval_debug = _maybe_retrieval_debug(
+        transform_result, debug_retrieval=debug_retrieval
+    )
     query_embeddings = await get_embeddings(transformed_queries)
     all_chunks: list = []
     seen_chunk_keys: set = set()
@@ -366,10 +383,13 @@ async def answer_question_for_document(
         except Exception as e:
             logger.error(f"Failed to store chat messages for session {session_id}: {e}", exc_info=True)
 
-    return {
+    response = {
         **base,
         "status": "ok",
     }
+    if retrieval_debug is not None:
+        response["retrieval_debug"] = retrieval_debug
+    return response
 
 
 async def answer_question_stream_for_document(
@@ -381,6 +401,7 @@ async def answer_question_stream_for_document(
     session_id: Optional[str] = None,
     session_context: Optional[SessionContext] = None,
     scope: Optional[str] = None,
+    debug_retrieval: bool = False,
 ) -> AsyncGenerator[str, None]:
     """
     Orchestrate the chat flow for a single question/document pair, yielding
@@ -421,7 +442,11 @@ async def answer_question_stream_for_document(
         transformation_history = (
             history[: config.QUERY_TRANSFORMATION_HISTORY_WINDOW] if history else None
         )
-        transformed_queries = await transform_query(question, history=transformation_history)
+        transform_result = await transform_query(question, history=transformation_history)
+        transformed_queries = transform_result.queries
+        retrieval_debug = _maybe_retrieval_debug(
+            transform_result, debug_retrieval=debug_retrieval
+        )
         query_embeddings = await get_embeddings(transformed_queries)
         all_chunks: list = []
         seen_chunk_keys: set = set()
@@ -484,6 +509,7 @@ async def answer_question_stream_for_document(
                 sources=sources,
                 latency_ms=latency_ms,
                 model=model_name,
+                retrieval_debug=retrieval_debug,
             ),
         )
         # Legacy completion marker — deprecated; retained for backward compatibility.
@@ -521,6 +547,7 @@ async def answer_questions_for_documents_batch(
     auth: AuthContext,
     session_context: Optional[SessionContext] = None,
     scope: Optional[str] = None,
+    debug_retrieval: bool = False,
 ) -> list[dict]:
     """
     Process multiple question/document retrieval requests in one call.
@@ -594,7 +621,7 @@ async def answer_questions_for_documents_batch(
         )
     )
 
-    transformed_query_lists = await asyncio.gather(
+    transform_results = await asyncio.gather(
         *[
             transform_query(
                 q["question"],
@@ -605,6 +632,7 @@ async def answer_questions_for_documents_batch(
             for q, h in zip(normalized_queries, per_query_histories)
         ]
     )
+    transformed_query_lists = [result.queries for result in transform_results]
     flat_queries = [q for queries in transformed_query_lists for q in queries]
     flat_embeddings = await get_embeddings(flat_queries)
     if len(flat_embeddings) != len(flat_queries):
@@ -634,7 +662,10 @@ async def answer_questions_for_documents_batch(
         offset += n
 
     async def _process_query(
-        query: dict, query_embeddings: list[list[float]], preloaded_history: list[dict]
+        query: dict,
+        query_embeddings: list[list[float]],
+        preloaded_history: list[dict],
+        transform_result: QueryTransformResult,
     ) -> dict:
         try:
             session_id = query.get("session_id")
@@ -718,7 +749,7 @@ async def answer_questions_for_documents_batch(
                 except Exception as e:
                     logger.error(f"Failed to store batch chat messages for session {session_id}: {e}", exc_info=True)
 
-            return {
+            result_payload = {
                 "status": "ok",
                 "question": query["question"],
                 "doc_ids": query["doc_ids"],
@@ -729,6 +760,12 @@ async def answer_questions_for_documents_batch(
                 "model": model_name,
                 "session_id": session_id,
             }
+            retrieval_debug = _maybe_retrieval_debug(
+                transform_result, debug_retrieval=debug_retrieval
+            )
+            if retrieval_debug is not None:
+                result_payload["retrieval_debug"] = retrieval_debug
+            return result_payload
         except Exception:
             logger.exception(
                 "Batch query failed (doc_ids=%s, question_len=%d)",
@@ -748,9 +785,12 @@ async def answer_questions_for_documents_batch(
 
     return await asyncio.gather(
         *[
-            _process_query(query, embeddings, history)
-            for query, embeddings, history in zip(
-                normalized_queries, per_query_embeddings, per_query_histories
+            _process_query(query, embeddings, history, transform_result)
+            for query, embeddings, history, transform_result in zip(
+                normalized_queries,
+                per_query_embeddings,
+                per_query_histories,
+                transform_results,
             )
         ]
     )
