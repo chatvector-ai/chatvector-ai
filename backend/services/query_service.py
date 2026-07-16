@@ -1,6 +1,7 @@
 """Query transformation for retrieval (rewrite, expand, step-back)."""
 
 import logging
+from dataclasses import dataclass
 
 from core.config import config
 from services.providers import get_llm_provider
@@ -8,6 +9,33 @@ from services.providers import get_llm_provider
 logger = logging.getLogger(__name__)
 
 _TRANSFORM_TEMPERATURE = 0.1
+
+
+@dataclass(frozen=True)
+class QueryTransformResult:
+    """Query transformation output for retrieval and optional debug traces."""
+
+    queries: list[str]
+    original_query: str
+    history_resolved_query: str | None = None
+    transformation_strategy: str | None = None
+
+    def to_retrieval_debug(self) -> dict:
+        """Build opt-in retrieval_debug payload for chat/batch responses."""
+        payload: dict = {
+            "original_query": self.original_query,
+            "transformed_queries": self.queries,
+        }
+        if (
+            self.history_resolved_query is not None
+            and self.history_resolved_query != self.original_query
+        ):
+            payload["history_resolved_query"] = self.history_resolved_query
+        if self.transformation_strategy is not None:
+            payload["transformation_strategy"] = self.transformation_strategy
+        return payload
+
+
 _TRANSFORM_MAX_OUTPUT_TOKENS = 512
 
 
@@ -122,26 +150,43 @@ async def _resolve_to_standalone(question: str, history: list[dict]) -> str:
 
 async def transform_query(
     question: str, history: list[dict] | None = None
-) -> list[str]:
+) -> QueryTransformResult:
     if not config.QUERY_TRANSFORMATION_ENABLED:
-        return [question]
+        return QueryTransformResult(
+            queries=[question],
+            original_query=question,
+        )
 
     # When recent session history is available, resolve any follow-up references
     # into a standalone question before applying the retrieval strategy.
     effective_question = question
+    history_resolved_query: str | None = None
     if history:
         effective_question = await _resolve_to_standalone(question, history)
+        if effective_question != question:
+            history_resolved_query = effective_question
 
     strategy = config.QUERY_TRANSFORMATION_STRATEGY
     if strategy == "rewrite":
-        return [await rewrite_query(effective_question)]
-    if strategy == "expand":
-        return await expand_query(effective_question)
-    if strategy == "stepback":
-        return await stepback_query(effective_question)
+        queries = [await rewrite_query(effective_question)]
+    elif strategy == "expand":
+        queries = await expand_query(effective_question)
+    elif strategy == "stepback":
+        queries = await stepback_query(effective_question)
+    else:
+        logger.warning(
+            "Unknown QUERY_TRANSFORMATION_STRATEGY=%r; returning original question unchanged",
+            strategy,
+        )
+        return QueryTransformResult(
+            queries=[question],
+            original_query=question,
+            history_resolved_query=history_resolved_query,
+        )
 
-    logger.warning(
-        "Unknown QUERY_TRANSFORMATION_STRATEGY=%r; returning original question unchanged",
-        strategy,
+    return QueryTransformResult(
+        queries=queries,
+        original_query=question,
+        history_resolved_query=history_resolved_query,
+        transformation_strategy=strategy,
     )
-    return [question]

@@ -24,7 +24,7 @@ def test_transform_query_returns_original_when_disabled(monkeypatch):
 
     result = asyncio.run(transform_query("original question"))
 
-    assert result == ["original question"]
+    assert result.queries == ["original question"]
 
 
 @pytest.mark.asyncio
@@ -39,7 +39,7 @@ async def test_rewrite_strategy_returns_single_transformed_query(monkeypatch):
 
     result = await transform_query("user question")
 
-    assert result == ["retrieval friendly version"]
+    assert result.queries == ["retrieval friendly version"]
 
 
 @pytest.mark.asyncio
@@ -54,7 +54,7 @@ async def test_expand_strategy_returns_original_plus_two_alternatives(monkeypatc
 
     result = await transform_query("base q")
 
-    assert result == ["base q", "first alt", "second alt"]
+    assert result.queries == ["base q", "first alt", "second alt"]
 
 
 @pytest.mark.asyncio
@@ -69,7 +69,7 @@ async def test_stepback_strategy_returns_original_and_broader_question(monkeypat
 
     result = await transform_query("specific detail about X?")
 
-    assert result == [
+    assert result.queries == [
         "specific detail about X?",
         "What are the general principles of X?",
     ]
@@ -121,7 +121,7 @@ def test_unknown_strategy_logs_warning_and_returns_original(caplog, monkeypatch)
     with caplog.at_level(logging.WARNING):
         result = asyncio.run(transform_query("unchanged"))
 
-    assert result == ["unchanged"]
+    assert result.queries == ["unchanged"]
     assert "Unknown QUERY_TRANSFORMATION_STRATEGY" in caplog.text
 
 
@@ -241,7 +241,7 @@ async def test_transform_query_with_history_resolves_before_strategy(monkeypatch
 
     result = await transform_query("What were its disadvantages?", history=_SAMPLE_HISTORY)
 
-    assert result == ["Disadvantages of Option B"]
+    assert result.queries == ["Disadvantages of Option B"]
 
 
 @pytest.mark.asyncio
@@ -300,7 +300,7 @@ def test_transform_query_disabled_ignores_history(monkeypatch):
         transform_query("follow-up question", history=_SAMPLE_HISTORY)
     )
 
-    assert result == ["follow-up question"]
+    assert result.queries == ["follow-up question"]
 
 
 @pytest.mark.asyncio
@@ -323,8 +323,8 @@ async def test_transform_query_history_passed_to_expand_strategy(monkeypatch):
 
     result = await transform_query("What are its risks?", history=_SAMPLE_HISTORY)
 
-    assert result[0] == resolved
-    assert len(result) == 3
+    assert result.queries[0] == resolved
+    assert len(result.queries) == 3
 
 
 @pytest.mark.asyncio
@@ -347,5 +347,105 @@ async def test_transform_query_history_passed_to_stepback_strategy(monkeypatch):
 
     result = await transform_query("How much does it cost?", history=_SAMPLE_HISTORY)
 
-    assert result[0] == resolved
-    assert len(result) == 2
+    assert result.queries[0] == resolved
+    assert len(result.queries) == 2
+
+
+# ---------------------------------------------------------------------------
+# Retrieval debug traces (Issue #392)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_rewrite_strategy_retrieval_debug_shape(monkeypatch):
+    monkeypatch.setattr(config, "QUERY_TRANSFORMATION_ENABLED", True)
+    monkeypatch.setattr(config, "QUERY_TRANSFORMATION_STRATEGY", "rewrite")
+
+    async def fake_llm(system_instruction: str, user_text: str) -> str | None:
+        return "rewritten for search"
+
+    monkeypatch.setattr(query_service_mod, "_llm_transform", fake_llm)
+
+    result = await transform_query("user question")
+
+    debug = result.to_retrieval_debug()
+    assert debug == {
+        "original_query": "user question",
+        "transformed_queries": ["rewritten for search"],
+        "transformation_strategy": "rewrite",
+    }
+
+
+@pytest.mark.asyncio
+async def test_expand_strategy_retrieval_debug_shape(monkeypatch):
+    monkeypatch.setattr(config, "QUERY_TRANSFORMATION_ENABLED", True)
+    monkeypatch.setattr(config, "QUERY_TRANSFORMATION_STRATEGY", "expand")
+
+    async def fake_llm(system_instruction: str, user_text: str) -> str | None:
+        return "alt one\nalt two"
+
+    monkeypatch.setattr(query_service_mod, "_llm_transform", fake_llm)
+
+    result = await transform_query("base q")
+
+    debug = result.to_retrieval_debug()
+    assert debug == {
+        "original_query": "base q",
+        "transformed_queries": ["base q", "alt one", "alt two"],
+        "transformation_strategy": "expand",
+    }
+
+
+@pytest.mark.asyncio
+async def test_stepback_strategy_retrieval_debug_shape(monkeypatch):
+    monkeypatch.setattr(config, "QUERY_TRANSFORMATION_ENABLED", True)
+    monkeypatch.setattr(config, "QUERY_TRANSFORMATION_STRATEGY", "stepback")
+
+    async def fake_llm(system_instruction: str, user_text: str) -> str | None:
+        return "What are the general principles?"
+
+    monkeypatch.setattr(query_service_mod, "_llm_transform", fake_llm)
+
+    result = await transform_query("specific detail?")
+
+    debug = result.to_retrieval_debug()
+    assert debug == {
+        "original_query": "specific detail?",
+        "transformed_queries": ["specific detail?", "What are the general principles?"],
+        "transformation_strategy": "stepback",
+    }
+
+
+@pytest.mark.asyncio
+async def test_retrieval_debug_includes_history_resolved_query(monkeypatch):
+    monkeypatch.setattr(config, "QUERY_TRANSFORMATION_ENABLED", True)
+    monkeypatch.setattr(config, "QUERY_TRANSFORMATION_STRATEGY", "rewrite")
+
+    async def fake_resolve(question: str, history: list[dict]) -> str:
+        return "What are the risks of Option B?"
+
+    async def fake_rewrite(question: str) -> str:
+        return "Option B risks"
+
+    monkeypatch.setattr(query_service_mod, "_resolve_to_standalone", fake_resolve)
+    monkeypatch.setattr(query_service_mod, "rewrite_query", fake_rewrite)
+
+    result = await transform_query("What are its risks?", history=_SAMPLE_HISTORY)
+
+    debug = result.to_retrieval_debug()
+    assert debug["original_query"] == "What are its risks?"
+    assert debug["history_resolved_query"] == "What are the risks of Option B?"
+    assert debug["transformed_queries"] == ["Option B risks"]
+    assert debug["transformation_strategy"] == "rewrite"
+
+
+def test_retrieval_debug_omits_strategy_when_transformation_disabled(monkeypatch):
+    monkeypatch.setattr(config, "QUERY_TRANSFORMATION_ENABLED", False)
+
+    result = asyncio.run(transform_query("plain question"))
+
+    debug = result.to_retrieval_debug()
+    assert debug == {
+        "original_query": "plain question",
+        "transformed_queries": ["plain question"],
+    }

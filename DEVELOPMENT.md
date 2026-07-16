@@ -847,6 +847,32 @@ curl http://localhost:8000/status
 curl http://localhost:8000/queue/stats
 ```
 
+### Inspect query transformation traces
+
+Chat endpoints accept an opt-in `debug_retrieval` flag (default `false`). When
+enabled, responses include a `retrieval_debug` object describing how the user
+question was transformed before embedding and search:
+
+- `original_query` — the raw user question
+- `history_resolved_query` — standalone rewrite after session history resolution (when it differs)
+- `transformed_queries` — final query list embedded and searched
+- `transformation_strategy` — active strategy (`rewrite`, `expand`, or `stepback`) when transformation is enabled
+
+Pass the flag as a JSON body field or query parameter:
+
+```bash
+curl -X POST "http://localhost:8000/chat?debug_retrieval=true" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"What about it?","doc_id":"<uuid>","session_id":"<session-id>"}'
+```
+
+The same flag works on `/chat/stream` (included on the `complete` SSE event)
+and `/chat/batch` (per result item). Normal clients are unaffected when the
+flag is omitted.
+
+Query transformation itself is controlled by `QUERY_TRANSFORMATION_ENABLED` and
+`QUERY_TRANSFORMATION_STRATEGY` — see `backend/.env.example`.
+
 ---
 
 ## Environment Variables

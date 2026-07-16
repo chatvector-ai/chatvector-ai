@@ -7,7 +7,12 @@ from core.auth import AuthContext
 from request_utils import make_test_request
 from routes.chat import ChatRequest, chat
 from core.config import config
+from services.query_service import QueryTransformResult
 import db
+
+
+def _mock_transform_result(question: str) -> QueryTransformResult:
+    return QueryTransformResult(queries=[question], original_query=question)
 
 
 @pytest.mark.asyncio
@@ -107,7 +112,10 @@ async def test_stream_finalization_persistence():
     session_id = f"stream-session-{uuid.uuid4()}"
     _DOC_ID_1 = "00000000-0000-0000-0000-000000000001"
     
-    with patch("services.chat_service.transform_query", new=AsyncMock(return_value=["Q"])), \
+    with patch(
+        "services.chat_service.transform_query",
+        new=AsyncMock(return_value=_mock_transform_result("Q")),
+    ), \
          patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]*1536])), \
          patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])), \
          patch("services.chat_service.get_session", new=AsyncMock(return_value=None)), \
