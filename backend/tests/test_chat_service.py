@@ -1261,6 +1261,82 @@ async def test_chat_response_includes_retrieval_debug_when_opted_in():
 
 
 @pytest.mark.asyncio
+async def test_chat_soft_error_includes_retrieval_debug_when_opted_in():
+    from services.answer_service import LLM_MSG_RATE_LIMIT
+
+    transform_result = QueryTransformResult(
+        queries=["rewritten q"],
+        original_query="user q",
+        transformation_strategy="rewrite",
+    )
+
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch(
+            "services.chat_service.generate_answer",
+            new=AsyncMock(return_value=(LLM_MSG_RATE_LIMIT, 0, "")),
+        ),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(return_value=transform_result),
+        ),
+    ):
+        result = await answer_question_for_document(
+            question="user q",
+            doc_id="doc-1",
+            auth=TEST_AUTH,
+            debug_retrieval=True,
+        )
+
+    assert result["status"] == "error"
+    assert result["retrieval_debug"] == transform_result.to_retrieval_debug()
+
+
+@pytest.mark.asyncio
+async def test_stream_complete_omits_retrieval_debug_by_default():
+    from services.chat_service import answer_question_stream_for_document
+
+    async def mock_generate_stream(q, c):
+        yield "answer"
+
+    mock_provider = MagicMock()
+    mock_provider.model_name = "gemini-test"
+
+    with (
+        patch("services.chat_service._resolve_retrieval_doc_ids", new=AsyncMock(return_value=["doc-1"])),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(
+                return_value=QueryTransformResult(
+                    queries=["expanded q"],
+                    original_query="user q",
+                    transformation_strategy="expand",
+                )
+            ),
+        ),
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="context"),
+        patch("services.chat_service.generate_answer_stream", new=mock_generate_stream),
+        patch("services.providers.get_llm_provider", return_value=mock_provider),
+        patch("db.get_session_history", new=AsyncMock(return_value=[])),
+        patch("db.store_chat_message", new=AsyncMock()),
+    ):
+        events = []
+        async for event in answer_question_stream_for_document(
+            "user q",
+            "doc-1",
+            auth=TEST_AUTH,
+        ):
+            events.append(event)
+
+    _, complete_data = _parse_sse_event(events[-2])
+    assert "retrieval_debug" not in complete_data
+
+
+@pytest.mark.asyncio
 async def test_stream_complete_includes_retrieval_debug_when_opted_in():
     from services.chat_service import answer_question_stream_for_document
 
@@ -1304,6 +1380,32 @@ async def test_stream_complete_includes_retrieval_debug_when_opted_in():
 
 
 @pytest.mark.asyncio
+async def test_batch_result_omits_retrieval_debug_by_default():
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1], [0.2]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch("services.chat_service.generate_answer", new=AsyncMock(return_value=("ans", 0, "m"))),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(
+                return_value=QueryTransformResult(
+                    queries=["step q", "broader q"],
+                    original_query="user q",
+                    transformation_strategy="stepback",
+                )
+            ),
+        ),
+    ):
+        results = await answer_questions_for_documents_batch(
+            [{"question": "user q", "doc_ids": ["doc-a"]}],
+            auth=TEST_AUTH,
+        )
+
+    assert "retrieval_debug" not in results[0]
+
+
+@pytest.mark.asyncio
 async def test_batch_result_includes_retrieval_debug_when_opted_in():
     transform_result = QueryTransformResult(
         queries=["step q", "broader q"],
@@ -1327,6 +1429,39 @@ async def test_batch_result_includes_retrieval_debug_when_opted_in():
             debug_retrieval=True,
         )
 
+    assert results[0]["retrieval_debug"] == transform_result.to_retrieval_debug()
+
+
+@pytest.mark.asyncio
+async def test_batch_soft_error_includes_retrieval_debug_when_opted_in():
+    from services.answer_service import LLM_MSG_MISSING_API_KEY
+
+    transform_result = QueryTransformResult(
+        queries=["step q", "broader q"],
+        original_query="user q",
+        transformation_strategy="stepback",
+    )
+
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1], [0.2]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch(
+            "services.chat_service.generate_answer",
+            new=AsyncMock(return_value=(LLM_MSG_MISSING_API_KEY, 0, "")),
+        ),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(return_value=transform_result),
+        ),
+    ):
+        results = await answer_questions_for_documents_batch(
+            [{"question": "user q", "doc_ids": ["doc-a"]}],
+            auth=TEST_AUTH,
+            debug_retrieval=True,
+        )
+
+    assert results[0]["status"] == "error"
     assert results[0]["retrieval_debug"] == transform_result.to_retrieval_debug()
 
 

@@ -9,7 +9,6 @@ import pytest
 import services.query_service as query_service_mod
 from core.config import config
 from services.query_service import (
-    QueryTransformResult,
     _format_history_context,
     _resolve_to_standalone,
     expand_query,

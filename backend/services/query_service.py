@@ -34,6 +34,8 @@ class QueryTransformResult:
         if self.transformation_strategy is not None:
             payload["transformation_strategy"] = self.transformation_strategy
         return payload
+
+
 _TRANSFORM_MAX_OUTPUT_TOKENS = 512
 
 

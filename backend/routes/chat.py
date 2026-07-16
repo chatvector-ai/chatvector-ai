@@ -1,5 +1,5 @@
 import logging
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 from uuid import UUID
 
 import db
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 RetrievalScopeParam = Literal["session", "tenant"]
+DebugRetrievalQuery = Annotated[bool, Query()]
 
 
 async def _assert_document_owned(doc_id: str, tenant_id: str) -> None:
@@ -63,13 +64,8 @@ class ChatRequest(BaseModel):
     debug_retrieval: bool = False
 
 
-def _coerce_bool_flag(value: object) -> bool:
-    """Normalize bool flags from JSON bodies and FastAPI Query defaults."""
-    return value is True
-
-
 def _resolve_debug_retrieval(*, query_param: bool, request_field: bool) -> bool:
-    return _coerce_bool_flag(query_param) or _coerce_bool_flag(request_field)
+    return query_param or request_field
 
 
 @router.post("/chat")
@@ -78,7 +74,7 @@ async def chat(
     request: Request,
     payload: ChatRequest,
     auth: AuthContext = Depends(require_auth),
-    debug_retrieval: bool = Query(default=False),
+    debug_retrieval: DebugRetrievalQuery = False,
 ):
     logger.info(f"Chat request received for document {payload.doc_id}")
 
@@ -113,7 +109,7 @@ async def chat_stream(
     request: Request,
     payload: ChatRequest,
     auth: AuthContext = Depends(require_auth),
-    debug_retrieval: bool = Query(default=False),
+    debug_retrieval: DebugRetrievalQuery = False,
 ):
     """Stream a chat answer as Server-Sent Events (SSE).
 
@@ -177,7 +173,7 @@ async def chat_batch(
     request: Request,
     payload: ChatBatchRequest,
     auth: AuthContext = Depends(require_auth),
-    debug_retrieval: bool = Query(default=False),
+    debug_retrieval: DebugRetrievalQuery = False,
 ):
     logger.info(f"Batch chat request received with {len(payload.queries)} queries")
 

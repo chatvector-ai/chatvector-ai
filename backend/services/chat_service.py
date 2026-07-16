@@ -363,11 +363,14 @@ async def answer_question_for_document(
     llm_err = _structured_error_from_llm_answer(answer)
     if llm_err is not None:
         logger.warning("Chat LLM returned soft failure for document %s", doc_id)
-        return {
+        error_response = {
             **base,
             "status": "error",
             "error": llm_err,
         }
+        if retrieval_debug is not None:
+            error_response["retrieval_debug"] = retrieval_debug
+        return error_response
 
     logger.info(f"Answer generated successfully for document {doc_id}")
 
@@ -722,9 +725,12 @@ async def answer_questions_for_documents_batch(
             answer, latency_ms, model_name = await generate_answer(query["question"], context)
 
             sources = _build_sources(matching_chunks)
+            retrieval_debug = _maybe_retrieval_debug(
+                transform_result, debug_retrieval=debug_retrieval
+            )
             llm_err = _structured_error_from_llm_answer(answer)
             if llm_err is not None:
-                return {
+                error_payload = {
                     "status": "error",
                     "question": query["question"],
                     "doc_ids": query["doc_ids"],
@@ -736,6 +742,9 @@ async def answer_questions_for_documents_batch(
                     "model": model_name,
                     "session_id": session_id,
                 }
+                if retrieval_debug is not None:
+                    error_payload["retrieval_debug"] = retrieval_debug
+                return error_payload
 
             if session_id and not is_compare_style:
                 try:
@@ -760,9 +769,6 @@ async def answer_questions_for_documents_batch(
                 "model": model_name,
                 "session_id": session_id,
             }
-            retrieval_debug = _maybe_retrieval_debug(
-                transform_result, debug_retrieval=debug_retrieval
-            )
             if retrieval_debug is not None:
                 result_payload["retrieval_debug"] = retrieval_debug
             return result_payload
