@@ -6,6 +6,7 @@ System design details and architectural decisions for ChatVector.
 
 - [System Design](#system-design)
 - [Database Strategy Pattern](#database-strategy-pattern)
+- [Schema migrations](#schema-migrations)
 - [Development vs Production](#development-vs-production)
 - [Ingestion Pipeline](#ingestion-pipeline)
 - [Ingestion Queue](#ingestion-queue)
@@ -56,6 +57,19 @@ This ensures:
 - Hybrid retrieval (pgvector + PostgreSQL full-text) works in all environments
 
 **Document deletion:** Removing a document and its rows in `document_chunks` is atomic — `SQLAlchemyService.delete_document()` runs both deletes in a single ORM transaction, preventing orphaned chunks on failure. The legacy `delete_document_atomic` RPC (`backend/db/init/003_atomic_delete.sql`) is retained in the database schema for backward compatibility but is not called by current runtime code.
+
+### Schema migrations
+
+DDL changes ship as numbered, idempotent SQL files in `backend/db/init/`
+(e.g. `007_sessions.sql`). Files are applied in lexical sort order. CI runs
+the full set before tests; Docker applies them only on first volume init;
+existing production volumes require manual `psql -f` for new files.
+
+The project does not use Alembic. Contributors add the next `NNN_*.sql` file,
+update SQLAlchemy models to match, and document operator upgrade steps in the PR.
+Full workflow (naming, CI/Docker/local apply, upgrading existing databases, and
+a possible future `schema_migrations` ledger) is in
+[DEVELOPMENT.md — Database migrations](DEVELOPMENT.md#database-migrations).
 
 ---
 

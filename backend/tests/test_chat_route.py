@@ -39,7 +39,13 @@ def test_chat_route_delegates_to_chat_service():
 
     assert result == payload
     mock_chat.assert_awaited_once_with(
-        question="q", doc_id=_DOC_ID_1, match_count=5, auth=ANY, session_id=ANY, scope="session"
+        question="q",
+        doc_id=_DOC_ID_1,
+        match_count=5,
+        auth=ANY,
+        session_id=ANY,
+        scope="session",
+        debug_retrieval=False,
     )
 
 def test_chat_batch_route_delegates_to_chat_service():
@@ -69,6 +75,7 @@ def test_chat_batch_route_delegates_to_chat_service():
         [{"question": "q", "doc_ids": [_DOC_ID_1], "match_count": 5, "session_id": ANY}],
         auth=ANY,
         scope="session",
+        debug_retrieval=False,
     )
 
 

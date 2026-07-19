@@ -1,9 +1,9 @@
 import logging
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 from uuid import UUID
 
 import db
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from core.auth import AuthContext, require_auth, require_current_tenant
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 RetrievalScopeParam = Literal["session", "tenant"]
+DebugRetrievalQuery = Annotated[bool, Query()]
 
 
 async def _assert_document_owned(doc_id: str, tenant_id: str) -> None:
@@ -51,6 +52,7 @@ class ChatBatchRequest(BaseModel):
     queries: list[ChatBatchItem] = Field(..., min_length=1, max_length=20)
     session_id: Optional[str] = None
     scope: RetrievalScopeParam = "session"
+    debug_retrieval: bool = False
 
 
 class ChatRequest(BaseModel):
@@ -59,11 +61,21 @@ class ChatRequest(BaseModel):
     match_count: int = Field(default=5, ge=1, le=20)
     session_id: Optional[str] = None
     scope: RetrievalScopeParam = "session"
+    debug_retrieval: bool = False
+
+
+def _resolve_debug_retrieval(*, query_param: bool, request_field: bool) -> bool:
+    return query_param or request_field
 
 
 @router.post("/chat")
 @limiter.limit(config.RATE_LIMIT_CHAT)
-async def chat(request: Request, payload: ChatRequest, auth: AuthContext = Depends(require_auth)):
+async def chat(
+    request: Request,
+    payload: ChatRequest,
+    auth: AuthContext = Depends(require_auth),
+    debug_retrieval: DebugRetrievalQuery = False,
+):
     logger.info(f"Chat request received for document {payload.doc_id}")
 
     doc_id_str = str(payload.doc_id)
@@ -84,12 +96,21 @@ async def chat(request: Request, payload: ChatRequest, auth: AuthContext = Depen
         auth=auth,
         session_id=session.id,
         scope=payload.scope,
+        debug_retrieval=_resolve_debug_retrieval(
+            query_param=debug_retrieval,
+            request_field=payload.debug_retrieval,
+        ),
     )
 
 
 @router.post("/chat/stream")
 @limiter.limit(config.RATE_LIMIT_CHAT)
-async def chat_stream(request: Request, payload: ChatRequest, auth: AuthContext = Depends(require_auth)):
+async def chat_stream(
+    request: Request,
+    payload: ChatRequest,
+    auth: AuthContext = Depends(require_auth),
+    debug_retrieval: DebugRetrievalQuery = False,
+):
     """Stream a chat answer as Server-Sent Events (SSE).
 
     Requires ``ENABLE_STREAMING=true``. Event contract:
@@ -97,7 +118,7 @@ async def chat_stream(request: Request, payload: ChatRequest, auth: AuthContext 
     - ``token`` — incremental answer text; ``data`` is a JSON-encoded string
       (unchanged from earlier clients).
     - ``complete`` — final structured payload with ``sources``, ``latency_ms``,
-      ``model``, and ``session_id``.
+      ``model``, ``session_id``, and optional ``retrieval_debug`` when requested.
     - ``done`` — legacy completion marker ``[DONE]`` (deprecated; retained for
       backward compatibility).
     - ``error`` — structured JSON object ``{"type": "error", "code": "...", "message": "..."}``.
@@ -136,6 +157,10 @@ async def chat_stream(request: Request, payload: ChatRequest, auth: AuthContext 
             auth=auth,
             session_id=session.id,
             scope=payload.scope,
+            debug_retrieval=_resolve_debug_retrieval(
+                query_param=debug_retrieval,
+                request_field=payload.debug_retrieval,
+            ),
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
@@ -144,7 +169,12 @@ async def chat_stream(request: Request, payload: ChatRequest, auth: AuthContext 
 
 @router.post("/chat/batch")
 @limiter.limit(config.RATE_LIMIT_CHAT_BATCH)
-async def chat_batch(request: Request, payload: ChatBatchRequest, auth: AuthContext = Depends(require_auth)):
+async def chat_batch(
+    request: Request,
+    payload: ChatBatchRequest,
+    auth: AuthContext = Depends(require_auth),
+    debug_retrieval: DebugRetrievalQuery = False,
+):
     logger.info(f"Batch chat request received with {len(payload.queries)} queries")
 
     # Shared session for the batch if provided at top level, otherwise uses individual
@@ -177,6 +207,10 @@ async def chat_batch(request: Request, payload: ChatBatchRequest, auth: AuthCont
             processed_queries,
             auth=auth,
             scope=payload.scope,
+            debug_retrieval=_resolve_debug_retrieval(
+                query_param=debug_retrieval,
+                request_field=payload.debug_retrieval,
+            ),
         )
     except ValueError as e:
         raise HTTPException(

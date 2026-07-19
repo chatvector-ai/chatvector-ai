@@ -364,7 +364,8 @@ High-impact contribution areas:
 
 Frontend contributions are welcome but considered **non-core**.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for details and
+Pick an open issue and start working — no permission or assignment needed. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for details and
 [Good First Issues](https://github.com/chatvector-ai/chatvector-ai/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
 to get started.
 

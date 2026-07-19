@@ -1,0 +1,231 @@
+name: Issue Auto-Assign
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  assign-on-request:
+    if: github.event.issue.pull_request == null
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Assign commenter when they ask to be added
+        id: assign
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const ASSIGNEE_REQUEST_PATTERNS = [
+              // Direct assign requests
+              /\bassign\s+(this\s+)?to\s+me\b/i,
+              /\bassign\s+me\b/i,
+              /\bpls?\s+assign(\s+this)?(\s+to\s+me)?\b/i,
+              /\bplease\s+assign(\s+this)?(\s+to\s+me)?\b/i,
+              /\bcan\s+(you\s+)?assign\s+(this\s+)?to\s+me\b/i,
+              /\bcould\s+(you\s+)?assign\s+(this\s+)?to\s+me\b/i,
+
+              // I'd like / I would like / I'd love
+              /\bi(?:'d|\s+would)\s+like\s+to\s+(?:work\s+on|take(?:\s+on)?|tackle|pick\s+up|help\s+(?:with|on))\b/i,
+              /\bi(?:'d|\s+would)\s+love\s+to\s+(?:work\s+on|take(?:\s+on)?|tackle|help\s+(?:with|on))\b/i,
+
+              // I'm / I am
+              /\bi(?:'m|\s+am)\s+(?:working\s+on|starting(?:\s+on|\s+with)?|taking(?:\s+on)?)\s+(?:this|it|this\s+issue)\b/i,
+              /\bi(?:'m|\s+am)\s+starting\s+today\b/i,
+              /\bi(?:'m|\s+am)\s+interested\s+in\s+(?:working\s+on|taking(?:\s+on)?|this)\b/i,
+              /\bi(?:'m|\s+am)\s+happy\s+to\s+(?:work\s+on|take(?:\s+on)?|tackle|help\s+(?:with|on))\b/i,
+              /\bi(?:'m|\s+am)\s+on\s+it\b/i,
+
+              // I will / I'll
+              /\bi(?:'ll|\s+will)\s+(?:work\s+on|take(?:\s+on)?|tackle|pick\s+up|handle)\s+(?:this|it|this\s+issue)\b/i,
+
+              // I want / I can
+              /\bi\s+want\s+to\s+(?:work\s+on|take(?:\s+on)?|tackle|help\s+(?:with|on))\b/i,
+              /\bi\s+can\s+(?:work\s+on|take(?:\s+on)?|tackle|help\s+(?:with|on))\s+(?:this|it|this\s+issue)\b/i,
+
+              // Permission-seeking (first person)
+              /\bcan\s+i\s+(?:work\s+on|take(?:\s+on)?|tackle|pick\s+up|help\s+(?:with|on))\b/i,
+              /\bcould\s+i\s+(?:work\s+on|take(?:\s+on)?|tackle|pick\s+up|help\s+(?:with|on))\b/i,
+              /\bmay\s+i\s+(?:work\s+on|take(?:\s+on)?|tackle|pick\s+up|help\s+(?:with|on))\b/i,
+              /\bmind\s+if\s+i\s+(?:work\s+on|take(?:\s+on)?|tackle|pick\s+up)\b/i,
+
+              // Let me / volunteer phrases
+              /\blet\s+me\s+(?:work\s+on|take(?:\s+on)?|tackle|pick\s+up|handle)\s+(?:this|it|this\s+issue)\b/i,
+              /\bsign\s+me\s+up\b/i,
+              /\bcount\s+me\s+in\b/i,
+            ];
+
+            const comment = context.payload.comment;
+            const issue = context.payload.issue;
+
+            if (comment.user.type === "Bot") {
+              core.info("Skipping bot comment.");
+              return;
+            }
+
+            if (issue.state !== "open") {
+              core.info("Issue is not open.");
+              return;
+            }
+
+            const body = comment.body ?? "";
+            const isAssignmentRequest = ASSIGNEE_REQUEST_PATTERNS.some((pattern) =>
+              pattern.test(body)
+            );
+
+            if (!isAssignmentRequest) {
+              core.info("Comment does not look like an assignment request.");
+              return;
+            }
+
+            const username = comment.user.login;
+            const alreadyAssigned = (issue.assignees ?? []).some(
+              (assignee) => assignee.login === username
+            );
+
+            if (alreadyAssigned) {
+              core.info(`${username} is already assigned.`);
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const assignable = await github.rest.issues
+              .checkUserCanBeAssignedToIssue({
+                owner,
+                repo,
+                issue_number: issue.number,
+                assignee: username,
+              })
+              .then(() => true)
+              .catch((error) => {
+                if (error.status === 404) {
+                  return false;
+                }
+                throw error;
+              });
+
+            if (!assignable) {
+              core.info(`${username} cannot be assigned to issue #${issue.number} yet.`);
+              return;
+            }
+
+            await github.rest.issues.addAssignees({
+              owner,
+              repo,
+              issue_number: issue.number,
+              assignees: [username],
+            });
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: issue.number,
+              body: `@${username} You've been assigned to this issue — we here at ChatVector look forward to your 🔥🔥🔥 contributions! If you have questions, feel free to ask here or post in [General Chat & Casual Discussion](https://github.com/chatvector-ai/chatvector-ai/discussions/51).`,
+            });
+
+            core.setOutput("assigned", "true");
+            core.setOutput("issue_number", String(issue.number));
+            core.info(`Assigned ${username} to issue #${issue.number}.`);
+
+      - name: Move issue to In progress
+        if: steps.assign.outputs.assigned == 'true'
+        uses: actions/github-script@v7
+        env:
+          PROJECT_OWNER: chatvector-ai
+          PROJECT_NUMBER: "2"
+          PROJECT_TITLE: ChatVector-AI Development
+          STATUS_FIELD_NAME: Status
+          STATUS_VALUE_NAME: In progress
+        with:
+          github-token: ${{ secrets.PROJECTS_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const issueNumber = Number("${{ steps.assign.outputs.issue_number }}");
+
+            const projectOwner = process.env.PROJECT_OWNER;
+            const projectNumber = Number(process.env.PROJECT_NUMBER);
+            const projectTitle = process.env.PROJECT_TITLE;
+            const statusFieldName = process.env.STATUS_FIELD_NAME;
+            const statusValueName = process.env.STATUS_VALUE_NAME;
+
+            const { organization } = await github.graphql(
+              `query($owner: String!, $number: Int!) {
+                organization(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                    fields(first: 20) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options { id name }
+                        }
+                      }
+                    }
+                  }
+                }
+              }`,
+              { owner: projectOwner, number: projectNumber }
+            );
+
+            const project = organization.projectV2;
+            const statusField = project.fields.nodes.find(
+              (field) => field.name === statusFieldName
+            );
+            const statusOption = statusField?.options.find(
+              (option) => option.name.toLowerCase() === statusValueName.toLowerCase()
+            );
+
+            if (!statusField || !statusOption) {
+              core.warning(`Could not resolve project status option "${statusValueName}".`);
+              return;
+            }
+
+            const { repository: issueRepo } = await github.graphql(
+              `query($owner: String!, $repo: String!, $issue: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  issue(number: $issue) {
+                    projectItems(first: 10) {
+                      nodes {
+                        id
+                        project { title }
+                      }
+                    }
+                  }
+                }
+              }`,
+              { owner, repo, issue: issueNumber }
+            );
+
+            const projectItem = issueRepo.issue.projectItems.nodes.find(
+              (item) => item.project.title === projectTitle
+            );
+
+            if (!projectItem) {
+              core.info(`Issue #${issueNumber} is not on ${projectTitle}; skipping.`);
+              return;
+            }
+
+            await github.graphql(
+              `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                updateProjectV2ItemFieldValue(
+                  input: {
+                    projectId: $projectId
+                    itemId: $itemId
+                    fieldId: $fieldId
+                    value: { singleSelectOptionId: $optionId }
+                  }
+                ) {
+                  projectV2Item { id }
+                }
+              }`,
+              {
+                projectId: project.id,
+                itemId: projectItem.id,
+                fieldId: statusField.id,
+                optionId: statusOption.id,
+              }
+            );
+
+            core.info(`Set issue #${issueNumber} to "${statusValueName}".`);

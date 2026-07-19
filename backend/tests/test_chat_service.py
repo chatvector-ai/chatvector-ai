@@ -8,10 +8,15 @@ import pytest
 
 import services.chat_service as chat_service_mod
 from core.auth import AuthContext
+from services.query_service import QueryTransformResult
 from services.chat_service import answer_question_for_document
 from services.chat_service import answer_questions_for_documents_batch
 
 TEST_AUTH = AuthContext(tenant_id="dev")
+
+
+def _mock_transform_result(question: str) -> QueryTransformResult:
+    return QueryTransformResult(queries=[question], original_query=question)
 
 
 def _parse_sse_event(raw: str) -> tuple[str, object]:
@@ -475,7 +480,10 @@ async def test_answer_question_stream_for_document_success():
 
     with (
         patch("services.chat_service._resolve_retrieval_doc_ids", new=AsyncMock(return_value=["doc-1"])),
-        patch("services.chat_service.transform_query", new=AsyncMock(return_value=["q"])),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(return_value=_mock_transform_result("q")),
+        ),
         patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1, 0.2]])),
         patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
         patch("services.chat_service.build_context_from_chunks", return_value="context"),
@@ -511,9 +519,9 @@ async def test_stream_history_loaded_and_bounded_before_transform():
     full_history = [{"role": "user", "content": f"msg{i}"} for i in range(10)]
     captured: dict = {}
 
-    async def fake_transform(question: str, history=None) -> list[str]:
+    async def fake_transform(question: str, history=None) -> QueryTransformResult:
         captured["history"] = history
-        return [question]
+        return _mock_transform_result(question)
 
     async def mock_stream(q, c):
         yield "tok"
@@ -550,7 +558,10 @@ async def test_answer_question_stream_for_document_error():
 
     with (
         patch("services.chat_service._resolve_retrieval_doc_ids", new=AsyncMock(return_value=["doc-1"])),
-        patch("services.chat_service.transform_query", new=AsyncMock(return_value=["q"])),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(return_value=_mock_transform_result("q")),
+        ),
         patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1, 0.2]])),
         patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
         patch("services.chat_service.build_context_from_chunks", return_value="context"),
@@ -602,7 +613,10 @@ async def test_stream_complete_event_includes_sources_and_session_id():
 
     with (
         patch("services.chat_service._resolve_retrieval_doc_ids", new=AsyncMock(return_value=["doc-1"])),
-        patch("services.chat_service.transform_query", new=AsyncMock(return_value=["q"])),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(return_value=_mock_transform_result("q")),
+        ),
         patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
         patch(
             "services.chat_service._retrieve_chunks_for_documents",
@@ -673,7 +687,10 @@ async def test_stream_cancellation_does_not_persist():
 
     with (
         patch("services.chat_service._resolve_retrieval_doc_ids", new=AsyncMock(return_value=["doc-1"])),
-        patch("services.chat_service.transform_query", new=AsyncMock(return_value=["q"])),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(return_value=_mock_transform_result("q")),
+        ),
         patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
         patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
         patch("services.chat_service.build_context_from_chunks", return_value="context"),
@@ -699,7 +716,10 @@ async def test_stream_legacy_done_follows_complete_event():
 
     with (
         patch("services.chat_service._resolve_retrieval_doc_ids", new=AsyncMock(return_value=["doc-1"])),
-        patch("services.chat_service.transform_query", new=AsyncMock(return_value=["q"])),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(return_value=_mock_transform_result("q")),
+        ),
         patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
         patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
         patch("services.chat_service.build_context_from_chunks", return_value="context"),
@@ -860,9 +880,9 @@ async def test_history_loaded_before_transform_query_for_single_chat():
 
     captured: dict = {}
 
-    async def fake_transform(question: str, history=None) -> list[str]:
+    async def fake_transform(question: str, history=None) -> QueryTransformResult:
         captured["history"] = history
-        return [question]
+        return _mock_transform_result(question)
 
     with (
         patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
@@ -892,9 +912,9 @@ async def test_history_bounded_to_window_for_single_chat():
 
     captured: dict = {}
 
-    async def fake_transform(question: str, history=None) -> list[str]:
+    async def fake_transform(question: str, history=None) -> QueryTransformResult:
         captured["history"] = history
-        return [question]
+        return _mock_transform_result(question)
 
     with (
         patch("services.chat_service.config.QUERY_TRANSFORMATION_HISTORY_WINDOW", window),
@@ -921,9 +941,9 @@ async def test_no_history_passed_to_transform_when_no_session_id():
     """Without a session_id, transform_query must receive no history (one-shot behavior)."""
     captured: dict = {}
 
-    async def fake_transform(question: str, history=None) -> list[str]:
+    async def fake_transform(question: str, history=None) -> QueryTransformResult:
         captured["history"] = history
-        return [question]
+        return _mock_transform_result(question)
 
     with (
         patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
@@ -994,9 +1014,9 @@ async def test_batch_history_bounded_to_window():
 
     captured_per_question: dict[str, list | None] = {}
 
-    async def fake_transform(question: str, history=None) -> list[str]:
+    async def fake_transform(question: str, history=None) -> QueryTransformResult:
         captured_per_question[question] = history
-        return [question]
+        return _mock_transform_result(question)
 
     with (
         patch("services.chat_service.config.QUERY_TRANSFORMATION_HISTORY_WINDOW", window),
@@ -1026,9 +1046,9 @@ async def test_batch_no_history_for_queries_without_session_id():
     """Batch queries without session_id must receive None history for transformation."""
     captured: dict[str, list | None] = {}
 
-    async def fake_transform(question: str, history=None) -> list[str]:
+    async def fake_transform(question: str, history=None) -> QueryTransformResult:
         captured[question] = history
-        return [question]
+        return _mock_transform_result(question)
 
     with (
         patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
@@ -1178,6 +1198,271 @@ async def test_synthesize_batch_still_injects_session_history_into_llm_context()
     assert "[Session History]" in context
     assert "Prior synthesized answer." in context
     assert mock_store.await_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Retrieval debug traces (Issue #392)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_chat_response_omits_retrieval_debug_by_default():
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch("services.chat_service.generate_answer", new=AsyncMock(return_value=("ans", 0, "m"))),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(
+                return_value=QueryTransformResult(
+                    queries=["rewritten q"],
+                    original_query="user q",
+                    transformation_strategy="rewrite",
+                )
+            ),
+        ),
+    ):
+        result = await answer_question_for_document(
+            question="user q",
+            doc_id="doc-1",
+            auth=TEST_AUTH,
+        )
+
+    assert "retrieval_debug" not in result
+
+
+@pytest.mark.asyncio
+async def test_chat_response_includes_retrieval_debug_when_opted_in():
+    transform_result = QueryTransformResult(
+        queries=["rewritten q"],
+        original_query="user q",
+        transformation_strategy="rewrite",
+    )
+
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch("services.chat_service.generate_answer", new=AsyncMock(return_value=("ans", 0, "m"))),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(return_value=transform_result),
+        ),
+    ):
+        result = await answer_question_for_document(
+            question="user q",
+            doc_id="doc-1",
+            auth=TEST_AUTH,
+            debug_retrieval=True,
+        )
+
+    assert result["retrieval_debug"] == transform_result.to_retrieval_debug()
+
+
+@pytest.mark.asyncio
+async def test_chat_soft_error_includes_retrieval_debug_when_opted_in():
+    from services.answer_service import LLM_MSG_RATE_LIMIT
+
+    transform_result = QueryTransformResult(
+        queries=["rewritten q"],
+        original_query="user q",
+        transformation_strategy="rewrite",
+    )
+
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch(
+            "services.chat_service.generate_answer",
+            new=AsyncMock(return_value=(LLM_MSG_RATE_LIMIT, 0, "")),
+        ),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(return_value=transform_result),
+        ),
+    ):
+        result = await answer_question_for_document(
+            question="user q",
+            doc_id="doc-1",
+            auth=TEST_AUTH,
+            debug_retrieval=True,
+        )
+
+    assert result["status"] == "error"
+    assert result["retrieval_debug"] == transform_result.to_retrieval_debug()
+
+
+@pytest.mark.asyncio
+async def test_stream_complete_omits_retrieval_debug_by_default():
+    from services.chat_service import answer_question_stream_for_document
+
+    async def mock_generate_stream(q, c):
+        yield "answer"
+
+    mock_provider = MagicMock()
+    mock_provider.model_name = "gemini-test"
+
+    with (
+        patch("services.chat_service._resolve_retrieval_doc_ids", new=AsyncMock(return_value=["doc-1"])),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(
+                return_value=QueryTransformResult(
+                    queries=["expanded q"],
+                    original_query="user q",
+                    transformation_strategy="expand",
+                )
+            ),
+        ),
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="context"),
+        patch("services.chat_service.generate_answer_stream", new=mock_generate_stream),
+        patch("services.providers.get_llm_provider", return_value=mock_provider),
+        patch("db.get_session_history", new=AsyncMock(return_value=[])),
+        patch("db.store_chat_message", new=AsyncMock()),
+    ):
+        events = []
+        async for event in answer_question_stream_for_document(
+            "user q",
+            "doc-1",
+            auth=TEST_AUTH,
+        ):
+            events.append(event)
+
+    _, complete_data = _parse_sse_event(events[-2])
+    assert "retrieval_debug" not in complete_data
+
+
+@pytest.mark.asyncio
+async def test_stream_complete_includes_retrieval_debug_when_opted_in():
+    from services.chat_service import answer_question_stream_for_document
+
+    transform_result = QueryTransformResult(
+        queries=["expanded q", "alt q"],
+        original_query="user q",
+        transformation_strategy="expand",
+    )
+
+    async def mock_generate_stream(q, c):
+        yield "answer"
+
+    mock_provider = MagicMock()
+    mock_provider.model_name = "gemini-test"
+
+    with (
+        patch("services.chat_service._resolve_retrieval_doc_ids", new=AsyncMock(return_value=["doc-1"])),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(return_value=transform_result),
+        ),
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1], [0.2]])),
+        patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="context"),
+        patch("services.chat_service.generate_answer_stream", new=mock_generate_stream),
+        patch("services.providers.get_llm_provider", return_value=mock_provider),
+        patch("db.get_session_history", new=AsyncMock(return_value=[])),
+        patch("db.store_chat_message", new=AsyncMock()),
+    ):
+        events = []
+        async for event in answer_question_stream_for_document(
+            "user q",
+            "doc-1",
+            auth=TEST_AUTH,
+            debug_retrieval=True,
+        ):
+            events.append(event)
+
+    _, complete_data = _parse_sse_event(events[-2])
+    assert complete_data["retrieval_debug"] == transform_result.to_retrieval_debug()
+
+
+@pytest.mark.asyncio
+async def test_batch_result_omits_retrieval_debug_by_default():
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1], [0.2]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch("services.chat_service.generate_answer", new=AsyncMock(return_value=("ans", 0, "m"))),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(
+                return_value=QueryTransformResult(
+                    queries=["step q", "broader q"],
+                    original_query="user q",
+                    transformation_strategy="stepback",
+                )
+            ),
+        ),
+    ):
+        results = await answer_questions_for_documents_batch(
+            [{"question": "user q", "doc_ids": ["doc-a"]}],
+            auth=TEST_AUTH,
+        )
+
+    assert "retrieval_debug" not in results[0]
+
+
+@pytest.mark.asyncio
+async def test_batch_result_includes_retrieval_debug_when_opted_in():
+    transform_result = QueryTransformResult(
+        queries=["step q", "broader q"],
+        original_query="user q",
+        transformation_strategy="stepback",
+    )
+
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1], [0.2]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch("services.chat_service.generate_answer", new=AsyncMock(return_value=("ans", 0, "m"))),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(return_value=transform_result),
+        ),
+    ):
+        results = await answer_questions_for_documents_batch(
+            [{"question": "user q", "doc_ids": ["doc-a"]}],
+            auth=TEST_AUTH,
+            debug_retrieval=True,
+        )
+
+    assert results[0]["retrieval_debug"] == transform_result.to_retrieval_debug()
+
+
+@pytest.mark.asyncio
+async def test_batch_soft_error_includes_retrieval_debug_when_opted_in():
+    from services.answer_service import LLM_MSG_MISSING_API_KEY
+
+    transform_result = QueryTransformResult(
+        queries=["step q", "broader q"],
+        original_query="user q",
+        transformation_strategy="stepback",
+    )
+
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1], [0.2]])),
+        patch("services.chat_service.find_similar_chunks", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
+        patch(
+            "services.chat_service.generate_answer",
+            new=AsyncMock(return_value=(LLM_MSG_MISSING_API_KEY, 0, "")),
+        ),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(return_value=transform_result),
+        ),
+    ):
+        results = await answer_questions_for_documents_batch(
+            [{"question": "user q", "doc_ids": ["doc-a"]}],
+            auth=TEST_AUTH,
+            debug_retrieval=True,
+        )
+
+    assert results[0]["status"] == "error"
+    assert results[0]["retrieval_debug"] == transform_result.to_retrieval_debug()
 
 
 @pytest.mark.asyncio

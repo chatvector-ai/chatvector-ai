@@ -6,6 +6,7 @@
 - [Quick Start](#quick-start)
 - [Docker Reference](#docker-reference)
 - [Database Initialization](#database-initialization)
+- [Database migrations](#database-migrations)
 - [Working with the Database Layer](#working-with-the-database-layer)
 - [Ingestion Queue](#ingestion-queue)
 - [Tests](#tests)
@@ -145,6 +146,138 @@ SELECT proname FROM pg_proc WHERE proname = 'match_chunks';
 
 \q
 ```
+
+---
+
+## Database migrations
+
+Schema changes are **numbered SQL files** in `backend/db/init/`. The project does
+not use Alembic or another migration framework — add a new file for each schema
+change and apply it with `psql` (or let CI / Docker first-init apply the full
+set automatically).
+
+### Convention
+
+| Rule | Detail |
+| ---- | ------ |
+| Location | `backend/db/init/` |
+| Filename | `NNN_descriptive_name.sql` — three-digit prefix, then a short slug |
+| Order | Lexical sort on the filename (`001` … `007` today; next is `008_*`) |
+| Idempotency | Prefer `CREATE … IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, and guarded `DO …` blocks so re-runs are safe |
+| ORM models | Update SQLAlchemy models in `backend/db/` to match new tables/columns |
+
+Current files (in apply order):
+
+```
+001_init.sql
+002_dimensionless_vector.sql
+003_atomic_delete.sql
+004_chat_history.sql
+004_hybrid_retrieval.sql   ← two files share prefix 004; order is alphabetical
+005_api_keys.sql
+006_tenant_fk_and_backfill.sql
+007_sessions.sql
+```
+
+> **Do not add another `004_*` file.** Use the next unused number (`008_*` at
+> time of writing). The duplicate `004` pair is historical; chat history always
+> runs before hybrid retrieval because of alphabetical sort.
+
+### How migrations are applied
+
+**CI** (`.github/workflows/ci.yml`) — on every test job, all files are sorted
+and executed in order:
+
+```bash
+for f in $(ls backend/db/init/*.sql | sort); do
+  psql -v ON_ERROR_STOP=1 -f "$f"
+done
+```
+
+**Docker first init** — `docker-compose.yml` and `docker-compose.prod.yml`
+mount `backend/db/init/` into Postgres `docker-entrypoint-initdb.d`. Scripts
+run **only when the data volume is empty** (first `docker compose up`). They do
+not re-run on later restarts.
+
+**Local Postgres** — apply the full set once after `createdb`, or apply a
+single missing file when upgrading:
+
+```bash
+# Fresh local database
+for f in $(ls backend/db/init/*.sql | sort); do
+  psql -d chatvector_dev -v ON_ERROR_STOP=1 -f "$f"
+done
+
+# Single file (Docker path inside the container)
+docker compose exec db psql -U postgres -d postgres \
+  -f /docker-entrypoint-initdb.d/007_sessions.sql
+
+# Single file (host path)
+psql -d chatvector_dev -v ON_ERROR_STOP=1 -f backend/db/init/007_sessions.sql
+```
+
+### Adding a new migration (contributors)
+
+1. Pick the next number — check `backend/db/init/`; use `008_*` if `007_sessions.sql`
+   is the latest.
+2. Add `backend/db/init/008_your_change.sql` with idempotent DDL (and any
+   backfill `UPDATE`/`INSERT` the change needs).
+3. Update SQLAlchemy models and services if the runtime code depends on the new
+   schema.
+4. Add or update tests that exercise the new schema path.
+5. In the PR description, note whether operators with **existing** databases must
+   apply the file manually (see below).
+
+CI will apply your file automatically; reviewers can verify ordering and
+idempotency from the filename and SQL.
+
+### Upgrading an existing database
+
+Postgres init scripts do **not** run again on a volume that already has data.
+After pulling a release that adds `008_*`, operators must apply any files they
+have not yet run.
+
+**Option A — apply one file:**
+
+```bash
+docker compose exec db psql -U postgres -d postgres \
+  -f /docker-entrypoint-initdb.d/008_your_change.sql
+```
+
+**Option B — apply all files in order** (safe when each file is idempotent):
+
+```bash
+for f in $(ls backend/db/init/*.sql | sort); do
+  docker compose exec -T db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f "/docker-entrypoint-initdb.d/$(basename "$f")"
+done
+```
+
+**Option C — dev wipe** (simplest when data loss is acceptable):
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
+Feature-specific upgrade notes (dimensionless vectors, API keys, hybrid
+retrieval, sessions) live under [Deployment](#deployment). They reference the
+same files; prefer this section for the general workflow.
+
+### Future: migration ledger (not implemented)
+
+There is no `schema_migrations` table yet. Deployments today rely on idempotent
+SQL and operator knowledge of which files were applied. A lightweight follow-up
+could add:
+
+```sql
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  filename TEXT PRIMARY KEY,
+  applied_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+and record each filename after successful `psql -f`. That would make “apply
+missing files” auditable without introducing Alembic or a custom runner CLI.
 
 ---
 
@@ -400,6 +533,9 @@ See `backend/.env.example` for the full list of tunables.
 
 ### Upgrading from a pre-#167 Deployment
 
+See [Database migrations](#database-migrations) for the general upgrade workflow.
+This release predates the dimensionless-vector change.
+
 Versions before PR #167 created `document_chunks.embedding` as `vector(3072)`.
 The current schema uses a dimensionless `vector` column to support multiple
 embedding providers.
@@ -426,6 +562,8 @@ docker compose up --build
 ```
 
 ### API-key authentication and tenant isolation (`005` + `006`)
+
+See [Database migrations](#database-migrations) for applying files on existing volumes.
 
 Issue #335 adds multi-tenant API-key authentication. Fresh Docker installations apply
 `005_api_keys.sql` and `006_tenant_fk_and_backfill.sql` automatically on first start.
@@ -473,12 +611,12 @@ ALTER TABLE documents DROP CONSTRAINT IF EXISTS fk_documents_tenant_id;
 -- then optionally: ALTER TABLE documents ALTER COLUMN tenant_id DROP NOT NULL;
 ```
 
-> **Note on duplicate 004 prefixes:** The init directory contains both
-> `004_chat_history.sql` and `004_hybrid_retrieval.sql`. PostgreSQL applies files
-> alphabetically, so chat history always precedes hybrid retrieval. Do not add
-> additional `004_*` files; use `007_*` for the next migration.
+> **Duplicate `004` prefixes:** Documented in [Database migrations](#database-migrations).
+> Do not add another `004_*` file; use the next unused number (`008_*` at time of writing).
 
 ### Hybrid retrieval (`content_tsv`)
+
+See [Database migrations](#database-migrations) for applying files on existing volumes.
 
 To enable vector + PostgreSQL full-text hybrid search (issue P3B-1), apply the migration
 and set `HYBRID_RETRIEVAL_ENABLED=true` in `backend/.env`:
@@ -494,6 +632,8 @@ are backfilled automatically. Hybrid retrieval requires the SQLAlchemy/PostgreSQ
 backend (`APP_ENV=development` or `APP_ENV=test` with `DATABASE_URL`).
 
 ### Durable session storage (`sessions`, `session_documents`)
+
+See [Database migrations](#database-migrations) for applying files on existing volumes.
 
 If your Postgres volume was created before issue #386, apply the session persistence
 migration manually (fresh Docker volumes and CI apply all init scripts automatically):
@@ -522,8 +662,8 @@ with Redis, set `QUEUE_BACKEND=redis` and provide `REDIS_URL`.
 
 Pull requests and pushes to `main` run the GitHub Actions workflow in
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml): backend tests
-against a real pgvector Postgres instance, plus a Docker build of
-the API image.
+against a real pgvector Postgres instance (with all [database migrations](#database-migrations)
+applied), plus a Docker build of the API image.
 
 To run tests locally in the same Docker environment as CI:
 
@@ -632,7 +772,10 @@ uvicorn main:app --reload --port 8000
 
 ```bash
 createdb chatvector_dev
-psql -d chatvector_dev -f backend/db/init/001_init.sql
+# Apply all migrations — see Database migrations
+for f in $(ls backend/db/init/*.sql | sort); do
+  psql -d chatvector_dev -v ON_ERROR_STOP=1 -f "$f"
+done
 
 export DATABASE_URL="postgresql+asyncpg://localhost:5432/chatvector_dev"
 export APP_ENV="development"
@@ -703,6 +846,32 @@ curl http://localhost:8000/status
 ```bash
 curl http://localhost:8000/queue/stats
 ```
+
+### Inspect query transformation traces
+
+Chat endpoints accept an opt-in `debug_retrieval` flag (default `false`). When
+enabled, responses include a `retrieval_debug` object describing how the user
+question was transformed before embedding and search:
+
+- `original_query` — the raw user question
+- `history_resolved_query` — standalone rewrite after session history resolution (when it differs)
+- `transformed_queries` — final query list embedded and searched
+- `transformation_strategy` — active strategy (`rewrite`, `expand`, or `stepback`) when transformation is enabled
+
+Pass the flag as a JSON body field or query parameter:
+
+```bash
+curl -X POST "http://localhost:8000/chat?debug_retrieval=true" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"What about it?","doc_id":"<uuid>","session_id":"<session-id>"}'
+```
+
+The same flag works on `/chat/stream` (included on the `complete` SSE event)
+and `/chat/batch` (per result item). Normal clients are unaffected when the
+flag is omitted.
+
+Query transformation itself is controlled by `QUERY_TRANSFORMATION_ENABLED` and
+`QUERY_TRANSFORMATION_STRATEGY` — see `backend/.env.example`.
 
 ---
 
