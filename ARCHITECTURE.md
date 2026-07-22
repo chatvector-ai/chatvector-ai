@@ -60,15 +60,26 @@ This ensures:
 
 ### Schema migrations
 
-DDL changes ship as numbered, idempotent SQL files in `backend/db/init/`
-(e.g. `007_sessions.sql`). Files are applied in lexical sort order. CI runs
+DDL changes ship as numbered SQL files in `backend/db/init/`
+(e.g. `008_schema_migrations.sql`). Files are applied in lexical sort order. CI runs
 the full set before tests; Docker applies them only on first volume init;
-existing production volumes require manual `psql -f` for new files.
+existing production volumes require manual `psql -v ON_ERROR_STOP=1 -f` for
+new files.
+
+Migration `008_schema_migrations.sql` creates `schema_migrations` and records a
+baseline for migrations `001` through `008`. Later migration files record their
+own filename as their final operation before `COMMIT`, atomically with the
+schema change, using an idempotent `ON CONFLICT` insert.
+At startup, the application validates the ledger table contract and compares the
+sorted SQL filenames with its rows. A missing or malformed ledger table, or a
+missing file row, stops startup with operator-facing instructions; ledger-only
+rows warn that the database may be newer than the running checkout. This
+validation is read-only and never applies migrations.
 
 The project does not use Alembic. Contributors add the next `NNN_*.sql` file,
 update SQLAlchemy models to match, and document operator upgrade steps in the PR.
 Full workflow (naming, CI/Docker/local apply, upgrading existing databases, and
-a possible future `schema_migrations` ledger) is in
+ledger inspection) is in
 [DEVELOPMENT.md — Database migrations](DEVELOPMENT.md#database-migrations).
 
 ---

@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from db.migration_ledger import migration_filenames
+
 
 def _reload_app(monkeypatch, app_env: str):
     """Reload config/main for the requested APP_ENV."""
@@ -41,7 +43,13 @@ def _restore_main_after_test(monkeypatch):
 def test_docs_returns_404_when_app_env_production(monkeypatch):
     main = _reload_app(monkeypatch, "production")
 
-    with patch("core.clients.redis_client.ping", new_callable=AsyncMock), TestClient(main.app) as client:
+    with patch(
+        "main._read_migration_ledger_with_retry",
+        new_callable=AsyncMock,
+        return_value=migration_filenames(),
+    ), patch("core.clients.redis_client.ping", new_callable=AsyncMock), TestClient(
+        main.app
+    ) as client:
         response = client.get("/docs")
         assert response.status_code == 404
 
@@ -50,6 +58,10 @@ def test_docs_returns_200_when_app_env_development(monkeypatch):
     main = _reload_app(monkeypatch, "development")
 
     with patch(
+        "main._read_migration_ledger_with_retry",
+        new_callable=AsyncMock,
+        return_value=migration_filenames(),
+    ), patch(
         "services.api_key_service.bootstrap_development_tenant",
         new_callable=AsyncMock,
     ), TestClient(main.app) as client:
@@ -64,6 +76,10 @@ def test_global_exception_handler_masks_errors(monkeypatch):
         raise RuntimeError("SENSITIVE_DB_PASSWORD_LEAK")
 
     with patch(
+        "main._read_migration_ledger_with_retry",
+        new_callable=AsyncMock,
+        return_value=migration_filenames(),
+    ), patch(
         "services.api_key_service.bootstrap_development_tenant",
         new_callable=AsyncMock,
     ), TestClient(main.app, raise_server_exceptions=False) as client:

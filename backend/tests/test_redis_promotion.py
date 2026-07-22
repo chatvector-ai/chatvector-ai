@@ -3,6 +3,8 @@ from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
+from db.migration_ledger import migration_filenames
+
 def test_queue_backend_default_development(monkeypatch):
     """Verify memory queue is default when APP_ENV is development."""
     monkeypatch.setenv("APP_ENV", "development")
@@ -34,6 +36,11 @@ async def test_startup_validation_redis_unreachable():
     app = FastAPI()
     
     with patch("main.config.QUEUE_BACKEND", "redis"), \
+         patch(
+             "main._read_migration_ledger_with_retry",
+             new_callable=AsyncMock,
+             return_value=migration_filenames(),
+         ), \
          patch("core.clients.redis_client.ping", new_callable=AsyncMock) as mock_ping, \
          patch("main.db.fail_stale_documents_global", new_callable=AsyncMock, return_value=set()), \
          patch("main.ingestion_queue.start", new_callable=AsyncMock), \

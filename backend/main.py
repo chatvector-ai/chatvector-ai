@@ -1,3 +1,4 @@
+import asyncio
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -12,6 +13,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import db
 from core.config import STALE_INGESTION_STATUSES, config
+from db.migration_ledger import (
+    MigrationFilesMissingError,
+    MigrationLedgerError,
+    MigrationLedgerSchemaError,
+    validate_migration_ledger,
+)
 from logging_config.logging_config import setup_logging
 from middleware.rate_limit import limiter, rate_limit_exceeded_handler
 from middleware.security_headers import SecurityHeadersMiddleware
@@ -29,6 +36,45 @@ import logging
 
 setup_logging()
 logger = logging.getLogger(__name__)
+operator_logger = logging.getLogger("uvicorn.error")
+
+MIGRATION_LEDGER_STARTUP_ATTEMPTS = 5
+MIGRATION_LEDGER_RETRY_DELAY_SECONDS = 1.0
+MIGRATION_LEDGER_READ_TIMEOUT_SECONDS = 5.0
+
+
+async def _read_migration_ledger_with_retry() -> list[str] | None:
+    """Allow an in-progress migration a brief window to finish its ledger write."""
+
+    for attempt in range(1, MIGRATION_LEDGER_STARTUP_ATTEMPTS + 1):
+        applied_migrations: list[str] | None = None
+        try:
+            applied_migrations = await asyncio.wait_for(
+                db.list_applied_migrations(),
+                timeout=MIGRATION_LEDGER_READ_TIMEOUT_SECONDS,
+            )
+            validate_migration_ledger(applied_migrations)
+        except (MigrationFilesMissingError, MigrationLedgerSchemaError):
+            raise
+        except MigrationLedgerError:
+            if attempt == MIGRATION_LEDGER_STARTUP_ATTEMPTS:
+                raise
+        except Exception:
+            if attempt == MIGRATION_LEDGER_STARTUP_ATTEMPTS:
+                raise
+        else:
+            return applied_migrations
+
+        await asyncio.sleep(MIGRATION_LEDGER_RETRY_DELAY_SECONDS)
+
+    return None
+
+
+def _log_operator_issue(level: int, message: str) -> None:
+    """Write migration drift to both app logs and Docker-visible Uvicorn logs."""
+
+    logger.log(level, "%s", message)
+    operator_logger.log(level, "%s", message)
 
 
 @asynccontextmanager
@@ -41,6 +87,35 @@ async def lifespan(app: FastAPI):
             "Set DATABASE_URL to a PostgreSQL connection string with pgvector enabled "
             "(e.g. postgresql+asyncpg://user:pass@host:5432/dbname). "
             "See backend/.env.example for configuration options."
+        )
+
+    try:
+        applied_migrations = await _read_migration_ledger_with_retry()
+        migration_drift = validate_migration_ledger(applied_migrations)
+    except MigrationLedgerError as exc:
+        _log_operator_issue(logging.ERROR, str(exc))
+        raise
+    except Exception as exc:
+        message = (
+            "Failed to read public.schema_migrations after startup retries. "
+            "Check DATABASE_URL connectivity and ensure the runtime database role "
+            "has SELECT permission on public.schema_migrations."
+        )
+        _log_operator_issue(logging.ERROR, message)
+        raise RuntimeError(message) from exc
+
+    if migration_drift.unknown_to_checkout:
+        unknown = ", ".join(migration_drift.unknown_to_checkout)
+        _log_operator_issue(
+            logging.WARNING,
+            "Database migration ledger contains entries absent from this checkout: "
+            f"{unknown}. The database may be newer than this application version; "
+            "verify the deployed release before continuing.",
+        )
+    else:
+        logger.info(
+            "Database migration ledger is current (%d migration(s)).",
+            len(applied_migrations or ()),
         )
 
     if config.QUEUE_BACKEND == "redis":

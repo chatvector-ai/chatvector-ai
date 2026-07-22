@@ -6,7 +6,15 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import delete, func, literal, literal_column, select, update as sql_update
+from sqlalchemy import (
+    delete,
+    func,
+    literal,
+    literal_column,
+    select,
+    text,
+    update as sql_update,
+)
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -16,6 +24,7 @@ from core.models import Document, DocumentChunk, SessionRecord, SessionDocument
 from core.config import config
 from core.session import Session
 from db.base import ChunkMatch, ChunkRecord, DatabaseService
+from db.migration_ledger import MigrationLedgerSchemaError
 from db.tenant_scope import require_tenant_id
 from services.retrieval_service import (
     SCORE_TYPE_HYBRID_RRF,
@@ -91,6 +100,112 @@ class SQLAlchemyService(DatabaseService):
             expire_on_commit=False,
         )
         self._retrieval_semaphore = asyncio.Semaphore(config.SQLALCHEMY_RETRIEVAL_CONCURRENCY)
+
+    async def list_applied_migrations(self) -> Optional[list[str]]:
+        """Validate and read the migration ledger without changing database state."""
+
+        async with self.async_session() as session:
+            schema_result = await session.execute(
+                text(
+                    """
+                    SELECT
+                      c.relkind = 'r' AS is_table,
+                      (
+                        SELECT pg_catalog.count(*) = 2
+                        FROM pg_catalog.pg_attribute AS a
+                        WHERE a.attrelid = c.oid
+                          AND a.attnum > 0
+                          AND NOT a.attisdropped
+                      ) AS has_only_expected_columns,
+                      EXISTS (
+                        SELECT 1
+                        FROM pg_catalog.pg_attribute AS a
+                        WHERE a.attrelid = c.oid
+                          AND a.attname = 'filename'
+                          AND NOT a.attisdropped
+                          AND a.atttypid = 'text'::pg_catalog.regtype
+                          AND a.attnotnull
+                      ) AS filename_is_text_not_null,
+                      EXISTS (
+                        SELECT 1
+                        FROM pg_catalog.pg_constraint AS con
+                        JOIN pg_catalog.pg_attribute AS a
+                          ON a.attrelid = con.conrelid
+                         AND a.attnum = ANY (con.conkey)
+                        WHERE con.conrelid = c.oid
+                          AND con.contype = 'p'
+                          AND pg_catalog.cardinality(con.conkey) = 1
+                          AND NOT con.condeferrable
+                          AND a.attname = 'filename'
+                      ) AS filename_is_primary_key,
+                      EXISTS (
+                        SELECT 1
+                        FROM pg_catalog.pg_attribute AS a
+                        WHERE a.attrelid = c.oid
+                          AND a.attname = 'applied_at'
+                          AND NOT a.attisdropped
+                          AND a.atttypid = 'timestamptz'::pg_catalog.regtype
+                          AND a.attnotnull
+                      ) AS applied_at_is_timestamptz_not_null,
+                      EXISTS (
+                        SELECT 1
+                        FROM pg_catalog.pg_attribute AS a
+                        JOIN pg_catalog.pg_attrdef AS d
+                          ON d.adrelid = a.attrelid
+                         AND d.adnum = a.attnum
+                        WHERE a.attrelid = c.oid
+                          AND a.attname = 'applied_at'
+                          AND NOT a.attisdropped
+                          AND pg_catalog.pg_get_expr(d.adbin, d.adrelid) = 'now()'
+                      ) AS applied_at_default_is_now
+                    FROM pg_catalog.pg_class AS c
+                    JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+                    WHERE n.nspname = 'public'
+                      AND c.relname = 'schema_migrations'
+                    """
+                )
+            )
+            schema = schema_result.mappings().one_or_none()
+            if schema is None:
+                return None
+
+            contract_fields = {
+                "is_table": "ordinary table",
+                "has_only_expected_columns": (
+                    "exactly the filename and applied_at columns"
+                ),
+                "filename_is_text_not_null": "filename TEXT NOT NULL",
+                "filename_is_primary_key": (
+                    "non-deferrable PRIMARY KEY (filename)"
+                ),
+                "applied_at_is_timestamptz_not_null": (
+                    "applied_at TIMESTAMPTZ NOT NULL"
+                ),
+                "applied_at_default_is_now": "applied_at DEFAULT now()",
+            }
+            invalid = [
+                description
+                for field, description in contract_fields.items()
+                if not schema[field]
+            ]
+            if invalid:
+                raise MigrationLedgerSchemaError(
+                    "Database migration ledger schema is malformed. Expected "
+                    "public.schema_migrations(filename TEXT PRIMARY KEY, "
+                    "applied_at TIMESTAMPTZ NOT NULL DEFAULT now()); invalid "
+                    f"component(s): {', '.join(invalid)}. Inspect and back up the "
+                    "existing relation, repair it to the expected contract, then "
+                    "rerun 008_schema_migrations.sql. See "
+                    "DEVELOPMENT.md#upgrading-an-existing-database."
+                )
+
+            result = await session.execute(
+                text(
+                    "SELECT filename FROM public.schema_migrations "
+                    "ORDER BY filename"
+                )
+            )
+            return list(result.scalars().all())
 
     async def _document_owned_by_tenant(
         self, session: AsyncSession, doc_id: str, tenant_id: str

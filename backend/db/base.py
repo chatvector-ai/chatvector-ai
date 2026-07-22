@@ -120,6 +120,11 @@ class DatabaseService(ABC):
     # ── Administrative / cross-tenant operations ──────────────────────────────
 
     @abstractmethod
+    async def list_applied_migrations(self) -> Optional[list[str]]:
+        """Return ledger filenames, or ``None`` when the ledger is not installed."""
+        pass
+
+    @abstractmethod
     async def fail_stale_documents_global(self, statuses: list[str]) -> set[str]:
         """Mark in-progress documents as failed across all tenants on startup."""
         pass

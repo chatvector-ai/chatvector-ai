@@ -16,6 +16,7 @@ import pytest
 pytest.importorskip("pgvector")
 
 from core.models import Tenant
+from db.migration_ledger import migration_filenames
 from db.sqlalchemy_service import SQLAlchemyService
 from services.api_key_service import (
     DevelopmentTenantConfigError,
@@ -193,6 +194,11 @@ async def test_lifespan_fails_when_bootstrap_persistence_fails():
     app = FastAPI()
 
     with patch("main.config.APP_ENV", "development"), \
+         patch(
+             "main._read_migration_ledger_with_retry",
+             new_callable=AsyncMock,
+             return_value=migration_filenames(),
+         ), \
          patch("main.db.fail_stale_documents_global", new_callable=AsyncMock, return_value=set()), \
          patch(
              "services.api_key_service.ensure_tenant_exists",
@@ -245,6 +251,11 @@ async def test_lifespan_bootstraps_missing_development_tenant(monkeypatch):
         app = FastAPI()
         with patch("main.config.APP_ENV", "development"), \
              patch("main.config.QUEUE_BACKEND", "memory"), \
+             patch(
+                 "main._read_migration_ledger_with_retry",
+                 new_callable=AsyncMock,
+                 return_value=migration_filenames(),
+             ), \
              patch("main.db.fail_stale_documents_global", new_callable=AsyncMock, return_value=set()), \
              patch("main.ingestion_queue.start", new_callable=AsyncMock), \
              patch("main.ingestion_queue.stop", new_callable=AsyncMock):

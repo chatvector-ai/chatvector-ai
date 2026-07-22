@@ -261,6 +261,12 @@ async def delete_document(doc_id: str, tenant_id: str) -> None:
     )
 
 
+async def list_applied_migrations() -> list[str] | None:
+    """Return applied migration filenames, or ``None`` before ledger bootstrap."""
+
+    return await get_db_service().list_applied_migrations()
+
+
 async def fail_stale_documents_global(statuses: list[str]) -> set[str]:
     """Mark in-progress documents as failed across all tenants (startup maintenance)."""
     service = get_db_service()
@@ -374,6 +380,7 @@ __all__ = [
     "get_document_status",
     "delete_document_chunks",
     "delete_document",
+    "list_applied_migrations",
     "fail_stale_documents_global",
     "store_chat_message",
     "get_session_history",

@@ -162,9 +162,10 @@ set automatically).
 | ---- | ------ |
 | Location | `backend/db/init/` |
 | Filename | `NNN_descriptive_name.sql` — three-digit prefix, then a short slug |
-| Order | Lexical sort on the filename (`001` … `007` today; next is `008_*`) |
+| Order | Lexical sort on the filename (`001` … `008` today; next is `009_*`) |
 | Idempotency | Prefer `CREATE … IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, and guarded `DO …` blocks so re-runs are safe |
 | ORM models | Update SQLAlchemy models in `backend/db/` to match new tables/columns |
+| Ledger | Migrations after `008_schema_migrations.sql` must record their own filename as their final operation before `COMMIT` |
 
 Current files (in apply order):
 
@@ -177,9 +178,10 @@ Current files (in apply order):
 005_api_keys.sql
 006_tenant_fk_and_backfill.sql
 007_sessions.sql
+008_schema_migrations.sql
 ```
 
-> **Do not add another `004_*` file.** Use the next unused number (`008_*` at
+> **Do not add another `004_*` file.** Use the next unused number (`009_*` at
 > time of writing). The duplicate `004` pair is historical; chat history always
 > runs before hybrid retrieval because of alphabetical sort.
 
@@ -208,24 +210,40 @@ for f in $(ls backend/db/init/*.sql | sort); do
   psql -d chatvector_dev -v ON_ERROR_STOP=1 -f "$f"
 done
 
-# Single file (Docker path inside the container)
-docker compose exec db psql -U postgres -d postgres \
-  -f /docker-entrypoint-initdb.d/007_sessions.sql
+# Single file (Docker path inside the development container)
+docker compose exec db sh -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/008_schema_migrations.sql'
 
 # Single file (host path)
-psql -d chatvector_dev -v ON_ERROR_STOP=1 -f backend/db/init/007_sessions.sql
+psql -d chatvector_dev -v ON_ERROR_STOP=1 \
+  -f backend/db/init/008_schema_migrations.sql
 ```
 
 ### Adding a new migration (contributors)
 
-1. Pick the next number — check `backend/db/init/`; use `008_*` if `007_sessions.sql`
-   is the latest.
-2. Add `backend/db/init/008_your_change.sql` with idempotent DDL (and any
-   backfill `UPDATE`/`INSERT` the change needs).
-3. Update SQLAlchemy models and services if the runtime code depends on the new
+1. Pick the next number — check `backend/db/init/`; use `009_*` if
+   `008_schema_migrations.sql` is the latest.
+2. Add `backend/db/init/009_your_change.sql` with idempotent DDL (and any
+   backfill `UPDATE`/`INSERT` the change needs) inside a transaction.
+3. Make the idempotent ledger insert the final operation before `COMMIT`, so the
+   schema changes and their ledger row become visible atomically:
+
+   ```sql
+   BEGIN;
+
+   -- Idempotent schema/data changes go here.
+
+   INSERT INTO public.schema_migrations (filename)
+   VALUES ('009_your_change.sql')
+   ON CONFLICT (filename) DO NOTHING;
+
+   COMMIT;
+   ```
+
+4. Update SQLAlchemy models and services if the runtime code depends on the new
    schema.
-4. Add or update tests that exercise the new schema path.
-5. In the PR description, note whether operators with **existing** databases must
+5. Add or update tests that exercise the new schema path and ledger record.
+6. In the PR description, note whether operators with **existing** databases must
    apply the file manually (see below).
 
 CI will apply your file automatically; reviewers can verify ordering and
@@ -234,25 +252,78 @@ idempotency from the filename and SQL.
 ### Upgrading an existing database
 
 Postgres init scripts do **not** run again on a volume that already has data.
-After pulling a release that adds `008_*`, operators must apply any files they
-have not yet run.
+After pulling a release that adds a migration, inspect the ledger and apply only
+files that are genuinely missing. The startup check detects drift but never runs
+SQL or applies migrations automatically.
 
-**Option A — apply one file:**
+The Docker commands below expand `POSTGRES_USER` and `POSTGRES_DB` inside the
+database container, so they target the database configured for that Compose
+stack rather than assuming the development defaults.
 
-```bash
-docker compose exec db psql -U postgres -d postgres \
-  -f /docker-entrypoint-initdb.d/008_your_change.sql
-```
-
-**Option B — apply all files in order** (safe when each file is idempotent):
+Inspect the ledger:
 
 ```bash
-for f in $(ls backend/db/init/*.sql | sort); do
-  docker compose exec -T db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f "/docker-entrypoint-initdb.d/$(basename "$f")"
-done
+# Development stack
+docker compose exec db sh -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "SELECT filename, applied_at FROM public.schema_migrations ORDER BY filename;"'
+
+# Production stack
+docker compose -f docker-compose.prod.yml exec db sh -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "SELECT filename, applied_at FROM public.schema_migrations ORDER BY filename;"'
 ```
 
-**Option C — dev wipe** (simplest when data loss is acceptable):
+If this reports that `public.schema_migrations` does not exist, follow the
+pre-ledger baseline procedure below.
+
+Apply each verified missing file separately, in lexical order, and stop on the
+first SQL error:
+
+```bash
+# Development stack (Docker path inside the database container)
+docker compose exec db sh -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/009_your_change.sql'
+
+# Production stack
+docker compose -f docker-compose.prod.yml exec db sh -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/009_your_change.sql'
+
+# Or a host path with local psql
+psql -d chatvector_dev -v ON_ERROR_STOP=1 \
+  -f backend/db/init/009_your_change.sql
+```
+
+Do **not** run every migration over a populated database: `001_init.sql` drops
+and recreates core tables. The full sorted loop is only for a newly created,
+empty database.
+
+For a database created before the ledger existed, `008_schema_migrations.sql`
+is a baseline bridge. It assumes that `001_init.sql` through `007_sessions.sql`
+were already applied; it does not inspect the old schema to prove that history.
+Verify the schema or deployment history, apply any genuinely missing historical
+files individually in lexical order, and then apply `008_schema_migrations.sql`.
+
+```bash
+# Development stack
+docker compose exec db sh -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/008_schema_migrations.sql'
+
+# Production stack
+docker compose -f docker-compose.prod.yml exec db sh -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/008_schema_migrations.sql'
+```
+
+Its backfill is idempotent. The `applied_at` values it creates for migrations
+`001` through `008` record when the baseline backfill ran, not when each older
+migration originally ran.
+
+If the ledger table exists but a row for `001` through `007` is missing, that
+missing row alone does **not** prove the historical SQL is unapplied. Verify the
+migration's schema effects or deployment history, apply only genuinely missing
+historical SQL, and then rerun `008_schema_migrations.sql` to restore all baseline
+rows idempotently. For a missing migration after `008`, apply that migration file
+itself; later files record their own ledger rows.
+
+**Dev wipe** (simplest when data loss is acceptable):
 
 ```bash
 docker compose down -v
@@ -263,21 +334,57 @@ Feature-specific upgrade notes (dimensionless vectors, API keys, hybrid
 retrieval, sessions) live under [Deployment](#deployment). They reference the
 same files; prefer this section for the general workflow.
 
-### Future: migration ledger (not implemented)
+### Migration ledger and startup drift check
 
-There is no `schema_migrations` table yet. Deployments today rely on idempotent
-SQL and operator knowledge of which files were applied. A lightweight follow-up
-could add:
+Migration `008_schema_migrations.sql` creates the runtime ledger and backfills
+one row for every migration from `001_init.sql` through itself:
 
 ```sql
-CREATE TABLE IF NOT EXISTS schema_migrations (
+CREATE TABLE IF NOT EXISTS public.schema_migrations (
   filename TEXT PRIMARY KEY,
-  applied_at TIMESTAMP DEFAULT NOW()
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 
-and record each filename after successful `psql -f`. That would make “apply
-missing files” auditable without introducing Alembic or a custom runner CLI.
+The backfill uses `ON CONFLICT (filename) DO NOTHING`, so re-running `008` does
+not create duplicate-key failures. Each later migration records its own filename
+as its final operation before `COMMIT` using the same conflict handling.
+
+If migrations run as a different PostgreSQL role than the application, grant the
+runtime role read access to the ledger after applying `008`:
+
+```sql
+GRANT SELECT ON public.schema_migrations TO chatvector_app;
+```
+
+Replace `chatvector_app` with the role used by `DATABASE_URL`.
+
+At application startup, ChatVector compares the lexically sorted
+`backend/db/init/*.sql` filenames with the ledger:
+
+- A missing `schema_migrations` table stops startup with instructions to apply
+  the historical migrations and `008_schema_migrations.sql`.
+- A ledger relation with the wrong columns, types, primary key, nullability, or
+  timestamp default stops startup as malformed instead of being treated as current.
+- Any migration file without a matching ledger row stops startup and lists the
+  missing filename(s).
+- Ledger rows that have no matching file in the running checkout produce a
+  warning, because the database may be newer than the application; startup
+  continues when that is the only difference.
+
+This check is detection only. It does not execute migrations, modify the ledger,
+or replace the operator-run `psql -v ON_ERROR_STOP=1 -f ...` workflow.
+
+If startup reports a malformed ledger, inspect it before changing anything:
+
+```bash
+docker compose exec db sh -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "\d+ public.schema_migrations"'
+```
+
+Back up and verify existing ledger rows, repair the relation to the documented
+two-column contract, and rerun `008_schema_migrations.sql`. Do not drop or replace
+the ledger blindly on a populated database.
 
 ---
 
@@ -543,7 +650,7 @@ embedding providers.
 **Option A — Run the migration (keeps existing data):**
 
 ```bash
-docker compose exec db psql -U postgres -d postgres \
+docker compose exec db psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
     -f /docker-entrypoint-initdb.d/002_dimensionless_vector.sql
 ```
 
@@ -572,9 +679,9 @@ Issue #335 adds multi-tenant API-key authentication. Fresh Docker installations 
 
 ```bash
 # Apply the schema migrations
-docker compose exec db psql -U postgres -d postgres \
+docker compose exec db psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
     -f /docker-entrypoint-initdb.d/005_api_keys.sql
-docker compose exec db psql -U postgres -d postgres \
+docker compose exec db psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
     -f /docker-entrypoint-initdb.d/006_tenant_fk_and_backfill.sql
 ```
 
@@ -612,7 +719,7 @@ ALTER TABLE documents DROP CONSTRAINT IF EXISTS fk_documents_tenant_id;
 ```
 
 > **Duplicate `004` prefixes:** Documented in [Database migrations](#database-migrations).
-> Do not add another `004_*` file; use the next unused number (`008_*` at time of writing).
+> Do not add another `004_*` file; use the next unused number (`009_*` at time of writing).
 
 ### Hybrid retrieval (`content_tsv`)
 
@@ -622,7 +729,7 @@ To enable vector + PostgreSQL full-text hybrid search (issue P3B-1), apply the m
 and set `HYBRID_RETRIEVAL_ENABLED=true` in `backend/.env`:
 
 ```bash
-docker compose exec db psql -U postgres -d postgres \
+docker compose exec db psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
     -f /docker-entrypoint-initdb.d/004_hybrid_retrieval.sql
 ```
 
@@ -639,7 +746,7 @@ If your Postgres volume was created before issue #386, apply the session persist
 migration manually (fresh Docker volumes and CI apply all init scripts automatically):
 
 ```bash
-docker compose exec db psql -U postgres -d postgres \
+docker compose exec db psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
     -f /docker-entrypoint-initdb.d/007_sessions.sql
 ```
 
