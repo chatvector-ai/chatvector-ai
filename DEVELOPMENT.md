@@ -711,6 +711,13 @@ python -m backend.cli create-tenant-key --tenant "My Org" --tenant-id my-org
 The raw API key (`cv_live_…`) is displayed **once** and is never stored.
 Record it immediately. Use it as `Authorization: Bearer <raw-key>` in all requests.
 
+**Managing keys after bootstrap:**
+
+python -m backend.cli list-tenant-keys --tenant-id <id>
+python -m backend.cli revoke-tenant-key --tenant-id <id> --key-id <key-id>
+
+Revoking is idempotent — running it again on an already-revoked key won't error.
+
 **Rollback:**
 
 ```sql

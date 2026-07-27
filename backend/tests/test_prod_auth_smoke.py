@@ -410,3 +410,55 @@ async def test_cross_tenant_chat_returns_404():
     finally:
         await _cleanup_tenant(tenant_a_id)
         await _cleanup_tenant(tenant_b_id)
+
+
+from services.api_key_service import list_tenant_keys, revoke_api_key
+
+@_requires_db
+async def test_list_tenant_keys_returns_created_key():
+    tenant_id, raw_key, api_key_id = await _provision_tenant("smoke-list")
+    try:
+        keys = await list_tenant_keys(tenant_id=tenant_id)
+        assert len(keys) == 1
+        assert str(keys[0].id) == api_key_id
+        assert keys[0].status == "active"
+    finally:
+        await _cleanup_tenant(tenant_id)
+
+
+@_requires_db
+async def test_revoke_api_key_sets_status_revoked():
+    tenant_id, raw_key, api_key_id = await _provision_tenant("smoke-revoke-fn")
+    try:
+        success = await revoke_api_key(tenant_id=tenant_id, key_id=api_key_id)
+        assert success is True
+
+        keys = await list_tenant_keys(tenant_id=tenant_id)
+        assert keys[0].status == "revoked"
+    finally:
+        await _cleanup_tenant(tenant_id)
+
+
+@_requires_db
+async def test_revoke_api_key_is_idempotent():
+    tenant_id, raw_key, api_key_id = await _provision_tenant("smoke-idempotent")
+    try:
+        first = await revoke_api_key(tenant_id=tenant_id, key_id=api_key_id)
+        second = await revoke_api_key(tenant_id=tenant_id, key_id=api_key_id)
+        assert first is True
+        assert second is True
+    finally:
+        await _cleanup_tenant(tenant_id)
+
+
+@_requires_db
+async def test_revoked_key_fails_validate_api_key():
+    tenant_id, raw_key, api_key_id = await _provision_tenant("smoke-revoke-validate")
+    try:
+        await revoke_api_key(tenant_id=tenant_id, key_id=api_key_id)
+
+        from services.api_key_service import validate_api_key
+        result = await validate_api_key(raw_key)
+        assert result is None
+    finally:
+        await _cleanup_tenant(tenant_id)

@@ -209,3 +209,35 @@ async def validate_api_key(raw_key: str) -> Optional[tuple[str, str]]:
         return None
 
     return api_key.tenant_id, str(api_key.id)
+
+async def list_tenant_keys(tenant_id: str) -> list[ApiKey]:
+    """List all API keys for a tenant (metadata only — no raw secrets exist to return)."""
+
+    factory = _get_session_factory()
+    async with factory() as session:
+            result = await session.execute(
+                select(ApiKey).where(ApiKey.tenant_id == tenant_id)
+            )
+            return list(result.scalars().all())
+
+async def revoke_api_key(tenant_id: str, key_id: Optional[str] = None, prefix: Optional[str] = None) -> bool:         
+    factory = _get_session_factory() 
+    async with factory() as session:
+        async with session.begin():
+            query = select(ApiKey).where(ApiKey.tenant_id == tenant_id)
+            if key_id:
+                query = select(ApiKey).where(ApiKey.id == key_id)
+            elif prefix:
+                query = select(ApiKey).where(ApiKey.prefix == prefix)
+            else:
+                return False
+            result = await session.execute(query)
+            api_key = result.scalar_one_or_none()
+            if api_key is None:
+                return False
+
+            if api_key.status != "revoked":
+                api_key.status = "revoked"
+
+    logger.info("Revoked API key id=%s for tenant=%s", key_id or prefix, tenant_id)
+    return True
