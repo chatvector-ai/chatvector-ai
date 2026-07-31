@@ -17,6 +17,7 @@ import {
 } from "../lib/citations";
 import RetrievalInspector from "../components/RetrievalInspector";
 import RetrievalSettingsPanel from "../components/RetrievalSettingsPanel";
+import BatchResultSkeleton from "./BatchResultSkeleton";
 import { getUploadedDocuments, type StoredDocument } from "../lib/documentStore";
 import { useRetrievalSettings } from "../lib/hooks/useRetrievalSettings";
 
@@ -416,27 +417,39 @@ export default function BatchPage() {
             </div>
           )}
 
-          {results && mode === "synthesize" && results[0] && (
-            <BatchResultCard result={results[0]} title={synthesizeTitle} />
-          )}
+          <div aria-busy={inflight}>
+            {inflight && mode === "synthesize" && <BatchResultSkeleton />}
 
-          {results && mode === "compare" && (
-            <div className="grid gap-4 md:grid-cols-2">
-              {results.map((result, index) => {
-                const docId = result.doc_ids[0];
-                const name =
-                  (docId && nameById.get(docId)) || docId || "Unknown document";
+            {inflight && mode === "compare" && (
+              <div className="grid gap-4 md:grid-cols-2">
+                {Array.from({ length: selectedDocIds.length }).map((_, index) => (
+                  <BatchResultSkeleton key={index} />
+                ))}
+              </div>
+            )}
 
-                return (
-                  <BatchResultCard
-                    key={`${docId ?? "doc"}-${index}`}
-                    result={result}
-                    title={name}
-                  />
-                );
-              })}
-            </div>
-          )}
+            {!inflight && results && mode === "synthesize" && results[0] && (
+              <BatchResultCard result={results[0]} title={synthesizeTitle} />
+            )}
+
+            {!inflight && results && mode === "compare" && (
+              <div className="grid gap-4 md:grid-cols-2">
+                {results.map((result, index) => {
+                  const docId = result.doc_ids[0];
+                  const name =
+                    (docId && nameById.get(docId)) || docId || "Unknown document";
+
+                  return (
+                    <BatchResultCard
+                      key={`${docId ?? "doc"}-${index}`}
+                      result={result}
+                      title={name}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
