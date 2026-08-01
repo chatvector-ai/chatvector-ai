@@ -5,6 +5,7 @@ import Image from "next/image";
 import ErrorState from "../components/ErrorState";
 import { DocLayout } from "@/app/components/DocLayout";
 import { DocPageHeader } from "@/app/components/DocPageHeader";
+import { SkeletonBlock, SkeletonCircle } from "@/app/components/ui/Skeleton";
 
 type Contributor = {
   login: string;
@@ -60,9 +61,9 @@ export default function ContributorsPage() {
               key={i}
               className="flex animate-pulse flex-col items-center gap-3 rounded-lg border border-border bg-surface p-4"
             >
-              <div className="h-16 w-16 rounded-full bg-border" />
-              <div className="h-3 w-36 rounded bg-border md:w-48" />
-              <div className="h-3 w-24 rounded bg-border md:w-28" />
+              <SkeletonCircle className="h-16 w-16" />
+              <SkeletonBlock className="h-3 w-36 md:w-48" />
+              <SkeletonBlock className="h-3 w-24 md:w-28" />
             </div>
           ))}
         </div>
