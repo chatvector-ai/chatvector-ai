@@ -226,9 +226,9 @@ async def revoke_api_key(tenant_id: str, key_id: Optional[str] = None, prefix: O
         async with session.begin():
             query = select(ApiKey).where(ApiKey.tenant_id == tenant_id)
             if key_id:
-                query = select(ApiKey).where(ApiKey.id == key_id)
+                query = query.where(ApiKey.id == key_id)
             elif prefix:
-                query = select(ApiKey).where(ApiKey.prefix == prefix)
+                query = query.where(ApiKey.prefix == prefix)
             else:
                 return False
             result = await session.execute(query)
