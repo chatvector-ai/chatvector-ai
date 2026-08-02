@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import UploadModal from "../components/UploadModal";
 import MessageList from "../components/chat/MessageList";
 import ChatInput from "../components/chat/ChatInput";
+import SessionSidebar from "../components/chat/SessionSidebar";
 import RetrievalSettingsPanel from "../components/RetrievalSettingsPanel";
 import { useChat } from "../lib/hooks/useChat";
 import { useRetrievalSettings } from "../lib/hooks/useRetrievalSettings";
@@ -54,32 +55,12 @@ export default function ChatPage() {
         maxHeight: "calc(100dvh - 60px)",
       }}
     >
-      <div className="w-64 border-r border-border bg-surface flex-col hidden md:flex">
-        <div className="p-4 border-b border-border">
-          <button
-            onClick={createNewSession}
-            className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-          >
-            <span className="text-lg leading-none">+</span>
-            <span>New Session</span>
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {sessions.map((session) => (
-            <button
-              key={session.id}
-              onClick={() => switchSession(session.id)}
-              className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors truncate ${
-                session.id === activeSessionId
-                  ? "bg-accent/10 text-accent font-medium"
-                  : "text-muted hover:bg-surface hover:text-foreground"
-              }`}
-            >
-              Session {session.id.substring(0, 8)}
-            </button>
-          ))}
-        </div>
-      </div>
+      <SessionSidebar
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onCreateSession={createNewSession}
+        onSwitchSession={switchSession}
+      />
 
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">
         <h1 className="sr-only">Chat with your documents</h1>
