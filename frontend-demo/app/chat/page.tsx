@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
 import UploadModal from "../components/UploadModal";
 import MessageList from "../components/chat/MessageList";
 import ChatInput from "../components/chat/ChatInput";
@@ -36,12 +35,56 @@ export default function ChatPage() {
 
   if (!isLoaded || !retrievalLoaded) {
     return (
-      <div 
-        className="flex h-full w-full flex-col items-center justify-center gap-3 bg-background text-muted"
-        style={{ height: "calc(100dvh - 60px)" }}
+      <div
+        className="flex min-h-0 w-full flex-1 overflow-hidden bg-background text-foreground"
+        style={{
+          height: "calc(100dvh - 60px)",
+          maxHeight: "calc(100dvh - 60px)",
+        }}
+        aria-busy="true"
       >
-        <Loader2 className="h-6 w-6 animate-spin opacity-50" />
-        <span className="text-sm">Loading sessions...</span>
+        {/* Sidebar skeleton */}
+        <div className="w-64 border-r border-border bg-surface hidden md:flex flex-col animate-pulse">
+          <div className="p-4 border-b border-border">
+            <div className="h-10 w-full rounded-lg bg-border" />
+          </div>
+          <div className="flex-1 p-2 space-y-1">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-9 w-full rounded-md bg-border"
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Main area skeleton */}
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0 animate-pulse">
+          <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden p-4">
+            {/* Message bubbles */}
+            <div className="flex-1 space-y-4 py-4">
+              <div className="flex justify-start">
+                <div className="h-16 w-72 rounded-xl border border-border bg-surface" />
+              </div>
+              <div className="flex justify-end">
+                <div className="h-12 w-56 rounded-xl border border-border bg-surface" />
+              </div>
+              <div className="flex justify-start">
+                <div className="h-20 w-80 rounded-xl border border-border bg-surface" />
+              </div>
+            </div>
+
+            {/* Input bar skeleton */}
+            <div className="shrink-0 space-y-3 pt-2">
+              <div className="h-4 w-48 rounded bg-border" />
+              <div className="flex items-end gap-2 rounded-xl border border-border bg-surface px-4 py-3">
+                <div className="h-5 w-5 rounded bg-border" />
+                <div className="flex-1 h-5 rounded bg-border" />
+                <div className="h-8 w-8 rounded-lg bg-border" />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
