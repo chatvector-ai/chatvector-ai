@@ -256,11 +256,11 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/postgres
           REDIS_URL: redis://redis:6379/0
           APP_ENV: production
+          LLM_PROVIDER: ${{ vars.CI_LLM_PROVIDER }}
+          LLM_MODEL: ${{ vars.CI_LLM_MODEL }}
+          EMBEDDING_PROVIDER: ${{ vars.CI_EMBEDDING_PROVIDER }}
+          EMBEDDING_MODEL: ${{ vars.CI_EMBEDDING_MODEL }}
           GEN_AI_KEY: ${{ secrets.GEN_AI_KEY }}
-          LLM_PROVIDER: gemini
-          LLM_MODEL: gemini-3.5-flash
-          EMBEDDING_PROVIDER: gemini
-          EMBEDDING_MODEL: models/gemini-embedding-001
           QUEUE_BACKEND: redis
           QUEUE_WORKER_COUNT: 3
           LOG_LEVEL: INFO
