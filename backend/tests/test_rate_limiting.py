@@ -13,14 +13,15 @@ from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-
+from slowapi import Limiter
 from core.auth import AuthContext, require_auth
+from core.config import config
 from core.session import Session
 from middleware.rate_limit import get_rate_limit_key, limiter
 from routes.chat import router as chat_router
 from routes.upload import router as upload_router
 from tests.request_utils import make_test_request
-
+from limits import RateLimitItemPerMinute
 _FAKE_SESSION = Session(id="rate-limit-session", tenant_id="dev")
 
 
@@ -280,4 +281,43 @@ async def test_require_auth_sets_tenant_on_request_state():
     request = make_test_request("GET", "/chat")
     result = await require_auth(request)
     assert result.tenant_id == "dev"
+
     assert request.state.tenant_id == "dev"
+
+def test_independent_limiters_share_redis_bucket():
+    """Independent limiter instances share rate-limit state through Redis."""
+    from limits.storage import RedisStorage
+
+    limiter_a = Limiter(
+    key_func=lambda _request: "tenant:redis-shared-test",
+    storage_uri=config.REDIS_URL,
+)
+
+    limiter_b = Limiter(
+        key_func=lambda _request: "tenant:redis-shared-test",
+        storage_uri=config.REDIS_URL,
+    )
+
+    limit = RateLimitItemPerMinute(2)
+
+    try:
+        assert isinstance(limiter_a._storage, RedisStorage)
+        assert isinstance(limiter_b._storage, RedisStorage)
+
+        assert limiter_a._limiter.hit(
+            limit,
+            "tenant:redis-shared-test",
+        )
+        assert limiter_b._limiter.hit(
+            limit,
+            "tenant:redis-shared-test",
+        )
+
+        # The two limiter instances share the same Redis-backed bucket.
+        assert not limiter_a._limiter.hit(
+            limit,
+            "tenant:redis-shared-test",
+        )
+    finally:
+        limiter_a.reset()
+        limiter_b.reset()

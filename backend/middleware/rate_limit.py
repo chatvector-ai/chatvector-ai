@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
-
+from core.config import config
 logger = logging.getLogger(__name__)
 
 # request.state attribute set by require_auth before rate-limit checks run.
@@ -46,7 +46,11 @@ def _rate_limit_key_type(limit_key: str) -> str:
     return "unauthenticated"
 
 
-limiter = Limiter(key_func=get_rate_limit_key)
+limiter = Limiter(
+    key_func=get_rate_limit_key,
+    storage_uri=config.REDIS_URL,
+    in_memory_fallback_enabled=True,
+)
 
 
 async def rate_limit_exceeded_handler(
