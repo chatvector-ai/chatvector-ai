@@ -425,6 +425,10 @@ def _status_fallback_health_dict(exc: BaseException, label: str) -> dict:
         "checked_at": datetime.utcnow().isoformat() + "Z",
     }
 
+@router.get("/health", include_in_schema=False)
+async def health():
+    return {"status": "ok"}
+
 
 @router.get("/status")
 @limiter.limit(config.RATE_LIMIT_STATUS)

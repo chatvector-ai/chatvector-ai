@@ -48,25 +48,38 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       APP_ENV: production
+
       GEN_AI_KEY: ${GEN_AI_KEY}
+
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      LLM_MODEL: ${LLM_MODEL}
+
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+
+      QUEUE_BACKEND: ${QUEUE_BACKEND:-redis}
+      QUEUE_WORKER_COUNT: ${QUEUE_WORKER_COUNT:-3}
+
       LOG_FORMAT: JSON
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       CORS_ORIGINS: ${CORS_ORIGINS}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       PYTHONPATH: /app
+
     working_dir: /app
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+
     deploy:
       resources:
         limits:
           memory: 1g
+
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/status || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-
 volumes:
   chatvector-db-data-prod:
   chatvector-redis-data-prod:
