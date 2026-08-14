@@ -240,7 +240,7 @@ jobs:
       - name: Test package exports
         run: npm run test:exports
  
-      prod-compose-e2e:
+  prod-compose-e2e:
     name: Production Compose E2E Smoke Test
     runs-on: ubuntu-latest
 
