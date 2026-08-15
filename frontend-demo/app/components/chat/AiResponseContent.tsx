@@ -9,6 +9,7 @@ import {
   formatResponseMetadata,
 } from "../../lib/citations";
 import RetrievalInspector from "../RetrievalInspector";
+import { InlineAlert } from "../ui/InlineAlert";
 
 export type AiResponseContentProps = {
   text?: string;
@@ -32,7 +33,6 @@ export type AiResponseContentProps = {
   sourceClassName?: string;
   sourcesContainerClassName?: string;
   metadataClassName?: string;
-  errorClassName?: string;
   zeroChunksClassName?: string;
   emptyMessageClassName?: string;
 };
@@ -55,7 +55,6 @@ export default function AiResponseContent({
   sourceClassName = "text-sm text-muted",
   sourcesContainerClassName = "mt-2 flex flex-col gap-1",
   metadataClassName = "mt-2 text-xs text-muted",
-  errorClassName = "mb-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-500",
   zeroChunksClassName = "mt-1 text-sm text-muted italic",
   emptyMessageClassName = "text-sm text-muted italic",
 }: AiResponseContentProps) {
@@ -68,7 +67,9 @@ export default function AiResponseContent({
   return (
     <>
       {error && detailsVisible && (
-        <p className={errorClassName}>{softFailureMessage(error)}</p>
+        <div className="mb-2">
+          <InlineAlert>{softFailureMessage(error)}</InlineAlert>
+        </div>
       )}
       {isStreaming ? (
         text ? (

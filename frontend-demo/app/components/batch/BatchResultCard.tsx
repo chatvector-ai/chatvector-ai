@@ -4,6 +4,7 @@ import {
   type BatchResultItem,
 } from "../../lib/api";
 import AiResponseContent from "../chat/AiResponseContent";
+import { InlineAlert } from "../ui/InlineAlert";
 
 export function hasPartialBatchResult(result: BatchResultItem): boolean {
   return Boolean(
@@ -42,10 +43,10 @@ export function BatchResultCard({
       </div>
 
       {isError && (
-        <div className="text-sm text-red-500">
-          <p>{softFailureMessage(result.error)}</p>
+        <div className="flex flex-col gap-1">
+          <InlineAlert>{softFailureMessage(result.error)}</InlineAlert>
           {result.error?.code && (
-            <p className="mt-1 font-mono text-xs text-red-500/80">
+            <p className="ml-6 font-mono text-xs text-red-500/80">
               {result.error.code}
             </p>
           )}
