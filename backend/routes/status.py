@@ -414,8 +414,6 @@ def _format_ascii(data: dict) -> str:
     ]
     return "\n".join(lines)
 
-
-# FIX: Added cached=False and checked_at fields to match response contract
 def _status_fallback_health_dict(exc: BaseException, label: str) -> dict:
     logger.exception("%s health check raised unexpectedly", label)
     return {
@@ -426,9 +424,9 @@ def _status_fallback_health_dict(exc: BaseException, label: str) -> dict:
     }
 
 @router.get("/health", include_in_schema=False)
-async def health():
+async def health() -> dict[str, str]:
+    """Lightweight liveness check for container orchestration."""
     return {"status": "ok"}
-
 
 @router.get("/status")
 @limiter.limit(config.RATE_LIMIT_STATUS)

@@ -636,6 +636,236 @@ Docker Compose expands `${VAR}` from your process environment or a
 `backend/.env.prod`, either `export` them first or pass
 `--env-file backend/.env.prod` to the `docker compose` command.
 
+### Production Docker Compose E2E smoke test
+
+The production Compose E2E smoke test verifies the complete production-style
+Docker Compose stack from startup through authenticated document processing and
+chat.
+
+The test is implemented in:
+
+```text
+scripts/prod-e2e-smoke.sh
+```
+
+The smoke test covers the following flow:
+
+1. Builds and starts the production Docker Compose stack.
+2. Waits for the API health endpoint to become available.
+3. Creates a temporary tenant and production API key.
+4. Creates a document fixture.
+5. Uploads the document using Bearer API-key authentication.
+6. Polls the document status endpoint until ingestion completes.
+7. Verifies that document ingestion completed successfully.
+8. Sends an authenticated chat request using the uploaded document.
+9. Validates that the chat response:
+   - is a valid JSON object,
+   - has `status: "ok"`,
+   - contains a non-empty answer,
+   - contains at least one source.
+10. Cleans up the production Compose containers, volumes, network, and orphan
+    containers when the test exits.
+
+Run the smoke test locally with:
+
+```bash
+./scripts/prod-e2e-smoke.sh
+```
+
+The script automatically starts the production stack using:
+
+```text
+docker-compose.prod.yml
+```
+
+The production Compose stack requires the following environment variables:
+
+```env
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=postgres
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/postgres
+REDIS_URL=redis://redis:6379/0
+APP_ENV=production
+LLM_PROVIDER=...
+LLM_MODEL=...
+EMBEDDING_PROVIDER=...
+EMBEDDING_MODEL=...
+GEN_AI_KEY=...
+QUEUE_BACKEND=redis
+QUEUE_WORKER_COUNT=3
+LOG_LEVEL=INFO
+```
+
+For CI, these values are supplied by GitHub Actions. LLM and embedding
+configuration is read from repository variables, while `GEN_AI_KEY` is
+provided through GitHub Actions secrets.
+
+The CI job is defined in:
+
+```text
+.github/workflows/ci.yml
+```
+
+The CI smoke-test step runs:
+
+```yaml
+- name: Run production Compose E2E smoke test
+  env:
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+    POSTGRES_DB: postgres
+    DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/postgres
+    REDIS_URL: redis://redis:6379/0
+    APP_ENV: production
+    LLM_PROVIDER: ${{ vars.CI_LLM_PROVIDER }}
+    LLM_MODEL: ${{ vars.CI_LLM_MODEL }}
+    EMBEDDING_PROVIDER: ${{ vars.CI_EMBEDDING_PROVIDER }}
+    EMBEDDING_MODEL: ${{ vars.CI_EMBEDDING_MODEL }}
+    GEN_AI_KEY: ${{ secrets.GEN_AI_KEY }}
+    QUEUE_BACKEND: redis
+    QUEUE_WORKER_COUNT: 3
+    LOG_LEVEL: INFO
+  run: |
+    chmod +x scripts/prod-e2e-smoke.sh
+    ./scripts/prod-e2e-smoke.sh
+```
+
+If the smoke test fails in CI, the workflow prints the production Compose
+service status and container logs to help diagnose API, database, Redis,
+configuration, or ingestion failures.
+
+The CI workflow also performs cleanup after the test:
+
+```bash
+docker compose -f docker-compose.prod.yml down -v --remove-orphans
+```
+
+### Production API health endpoint
+
+The production Compose API healthcheck uses:
+
+```text
+GET /health
+```
+
+The endpoint returns:
+
+```json
+{
+  "status": "ok"
+}
+```
+
+The endpoint is intentionally lightweight and is used to determine whether the
+API process is ready to accept HTTP requests.
+
+It is excluded from the OpenAPI schema:
+
+```python
+@router.get("/health", include_in_schema=False)
+async def health():
+    return {"status": "ok"}
+```
+
+The production Compose healthcheck uses this endpoint:
+
+```yaml
+healthcheck:
+  test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
+```
+
+The smoke-test script also waits for this endpoint before creating the tenant
+and API key or uploading the fixture.
+
+### Production Compose configuration
+
+The production Compose API explicitly receives the LLM, embedding, and Redis
+queue configuration:
+
+```yaml
+environment:
+  DATABASE_URL: ${DATABASE_URL}
+  APP_ENV: production
+
+  GEN_AI_KEY: ${GEN_AI_KEY}
+
+  LLM_PROVIDER: ${LLM_PROVIDER}
+  LLM_MODEL: ${LLM_MODEL}
+
+  EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+
+  QUEUE_BACKEND: ${QUEUE_BACKEND:-redis}
+  QUEUE_WORKER_COUNT: ${QUEUE_WORKER_COUNT:-3}
+
+  LOG_FORMAT: JSON
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  CORS_ORIGINS: ${CORS_ORIGINS}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  PYTHONPATH: /app
+```
+
+The production API runs with a single Uvicorn worker process in the Compose
+container:
+
+```yaml
+command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+```
+
+This keeps the API container's in-process background worker configuration
+predictable while the E2E test exercises the Redis-backed ingestion queue.
+
+The API container has a 1 GB memory limit:
+
+```yaml
+deploy:
+  resources:
+    limits:
+      memory: 1g
+```
+
+The production stack uses Redis for the ingestion queue:
+
+```env
+QUEUE_BACKEND=redis
+QUEUE_WORKER_COUNT=3
+```
+
+This allows the E2E test to verify the production-style path across the API,
+PostgreSQL, Redis-backed ingestion, document processing, authentication, and
+authenticated chat.
+
+### Smoke-test success criteria
+
+A successful run ends with:
+
+```text
+=========================================
+Production E2E smoke test PASSED
+=========================================
+```
+
+The test is considered successful only when:
+
+- the production Compose stack starts successfully;
+- the API becomes healthy;
+- a tenant and API key can be created;
+- a document can be uploaded using authenticated access;
+- document ingestion reaches `completed`;
+- the completed document contains processed chunks;
+- an authenticated chat request succeeds;
+- the response contains a non-empty answer;
+- the response contains at least one source.
+
+The smoke test is intended as a production-style integration check rather than
+a load test. It validates that the major components work together through the
+real HTTP API and production Compose configuration.
+
 ### Production environment variables
 
 | Variable              | Required     | Notes                                                           |

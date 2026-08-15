@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import routes.status as status_module
-
+from fastapi.testclient import TestClient
 from routes.status import (
     _embedding_health_check,
     _llm_health_check,
@@ -298,3 +298,12 @@ async def test_run_health_check_with_cache_skips_redis_if_backend_is_memory(monk
 
     mock_redis.get.assert_not_called()
     mock_redis.setex.assert_not_called()
+
+def test_health_returns_ok():
+    from main import app
+
+    with TestClient(app) as client:
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
