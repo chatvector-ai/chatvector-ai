@@ -4,11 +4,15 @@ Uses a minimal FastAPI app (upload + chat routers only) so tests do not import
 ``main`` and trigger DB driver / lifespan side effects at collection time.
 """
 
+import os
 from io import BytesIO
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+from dotenv import load_dotenv
+
 import pytest
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 from slowapi.errors import RateLimitExceeded
@@ -22,8 +26,22 @@ from routes.chat import router as chat_router
 from routes.upload import router as upload_router
 from tests.request_utils import make_test_request
 from limits import RateLimitItemPerMinute
-_FAKE_SESSION = Session(id="rate-limit-session", tenant_id="dev")
 
+_FAKE_SESSION = Session(id="rate-limit-session", tenant_id="dev")
+_BACKEND_DIR = Path(__file__).resolve().parents[1]
+load_dotenv(_BACKEND_DIR / ".env", override=False)
+
+_DEFAULT_REDIS_URL = "redis://localhost:6379/0"
+_REDIS_TEST_URL = (
+    os.environ.get("REDIS_URL") or _DEFAULT_REDIS_URL
+).strip() or _DEFAULT_REDIS_URL
+
+try:
+    import redis as redis_lib
+
+    REDIS_AVAILABLE = redis_lib.Redis.from_url(_REDIS_TEST_URL).ping()
+except Exception:
+    REDIS_AVAILABLE = False
 
 async def _rate_limit_exceeded_handler(
     _request: Request, _exc: RateLimitExceeded
@@ -284,15 +302,16 @@ async def test_require_auth_sets_tenant_on_request_state():
 
     assert request.state.tenant_id == "dev"
 
+@pytest.mark.redis_integration
+@pytest.mark.skipif(not REDIS_AVAILABLE, reason="Redis not reachable")
 def test_independent_limiters_share_redis_bucket():
     """Independent limiter instances share rate-limit state through Redis."""
     from limits.storage import RedisStorage
 
     limiter_a = Limiter(
-    key_func=lambda _request: "tenant:redis-shared-test",
-    storage_uri=config.REDIS_URL,
-)
-
+        key_func=lambda _request: "tenant:redis-shared-test",
+        storage_uri=config.REDIS_URL,
+    )
     limiter_b = Limiter(
         key_func=lambda _request: "tenant:redis-shared-test",
         storage_uri=config.REDIS_URL,
@@ -308,12 +327,13 @@ def test_independent_limiters_share_redis_bucket():
             limit,
             "tenant:redis-shared-test",
         )
+
         assert limiter_b._limiter.hit(
             limit,
             "tenant:redis-shared-test",
         )
 
-        # The two limiter instances share the same Redis-backed bucket.
+        # The third hit exceeds the shared limit.
         assert not limiter_a._limiter.hit(
             limit,
             "tenant:redis-shared-test",

@@ -798,6 +798,8 @@ Or paste the contents of `backend/db/init/007_sessions.sql` into `psql`.
 - **8000** — HTTP API. Expose behind a reverse proxy or load balancer.
 - **5432** — Postgres. Keep internal to your network in production.
 
+
+
 ### Distributed rate limiting
 
 The API uses Redis as the storage backend for `slowapi` rate limiting when
@@ -808,6 +810,7 @@ Rate-limit keys are tenant-scoped:
 
 ```text
 tenant:{tenant_id}
+```
 
 ### Queue persistence
 
