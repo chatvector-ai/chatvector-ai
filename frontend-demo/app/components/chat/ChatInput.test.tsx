@@ -6,11 +6,13 @@ import ChatInput from "./ChatInput";
 
 const mockPoll = {
   stage: undefined,
+  completedStages: [] as string[],
   chunks: undefined,
   awaitingProcessing: false,
   queuePosition: undefined,
   processingTime: undefined,
-  status: "idle" as const,
+  errorMessage: undefined,
+  status: undefined,
 };
 
 function renderChatInput(overrides: Partial<ComponentProps<typeof ChatInput>> = {}) {
