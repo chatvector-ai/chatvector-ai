@@ -243,15 +243,25 @@ jobs:
   prod-compose-e2e:
     name: Production Compose E2E Smoke Test
     runs-on: ubuntu-latest
-    # Requires a real provider key; skip cleanly when the secret is not configured
-    # (common on fork PRs where secrets are unavailable).
-    if: ${{ secrets.GEN_AI_KEY != '' }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check E2E prerequisites
+        id: e2e-prereqs
+        env:
+          GEN_AI_KEY: ${{ secrets.GEN_AI_KEY }}
+        run: |
+          if [ -z "${GEN_AI_KEY}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping production E2E — GEN_AI_KEY secret is not configured."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run production Compose E2E smoke test
+        if: steps.e2e-prereqs.outputs.enabled == 'true'
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
