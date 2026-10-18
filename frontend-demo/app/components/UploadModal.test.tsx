@@ -28,7 +28,7 @@ describe("UploadModal", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("accepts only PDF and TXT in the file picker", () => {
+  it("lists all supported formats in the upload modal", () => {
     render(
       <UploadModal
         onClose={vi.fn()}
@@ -39,7 +39,10 @@ describe("UploadModal", () => {
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     expect(fileInput.accept).toBe(".pdf,.txt,.md,.markdown,.html,.htm,.docx");
-    expect(screen.getByText("PDF or TXT")).toBeInTheDocument();
+    expect(screen.getByText("PDF, TXT, Markdown, HTML, and DOCX")).toBeInTheDocument();
+    expect(screen.getByText("PDF · TXT · Markdown · HTML · DOCX")).toBeInTheDocument();
+    expect(screen.queryByText("PDF or TXT")).not.toBeInTheDocument();
+    expect(screen.queryByText("PDF · TXT")).not.toBeInTheDocument();
   });
 
   it("shows validation error when upload fails", async () => {

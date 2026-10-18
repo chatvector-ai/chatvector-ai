@@ -283,7 +283,9 @@ export default function UploadModal({
                 </button>
               )}
             </div>
-            <p className="mt-1 mb-2 text-base text-muted">PDF or TXT</p>
+            <p className="mt-1 mb-2 text-base text-muted">
+              PDF, TXT, Markdown, HTML, and DOCX
+            </p>
           </div>
           <button
             ref={closeButtonRef}
@@ -460,7 +462,9 @@ export default function UploadModal({
                 Drop a file here or{" "}
                 <span className="font-medium text-accent-text">browse</span>
               </p>
-              <p className="mt-2 text-sm text-subtle">PDF · TXT</p>
+              <p className="mt-2 text-sm text-subtle">
+                PDF · TXT · Markdown · HTML · DOCX
+              </p>
             </>
           )}
         </div>

@@ -36,7 +36,7 @@ export default function WhatIs() {
     {
       num: "01",
       title: "Ingest",
-      desc: "Upload PDF and plain text files. Auto-chunked and embedded.",
+      desc: "Upload PDF, TXT, Markdown, HTML, and DOCX files. Auto-chunked and embedded.",
     },
     {
       num: "02",
