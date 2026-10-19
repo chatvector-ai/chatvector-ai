@@ -15,7 +15,7 @@ const STEP_MS = 380;
 
 const EMBEDDING_STAGE_INDEX = PIPELINE_STAGES.indexOf("embedding");
 
-type StageState = "completed" | "active" | "pending" | "failed";
+type StageState = "completed" | "active" | "retrying" | "pending" | "failed";
 
 type Props = {
   /** Current in-progress stage key (e.g. "chunking"). Undefined while awaiting first event. */
@@ -33,7 +33,8 @@ type Props = {
  * When the actual stage jumps ahead by multiple steps (rapid SSE updates),
  * this hook steps through each intermediate stage one at a time so each
  * completion animates in sequentially instead of teleporting.
- * When `instant` is true (e.g. on failure) it jumps directly without delays.
+ * When `instant` is true (e.g. on failure) or transitioning into/out of
+ * "retrying", it jumps directly without delays.
  */
 function useAnimatedStage(actualStage: string | undefined, instant = false) {
   const [displayedIdx, setDisplayedIdx] = useState(-1);
@@ -54,19 +55,25 @@ function useAnimatedStage(actualStage: string | undefined, instant = false) {
     }
 
     const fromIdx = displayedIdxRef.current;
+    const fromStage = fromIdx >= 0 ? PIPELINE_STAGES[fromIdx] : undefined;
 
-    if (actualIdx <= fromIdx) return;
-
-    if (instant) {
+    if (instant || actualStage === "retrying" || fromStage === "retrying") {
       displayedIdxRef.current = actualIdx;
       setDisplayedIdx(actualIdx);
       return;
     }
 
-    const steps = actualIdx - fromIdx;
-    for (let s = 1; s <= steps; s++) {
-      const target = fromIdx + s;
-      if (s === 1) {
+    if (actualIdx <= fromIdx) return;
+
+    const targets: number[] = [];
+    for (let idx = fromIdx + 1; idx <= actualIdx; idx++) {
+      if (PIPELINE_STAGES[idx] !== "retrying") {
+        targets.push(idx);
+      }
+    }
+
+    targets.forEach((target, i) => {
+      if (i === 0) {
         // Advance the first step synchronously so the active stage renders
         // on the very first paint with no visible delay.
         displayedIdxRef.current = target;
@@ -77,11 +84,11 @@ function useAnimatedStage(actualStage: string | undefined, instant = false) {
             displayedIdxRef.current = target;
             setDisplayedIdx(target);
           },
-          (s - 1) * STEP_MS
+          i * STEP_MS
         );
         timersRef.current.push(t);
       }
-    }
+    });
 
     return () => {
       timersRef.current.forEach(clearTimeout);
@@ -92,7 +99,9 @@ function useAnimatedStage(actualStage: string | undefined, instant = false) {
   const displayedStage =
     displayedIdx >= 0 ? PIPELINE_STAGES[displayedIdx] : undefined;
   const displayedCompleted: string[] =
-    displayedIdx > 0 ? Array.from(PIPELINE_STAGES.slice(0, displayedIdx)) : [];
+    displayedIdx > 0
+      ? PIPELINE_STAGES.slice(0, displayedIdx).filter((s) => s !== "retrying")
+      : [];
 
   return { displayedStage, displayedCompleted };
 }
@@ -106,7 +115,11 @@ function getStageState(
   if (completedStages.includes(stageKey)) return "completed";
   if (stageKey === "completed" && currentStage === "completed" && !failed)
     return "completed";
-  if (stageKey === currentStage) return failed ? "failed" : "active";
+  if (stageKey === currentStage) {
+    if (failed) return "failed";
+    if (stageKey === "retrying") return "retrying";
+    return "active";
+  }
   return "pending";
 }
 
@@ -136,7 +149,11 @@ function StageRow({
       : null;
 
   return (
-    <li className="flex items-start gap-3">
+    <li
+      className="flex items-start gap-3"
+      data-stage={stageKey}
+      data-state={state}
+    >
       {/* Vertical connector + icon column */}
       <div className="flex flex-col items-center">
         <div
@@ -146,15 +163,17 @@ function StageRow({
               ? "bg-success/15 ring-success/35 text-success"
               : state === "active"
                 ? "bg-accent/15 ring-accent/40 text-accent"
-                : state === "failed"
-                  ? "bg-danger/10 ring-danger/30 text-danger"
-                  : "bg-surface ring-border text-muted/40",
+                : state === "retrying"
+                  ? "bg-amber-500/15 ring-amber-500/40 text-amber-400"
+                  : state === "failed"
+                    ? "bg-danger/10 ring-danger/30 text-danger"
+                    : "bg-surface ring-border text-muted/40",
           ].join(" ")}
         >
           {state === "completed" && (
             <Check size={13} strokeWidth={2.5} aria-hidden />
           )}
-          {state === "active" && (
+          {(state === "active" || state === "retrying") && (
             <Loader2 size={13} strokeWidth={2.5} className="animate-spin" aria-hidden />
           )}
           {state === "failed" && (
@@ -183,9 +202,11 @@ function StageRow({
               ? "text-success-text"
               : state === "active"
                 ? "text-accent-text"
-                : state === "failed"
-                  ? "text-danger-text"
-                  : "text-muted/50",
+                : state === "retrying"
+                  ? "text-amber-400"
+                  : state === "failed"
+                    ? "text-danger-text"
+                    : "text-muted/50",
           ].join(" ")}
         >
           {label}
@@ -263,12 +284,16 @@ export default function IngestionPipeline({
     onDisplayedStageChangeRef.current?.(displayedStage);
   }, [displayedStage]);
 
+  const visibleStages = PIPELINE_STAGES.filter(
+    (stageKey) => stageKey !== "retrying" || displayedStage === "retrying"
+  );
+
   return (
     <ul className="w-full" role="list" aria-label="Ingestion progress">
-      {PIPELINE_STAGES.map((stageKey, idx) => {
+      {visibleStages.map((stageKey, idx) => {
         const state = getStageState(stageKey, displayedStage, displayedCompleted, failed);
         const label = PIPELINE_STAGE_LABELS[stageKey];
-        const isLast = idx === PIPELINE_STAGES.length - 1;
+        const isLast = idx === visibleStages.length - 1;
 
         return (
           <StageRow

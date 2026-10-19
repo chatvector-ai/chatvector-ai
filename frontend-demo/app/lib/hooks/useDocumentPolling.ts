@@ -28,7 +28,7 @@ function formatDuration(ms: number): string {
 function stagesBefore(currentStage: string): string[] {
   const idx = PIPELINE_STAGES.indexOf(currentStage as never);
   if (idx <= 0) return [];
-  return Array.from(PIPELINE_STAGES.slice(0, idx));
+  return PIPELINE_STAGES.slice(0, idx).filter((s) => s !== "retrying");
 }
 
 /**
@@ -37,6 +37,8 @@ function stagesBefore(currentStage: string): string[] {
  * - On failure: use error.stage (the pipeline step that failed) so the
  *   pipeline list can highlight the correct row. Fall back to the last
  *   known non-failure stage string.
+ * - "retrying" is surfaced directly as its own non-terminal stage so the
+ *   pipeline can show a retry indicator rather than resetting or freezing.
  * - "uploaded" is only emitted by the synchronous path and maps to "queued"
  *   (the nearest PIPELINE_STAGES entry) to avoid an indexOf miss.
  * - "failed" itself is not a pipeline step — handled via the `failed` flag.
@@ -48,11 +50,27 @@ function resolveDisplayStage(payload: {
 }): string {
   if (payload.status === "failed") {
     const errorStage = payload.error?.stage;
-    if (errorStage && errorStage !== "failed" && PIPELINE_STAGES.indexOf(errorStage as never) >= 0) {
+    if (
+      errorStage &&
+      errorStage !== "failed" &&
+      errorStage !== "retrying" &&
+      PIPELINE_STAGES.indexOf(errorStage as never) >= 0
+    ) {
       return errorStage;
     }
-    // fall back to the last stage field the server sent, or a safe default
-    return payload.stage ?? "extracting";
+    if (
+      payload.stage &&
+      payload.stage !== "failed" &&
+      payload.stage !== "retrying" &&
+      PIPELINE_STAGES.indexOf(payload.stage as never) >= 0
+    ) {
+      return payload.stage;
+    }
+    // fall back to a safe default
+    return "extracting";
+  }
+  if (payload.status === "retrying" || payload.stage === "retrying") {
+    return "retrying";
   }
   if (payload.status === "uploaded" || payload.stage === "uploaded") {
     return "queued";

@@ -1,6 +1,7 @@
 export const STAGE_LABELS: Record<string, string> = {
   queued: "Queued",
   uploaded: "Uploaded",
+  retrying: "Retrying",
   extracting: "Extracting text",
   chunking: "Chunking",
   embedding: "Embedding",
@@ -16,6 +17,7 @@ export const STAGE_LABELS: Record<string, string> = {
 export const PIPELINE_STAGES = [
   "uploading",
   "queued",
+  "retrying",
   "extracting",
   "chunking",
   "embedding",
@@ -28,6 +30,7 @@ export type PipelineStage = (typeof PIPELINE_STAGES)[number];
 export const PIPELINE_STAGE_LABELS: Record<PipelineStage, string> = {
   uploading: "Uploading",
   queued: "Queued",
+  retrying: "Retrying",
   extracting: "Extracting text",
   chunking: "Chunking",
   embedding: "Embedding",
