@@ -48,6 +48,8 @@ services:
       APP_ENV: "development"
       PYTHONPATH: /app
       REDIS_URL: "redis://redis:6379/0"
+      # Reference-demo persona (matches the code default); see DEVELOPMENT.md → Prompt persona
+      PROMPT_PERSONA: "default"
       # QUEUE_BACKEND defaults to "memory" — set to "redis" in backend/.env
       # to enable the Redis-backed durable queue
       # MULTI_API_INSTANCE=true requires QUEUE_BACKEND=redis and ARTIFACT_STORAGE=s3

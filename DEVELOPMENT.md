@@ -1617,6 +1617,26 @@ and fail open; they do not use `REDIS_SOCKET_TIMEOUT_SEC`. `/status` LLM and
 embedding probes use `LLM_HEALTH_CHECK_TIMEOUT_SEC` and
 `EMBEDDING_HEALTH_CHECK_TIMEOUT_SEC` (default 10 seconds each).
 
+### Prompt persona
+
+The reference demo runs `PROMPT_PERSONA=default` — the same persona as the
+backend code default (`backend/core/config.py`) and `backend/.env.example`.
+Docker Compose sets it explicitly on the `api` service, so the stock stack
+does not depend on a private `backend/.env`. A deployment may still override
+`PROMPT_PERSONA` with any value in `VALID_PERSONAS` (`default`, `concise`,
+`conversational`, `academic`, `technical`). `load_dotenv` does not override
+variables already in the process environment, so an explicit Compose or
+process value wins over a `backend/.env` line.
+
+Audit 2 and Audit 3 ran `conversational` because a private environment
+overrode the default. That persona is warmer and more verbose than `default`
+and does not require citations; it is not the product default. Any future
+Gemini quality baseline must record the persona that was actually active for
+its run, including an override if one was used, and must not assume the audit
+environment's `conversational` setting.
+
+The chat UI has no persona selector; persona stays process configuration.
+
 ### Authentication variables
 
 | Variable | Default | Description |
