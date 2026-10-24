@@ -97,7 +97,7 @@ export function useSessionManager() {
     try {
       const created = await apiCreateSession();
       const newSession = mapSession(created);
-      setSessions((prev) => [newSession, ...prev].slice(0, 20));
+      setSessions((prev) => [newSession, ...prev]);
       selectSession(newSession.id);
     } catch (err) {
       const message =

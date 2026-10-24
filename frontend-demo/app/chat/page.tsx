@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { PanelLeft } from "lucide-react";
 import UploadModal from "../components/UploadModal";
 import MessageList from "../components/chat/MessageList";
 import ChatInput from "../components/chat/ChatInput";
@@ -13,6 +14,7 @@ import { useSessionManager } from "../lib/hooks/useSessionManager";
 
 export default function ChatPage() {
   const [showModal, setShowModal] = useState(false);
+  const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false);
   const uploadButtonRef = useRef<HTMLButtonElement>(null);
   const {
     sessions,
@@ -106,13 +108,14 @@ export default function ChatPage() {
 
   return (
     <div
-      className="flex min-h-0 w-full flex-1 overflow-hidden bg-background text-foreground"
+      className="relative flex min-h-0 w-full flex-1 overflow-hidden bg-background text-foreground"
       style={{
         height: "calc(100dvh - 60px)",
         maxHeight: "calc(100dvh - 60px)",
       }}
     >
       <SessionSidebar
+        id="chat-session-sidebar"
         sessions={sessions}
         activeSessionId={activeSessionId}
         onCreateSession={createNewSession}
@@ -120,10 +123,24 @@ export default function ChatPage() {
         onDeleteSession={deleteSession}
         isCreating={isCreating}
         deletingSessionId={deletingSessionId}
+        isOpen={mobileSessionsOpen}
+        onClose={() => setMobileSessionsOpen(false)}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">
         <h1 className="sr-only">Chat with your documents</h1>
+        <div className="flex items-center border-b border-border bg-surface px-4 py-2 md:hidden">
+          <button
+            type="button"
+            aria-expanded={mobileSessionsOpen}
+            aria-controls="chat-session-sidebar"
+            onClick={() => setMobileSessionsOpen((prev) => !prev)}
+            className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-surface"
+          >
+            <PanelLeft size={16} aria-hidden />
+            <span>Sessions</span>
+          </button>
+        </div>
         {sessionError && (
           <div className="px-4 pt-4">
             <InlineAlert>{sessionError}</InlineAlert>
