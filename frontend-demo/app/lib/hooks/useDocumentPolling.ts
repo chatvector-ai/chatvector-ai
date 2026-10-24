@@ -26,9 +26,10 @@ function formatDuration(ms: number): string {
   return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
 }
 function stagesBefore(currentStage: string): string[] {
+  if (currentStage === "retrying") return [];
   const idx = PIPELINE_STAGES.indexOf(currentStage as never);
   if (idx <= 0) return [];
-  return Array.from(PIPELINE_STAGES.slice(0, idx));
+  return PIPELINE_STAGES.slice(0, idx).filter((stage) => stage !== "retrying");
 }
 
 /**
@@ -37,6 +38,8 @@ function stagesBefore(currentStage: string): string[] {
  * - On failure: use error.stage (the pipeline step that failed) so the
  *   pipeline list can highlight the correct row. Fall back to the last
  *   known non-failure stage string.
+ * - "retrying" is a non-terminal state shown on its own row while a retryable
+ *   attempt is in flight.
  * - "uploaded" is only emitted by the synchronous path and maps to "queued"
  *   (the nearest PIPELINE_STAGES entry) to avoid an indexOf miss.
  * - "failed" itself is not a pipeline step — handled via the `failed` flag.
@@ -48,11 +51,19 @@ function resolveDisplayStage(payload: {
 }): string {
   if (payload.status === "failed") {
     const errorStage = payload.error?.stage;
-    if (errorStage && errorStage !== "failed" && PIPELINE_STAGES.indexOf(errorStage as never) >= 0) {
+    if (
+      errorStage &&
+      errorStage !== "failed" &&
+      errorStage !== "retrying" &&
+      PIPELINE_STAGES.indexOf(errorStage as never) >= 0
+    ) {
       return errorStage;
     }
     // fall back to the last stage field the server sent, or a safe default
     return payload.stage ?? "extracting";
+  }
+  if (payload.status === "retrying") {
+    return "retrying";
   }
   if (payload.status === "uploaded" || payload.stage === "uploaded") {
     return "queued";
@@ -152,7 +163,9 @@ export function useDocumentPolling(
 
           const rawStage = resolveDisplayStage(payload);
           setStage(rawStage);
-          setCompletedStages(stagesBefore(rawStage));
+          setCompletedStages((prev) =>
+            rawStage === "retrying" ? prev : stagesBefore(rawStage)
+          );
           if (payload.status === "failed") {
            setErrorMessage(payload.error?.message);
           }
@@ -235,7 +248,9 @@ export function useDocumentPolling(
 
           const rawStage = resolveDisplayStage(payload);
           setStage(rawStage);
-          setCompletedStages(stagesBefore(rawStage));
+          setCompletedStages((prev) =>
+            rawStage === "retrying" ? prev : stagesBefore(rawStage)
+          );
           if (payload.status === "failed") {
            setErrorMessage(payload.error?.message);
           }

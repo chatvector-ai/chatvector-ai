@@ -44,6 +44,18 @@ describe("resolveStageForChunkAnimation", () => {
       })
     ).toBe("storing");
   });
+
+  it("surfaces retrying immediately without holding on embedding", () => {
+    expect(
+      resolveStageForChunkAnimation({
+        currentStage: "retrying",
+        animatedProcessed: 120,
+        chunkTarget: 137,
+        failed: false,
+        pipelineStages: PIPELINE_STAGES,
+      })
+    ).toBe("retrying");
+  });
 });
 
 describe("shouldShowChunkProgress", () => {

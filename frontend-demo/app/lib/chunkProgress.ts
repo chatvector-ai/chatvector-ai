@@ -3,7 +3,12 @@ export type ChunkProgress = {
   processed: number;
 };
 
-type ChunkProgressStageState = "completed" | "active" | "pending" | "failed";
+type ChunkProgressStageState =
+  | "completed"
+  | "active"
+  | "retrying"
+  | "pending"
+  | "failed";
 
 const EMBEDDING_STAGE = "embedding";
 
@@ -25,6 +30,9 @@ export function resolveStageForChunkAnimation({
   failed: boolean;
   pipelineStages: readonly string[];
 }): string | undefined {
+  if (currentStage === "retrying") {
+    return currentStage;
+  }
   const embeddingIdx = pipelineStages.indexOf(EMBEDDING_STAGE);
   const currentIdx = currentStage ? pipelineStages.indexOf(currentStage) : -1;
   const stillCounting =
