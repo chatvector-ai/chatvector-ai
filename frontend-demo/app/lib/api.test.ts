@@ -566,6 +566,51 @@ describe("uploadDocument", () => {
       })
     );
   });
+
+  it("appends replace_document_id to FormData when replaceDocumentId is provided", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          document_id: "doc-2",
+          status_endpoint: "/documents/doc-2/status",
+        }),
+        { status: 202 }
+      )
+    );
+
+    const file = new File(["content"], "replacement.pdf", {
+      type: "application/pdf",
+    });
+    await uploadDocument(file, "sess-123", "doc-1");
+
+    const [, init] = vi.mocked(globalThis.fetch).mock.calls[0];
+    const formData = init?.body as FormData;
+    expect(formData).toBeInstanceOf(FormData);
+    expect(formData.get("replace_document_id")).toBe("doc-1");
+    expect(formData.get("file")).toBeInstanceOf(File);
+  });
+
+  it("omits replace_document_id from FormData when replaceDocumentId is not provided", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          document_id: "doc-1",
+          status_endpoint: "/documents/doc-1/status",
+        }),
+        { status: 202 }
+      )
+    );
+
+    const file = new File(["content"], "initial.pdf", {
+      type: "application/pdf",
+    });
+    await uploadDocument(file, "sess-123");
+
+    const [, init] = vi.mocked(globalThis.fetch).mock.calls[0];
+    const formData = init?.body as FormData;
+    expect(formData).toBeInstanceOf(FormData);
+    expect(formData.get("replace_document_id")).toBeNull();
+  });
 });
 
 describe("listDocuments", () => {
@@ -826,6 +871,40 @@ describe("getDocumentStatus", () => {
       status: "queued",
       stage: "queued",
       queue_position: 1,
+    });
+  });
+
+  it("preserves status_detail and error during and after in-place replacement", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          status: "completed",
+          status_detail: "replacement_in_progress",
+          queue_position: 2,
+        }),
+        { status: 200 }
+      )
+    );
+    await expect(getDocumentStatus("/documents/doc-123/status")).resolves.toEqual({
+      status: "completed",
+      status_detail: "replacement_in_progress",
+      queue_position: 2,
+    });
+
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          status: "completed",
+          status_detail: "replacement_failed",
+          error: { stage: "embedding", message: "Embedding provider failed" },
+        }),
+        { status: 200 }
+      )
+    );
+    await expect(getDocumentStatus("/documents/doc-123/status")).resolves.toEqual({
+      status: "completed",
+      status_detail: "replacement_failed",
+      error: { stage: "embedding", message: "Embedding provider failed" },
     });
   });
 });

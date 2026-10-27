@@ -107,7 +107,11 @@ export default function ChatInput({
 
       <div className="bg-background px-4 py-3">
         <div className="flex items-end gap-2 bg-surface rounded-xl px-4 py-2">
-          <UploadButton ref={uploadButtonRef} onClick={onUploadClick} disabled={!!attachment} />
+          <UploadButton
+            ref={uploadButtonRef}
+            onClick={onUploadClick}
+            disabled={attachment?.status === "processing"}
+          />
           <textarea
             ref={textareaRef}
             rows={1}

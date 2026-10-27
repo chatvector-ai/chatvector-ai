@@ -42,7 +42,6 @@ export default function ChatPage() {
     poll,
     handleSend,
     handleKeyDown,
-    handleBeforeUpload,
     handleUploadAccepted,
     handleRemoveAttachment,
     stopStreaming,
@@ -134,11 +133,16 @@ export default function ChatPage() {
             sessionId={activeSessionId}
             onClose={() => setShowModal(false)}
             returnFocusRef={uploadButtonRef}
-            onBeforeUpload={handleBeforeUpload}
+            replaceDocumentId={
+              attachment && attachment.status !== "processing"
+                ? attachment.documentId
+                : null
+            }
             onUploadAccepted={handleUploadAccepted}
             attachment={
               attachment
                 ? {
+                    documentId: attachment.documentId,
                     status: attachment.status,
                     stage: poll.stage,
                     chunks: poll.chunks,

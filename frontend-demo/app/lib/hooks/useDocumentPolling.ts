@@ -10,10 +10,42 @@ import { PIPELINE_STAGES } from "../stageLabels";
 
 export type PolledDocumentStatus = "processing" | "ready" | "failed";
 
-function mapApiStatusToUi(apiStatus: string): PolledDocumentStatus {
+function mapApiStatusToUi(
+  apiStatus: string,
+  statusDetail?: string
+): PolledDocumentStatus {
+  if (statusDetail === "replacement_in_progress") return "processing";
+  if (statusDetail === "replacement_failed") return "failed";
   if (apiStatus === "completed") return "ready";
   if (apiStatus === "failed") return "failed";
   return "processing";
+}
+
+function isFailedStatusPayload(payload: {
+  status: string;
+  status_detail?: string;
+}): boolean {
+  if (payload.status_detail === "replacement_in_progress") {
+    return false;
+  }
+  return (
+    payload.status === "failed" ||
+    payload.status_detail === "replacement_failed"
+  );
+}
+
+function isTerminalStatusPayload(payload: {
+  status: string;
+  status_detail?: string;
+}): boolean {
+  if (payload.status_detail === "replacement_in_progress") {
+    return false;
+  }
+  return (
+    payload.status === "completed" ||
+    payload.status === "failed" ||
+    payload.status_detail === "replacement_failed"
+  );
 }
 
 /** Format a duration in milliseconds to a human-readable string. */
@@ -43,16 +75,36 @@ function stagesBefore(currentStage: string): string[] {
  */
 function resolveDisplayStage(payload: {
   status: string;
+  status_detail?: string;
   stage?: string;
   error?: { stage?: string } | null;
 }): string {
-  if (payload.status === "failed") {
+  if (isFailedStatusPayload(payload)) {
     const errorStage = payload.error?.stage;
     if (errorStage && errorStage !== "failed" && PIPELINE_STAGES.indexOf(errorStage as never) >= 0) {
       return errorStage;
     }
-    // fall back to the last stage field the server sent, or a safe default
-    return payload.stage ?? "extracting";
+    if (
+      typeof payload.stage === "string" &&
+      payload.stage.length > 0 &&
+      payload.stage !== "completed" &&
+      payload.stage !== "failed"
+    ) {
+      return payload.stage;
+    }
+    // fall back to a safe default
+    return "extracting";
+  }
+  if (payload.status_detail === "replacement_in_progress") {
+    if (
+      typeof payload.stage === "string" &&
+      payload.stage.length > 0 &&
+      payload.stage !== "completed" &&
+      payload.stage !== "failed"
+    ) {
+      return payload.stage === "uploaded" ? "queued" : payload.stage;
+    }
+    return "queued";
   }
   if (payload.status === "uploaded" || payload.stage === "uploaded") {
     return "queued";
@@ -103,21 +155,29 @@ export function useDocumentPolling(
 
   const docKey = documentId ?? "";
   const prevDocKeyRef = useRef<string>("");
+  const prevStatusRef = useRef<PolledDocumentStatus | undefined>(undefined);
+  const isRestartingProcessing =
+    status === "processing" &&
+    prevStatusRef.current !== undefined &&
+    prevStatusRef.current !== "processing";
+  const shouldReset =
+    docKey !== prevDocKeyRef.current || isRestartingProcessing;
 
   useEffect(() => {
-    if (docKey !== prevDocKeyRef.current) {
+    if (docKey !== prevDocKeyRef.current || isRestartingProcessing) {
       prevDocKeyRef.current = docKey;
       setPolledUiStatus(undefined);
       setStage(undefined);
       setCompletedStages([]);
       setChunks(undefined);
-      setAwaitingProcessing(false);
+      setAwaitingProcessing(enabled);
       setUseFallbackPolling(false);
       setProcessingTime(undefined);
       setErrorMessage(undefined);
       setQueuePosition(undefined);
     }
-  }, [docKey]);
+    prevStatusRef.current = status;
+  }, [docKey, status, isRestartingProcessing, enabled]);
 
   useEffect(() => {
     if (!enabled || !documentId || !statusEndpoint) {
@@ -153,8 +213,15 @@ export function useDocumentPolling(
           const rawStage = resolveDisplayStage(payload);
           setStage(rawStage);
           setCompletedStages(stagesBefore(rawStage));
-          if (payload.status === "failed") {
-           setErrorMessage(payload.error?.message);
+          if (isFailedStatusPayload(payload)) {
+            setErrorMessage(
+              payload.error?.message ||
+                (payload.status_detail === "replacement_failed"
+                  ? "Document replacement failed."
+                  : undefined)
+            );
+          } else {
+            setErrorMessage(undefined);
           }
 
           const c = payload.chunks;
@@ -182,7 +249,7 @@ export function useDocumentPolling(
             setQueuePosition(payload.queue_position);
           }
 
-          const ui = mapApiStatusToUi(payload.status);
+          const ui = mapApiStatusToUi(payload.status, payload.status_detail);
           setPolledUiStatus(ui);
 
           // Compute processing duration when ingestion completes
@@ -194,7 +261,7 @@ export function useDocumentPolling(
             }
           }
 
-          if (payload.status === "completed" || payload.status === "failed") {
+          if (isTerminalStatusPayload(payload)) {
             eventSource?.close();
           }
         } catch (e) {
@@ -236,8 +303,15 @@ export function useDocumentPolling(
           const rawStage = resolveDisplayStage(payload);
           setStage(rawStage);
           setCompletedStages(stagesBefore(rawStage));
-          if (payload.status === "failed") {
-           setErrorMessage(payload.error?.message);
+          if (isFailedStatusPayload(payload)) {
+            setErrorMessage(
+              payload.error?.message ||
+                (payload.status_detail === "replacement_failed"
+                  ? "Document replacement failed."
+                  : undefined)
+            );
+          } else {
+            setErrorMessage(undefined);
           }
           
 
@@ -262,7 +336,7 @@ export function useDocumentPolling(
             setQueuePosition(payload.queue_position);
           }
 
-          const ui = mapApiStatusToUi(payload.status);
+          const ui = mapApiStatusToUi(payload.status, payload.status_detail);
           setPolledUiStatus(ui);
 
           // Compute processing duration when ingestion completes
@@ -274,8 +348,8 @@ export function useDocumentPolling(
             }
           }
           
-          if (payload.status === "completed" || payload.status === "failed") {
-              if (interval) clearInterval(interval);
+          if (isTerminalStatusPayload(payload)) {
+            if (interval) clearInterval(interval);
           }
         } catch (e) {
           if (e instanceof DocumentNotFoundError) {
@@ -305,13 +379,13 @@ export function useDocumentPolling(
   }, [enabled, documentId, statusEndpoint, useFallbackPolling]);
 
   return {
-    status: polledUiStatus,
-    stage,
-    completedStages,
-    chunks,
-    awaitingProcessing: enabled && awaitingProcessing,
-    processingTime,
-    errorMessage,
-    queuePosition,
+    status: shouldReset ? undefined : polledUiStatus,
+    stage: shouldReset ? undefined : stage,
+    completedStages: shouldReset ? [] : completedStages,
+    chunks: shouldReset ? undefined : chunks,
+    awaitingProcessing: enabled && (shouldReset || awaitingProcessing),
+    processingTime: shouldReset ? undefined : processingTime,
+    errorMessage: shouldReset ? undefined : errorMessage,
+    queuePosition: shouldReset ? undefined : queuePosition,
   };
 }
