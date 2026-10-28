@@ -13,6 +13,7 @@ from cli import cmd_eval
 from services.eval_config import EffectiveRetrievalConfig
 from services.eval_fixtures import EvalDataset, load_dataset
 from services.eval_service import EvalRunResult, diff_arms, run_eval
+from services.metadata_filter import InvalidMetadataFilterError
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "eval"
 
@@ -357,3 +358,166 @@ async def test_eval_bypasses_embedding_cache_by_default():
 
     assert captured
     assert all(flag is False for flag in captured)
+
+
+# ---------------------------------------------------------------------------
+# Fixture metadata_filter — narrowed with chat's validator + document filter
+# ---------------------------------------------------------------------------
+
+
+def _filter_dataset(tmp_path, rows: list[dict]) -> EvalDataset:
+    path = tmp_path / "filtered.json"
+    path.write_text(json.dumps({"name": "filtered", "queries": rows}), encoding="utf-8")
+    return load_dataset(path)
+
+
+def _retrieval_patches():
+    async def fake_find_similar_chunks(*, doc_id, query_embedding, match_count, tenant_id, query_text=None, session_id=None, hybrid_enabled=None):
+        return [_chunk(doc_id, 0)]
+
+    find_similar = AsyncMock(side_effect=fake_find_similar_chunks)
+    return find_similar, (
+        patch("services.chat_service.find_similar_chunks", find_similar),
+        patch(
+            "services.chat_service.get_embeddings",
+            AsyncMock(side_effect=lambda texts, **kwargs: [[0.1, 0.2, 0.3] for _ in texts]),
+        ),
+    )
+
+
+def _searched_doc_ids(find_similar: AsyncMock) -> set[str]:
+    return {call.kwargs["doc_id"] for call in find_similar.await_args_list}
+
+
+_ARM = EffectiveRetrievalConfig(label="filtered", hybrid_retrieval_enabled=False, enable_reranking=False)
+
+
+@pytest.mark.asyncio
+async def test_metadata_filter_narrows_documents_before_retrieval(tmp_path):
+    dataset = _filter_dataset(tmp_path, [
+        {
+            "query": "legal docs only",
+            "doc_ids": ["doc-legal", "doc-hr"],
+            "relevant_chunks": [["doc-legal", 0]],
+            "metadata_filter": {"department": "legal"},
+        },
+    ])
+    filter_docs = AsyncMock(return_value=["doc-legal"])
+    find_similar, (p1, p2) = _retrieval_patches()
+
+    with p1, p2, patch("services.eval_service.filter_document_ids_by_metadata", filter_docs):
+        result = await run_eval(dataset, [_ARM], tenant_id="tenant-eval-test")
+
+    filter_docs.assert_awaited_once_with(
+        tenant_id="tenant-eval-test",
+        doc_ids=["doc-legal", "doc-hr"],
+        metadata_filter={"department": "legal"},
+    )
+    assert _searched_doc_ids(find_similar) == {"doc-legal"}
+    qr = result.arms[0].query_results[0]
+    assert {c["document_id"] for c in qr.candidates} == {"doc-legal"}
+    assert qr.metadata_filter == {"department": "legal"}
+    assert qr.filter_excluded_all_documents is False
+    assert qr.metrics["mrr"] == pytest.approx(1.0)
+
+
+@pytest.mark.asyncio
+async def test_metadata_filter_in_list_and_anded_keys_go_to_chat_helper(tmp_path):
+    metadata_filter = {"department": {"in": ["legal", "hr"]}, "year": 2024}
+    dataset = _filter_dataset(tmp_path, [
+        {
+            "query": "legal or hr in 2024",
+            "doc_ids": ["doc-1", "doc-2", "doc-3"],
+            "relevant_doc_ids": ["doc-3"],
+            "metadata_filter": metadata_filter,
+        },
+    ])
+    filter_docs = AsyncMock(return_value=["doc-1", "doc-3"])
+    find_similar, (p1, p2) = _retrieval_patches()
+
+    with p1, p2, patch("services.eval_service.filter_document_ids_by_metadata", filter_docs):
+        result = await run_eval(dataset, [_ARM], tenant_id="tenant-eval-test")
+
+    # The eval passes the validated v1 filter through unchanged; containment
+    # semantics live only in the shared helper.
+    filter_docs.assert_awaited_once_with(
+        tenant_id="tenant-eval-test",
+        doc_ids=["doc-1", "doc-2", "doc-3"],
+        metadata_filter=metadata_filter,
+    )
+    assert _searched_doc_ids(find_similar) == {"doc-1", "doc-3"}
+    assert result.arms[0].query_results[0].metadata_filter == metadata_filter
+
+
+@pytest.mark.asyncio
+async def test_metadata_filter_excluding_everything_searches_nothing(tmp_path):
+    dataset = _filter_dataset(tmp_path, [
+        {
+            "query": "nothing matches",
+            "doc_ids": ["doc-1", "doc-2"],
+            "relevant_doc_ids": ["doc-1"],
+            "metadata_filter": {"department": "finance"},
+        },
+    ])
+    filter_docs = AsyncMock(return_value=[])
+    find_similar, (p1, p2) = _retrieval_patches()
+    export_path = tmp_path / "run.json"
+
+    with p1, p2, patch("services.eval_service.filter_document_ids_by_metadata", filter_docs), \
+         patch("services.eval_service.retrieve_for_documents", AsyncMock()) as retrieve:
+        result = await run_eval(dataset, [_ARM], tenant_id="tenant-eval-test", export_path=export_path)
+
+    retrieve.assert_not_awaited()
+    find_similar.assert_not_awaited()
+    qr = result.arms[0].query_results[0]
+    assert qr.candidates == []
+    assert qr.context_preview == ""
+    assert qr.filter_excluded_all_documents is True
+    assert all(value == 0.0 for value in qr.metrics.values())
+
+    per_query = json.loads(export_path.read_text(encoding="utf-8"))["arms"][0]["per_query_metrics"][0]
+    assert per_query["metadata_filter"] == {"department": "finance"}
+    assert per_query["filter_excluded_all_documents"] is True
+    assert per_query["candidates"] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_filter", [{}, {"department": None}, {"department": {"gt": 1}}, ["legal"]])
+async def test_malformed_metadata_filter_fails_the_run(tmp_path, bad_filter):
+    dataset = _filter_dataset(tmp_path, [
+        {"query": "fine", "doc_ids": ["doc-1"], "relevant_doc_ids": ["doc-1"]},
+        {
+            "query": "broken filter",
+            "doc_ids": ["doc-1"],
+            "relevant_doc_ids": ["doc-1"],
+            "metadata_filter": bad_filter,
+        },
+    ])
+    filter_docs = AsyncMock()
+    find_similar, (p1, p2) = _retrieval_patches()
+
+    with p1, p2, patch("services.eval_service.filter_document_ids_by_metadata", filter_docs), \
+         pytest.raises(InvalidMetadataFilterError, match="broken filter"):
+        await run_eval(dataset, [_ARM], tenant_id="tenant-eval-test")
+
+    filter_docs.assert_not_awaited()
+    find_similar.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_rows_without_metadata_filter_are_unchanged(tmp_path):
+    dataset = load_dataset(FIXTURES_DIR / "basic_queries.json")
+    filter_docs = AsyncMock()
+    find_similar, (p1, p2) = _retrieval_patches()
+    export_path = tmp_path / "run.json"
+
+    with p1, p2, patch("services.eval_service.filter_document_ids_by_metadata", filter_docs):
+        result = await run_eval(dataset, [_ARM], tenant_id="tenant-eval-test", export_path=export_path)
+
+    filter_docs.assert_not_awaited()
+    assert _searched_doc_ids(find_similar) == {doc_id for q in dataset.queries for doc_id in q.doc_ids}
+    for qr in result.arms[0].query_results:
+        assert qr.metadata_filter is None
+        assert qr.filter_excluded_all_documents is False
+    per_query = json.loads(export_path.read_text(encoding="utf-8"))["arms"][0]["per_query_metrics"]
+    assert all(row["metadata_filter"] is None for row in per_query)

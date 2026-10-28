@@ -19,7 +19,7 @@ class EvalQuery:
     doc_ids: list[str] = field(default_factory=list)
     relevant_doc_ids: list[str] = field(default_factory=list)
     relevant_chunks: list[tuple[str, int]] = field(default_factory=list)
-    metadata_filter: dict | None = None  # reserved, unused by this issue
+    metadata_filter: dict | None = None  # v1 chat filter; narrows doc_ids before retrieval
     simulate_session: bool = False
     session_history: list[dict] = field(default_factory=list)
 
