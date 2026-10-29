@@ -659,7 +659,7 @@ python -m backend.cli eval \
 
 Repeat `--config path/to/arm.json` to compare retrieval settings. Omit `--config` to score the current process defaults. Metrics are recall@k, MRR, and nDCG@k, plus retrieval latency. `--export` writes the config snapshot and per-query results.
 
-Each query needs `relevant_chunks` (`[document_id, chunk_index]`) and/or `relevant_doc_ids`. `doc_ids` are the documents to search. `simulate_session` defaults to false, so a run does not inherit conversational history unless the fixture sets it.
+Each query needs `relevant_chunks` (`[document_id, chunk_index]`) and/or `relevant_doc_ids`, or `expected_result` set to `no_supporting_evidence` or `refusal` when the correct result has no supporting chunk. A row with neither fails to load. `doc_ids` are the documents to search. `simulate_session` defaults to false, so a run does not inherit conversational history unless the fixture sets it.
 
 An arm file is a JSON object of retrieval overrides, for example `{"hybrid_enabled": true, "match_count": 8}`. There is no public HTTP retrieval endpoint.
 
