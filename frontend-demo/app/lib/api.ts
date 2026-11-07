@@ -23,6 +23,8 @@ export type ChatCallOptions = {
   matchCount?: number;
   scope?: RetrievalScope;
   sessionId?: string | null;
+  /** When true, request opt-in `retrieval_debug` from chat/stream (diagnostic only). */
+  debugRetrieval?: boolean;
   /** Optional abort signal for cancelling the in-flight request. */
   signal?: AbortSignal;
 };
@@ -69,7 +71,24 @@ export type RetrievalDebugMetadata = {
   original_query?: string;
   transformed_queries?: string[];
   transformation_strategy?: string;
+  history_resolved_query?: string;
+  effective_retrieval_query?: string;
+  effective_config?: Record<string, unknown>;
+  resolved_preset?: string | null;
+  timing_ms?: Record<string, number>;
+  reranker?: Record<string, unknown>;
+  [key: string]: unknown;
 };
+
+/** Retain the backend debug object without stripping unknown keys. */
+export function parseRetrievalDebug(
+  value: unknown,
+): RetrievalDebugMetadata | undefined {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return { ...(value as Record<string, unknown>) };
+}
 
 export type RetrievalInspectorData = {
   question?: string;
@@ -236,7 +255,7 @@ export async function sendMessage(
     "Content-Type": "application/json",
     ...authHeaders(),
   };
-  const body: Record<string, string | number> = {
+  const body: Record<string, string | number | boolean> = {
     question,
     doc_id: docId,
     match_count: matchCount,
@@ -246,6 +265,10 @@ export async function sendMessage(
   if (sessionId !== null) {
     headers["X-Session-Id"] = sessionId;
     body.session_id = sessionId;
+  }
+
+  if (options.debugRetrieval === true) {
+    body.debug_retrieval = true;
   }
 
   let res: Response;
@@ -303,7 +326,7 @@ export async function* sendMessageStream(
     "Content-Type": "application/json",
     ...authHeaders(),
   };
-  const body: Record<string, string | number> = {
+  const body: Record<string, string | number | boolean> = {
     question,
     doc_id: docId,
     match_count: matchCount,
@@ -313,6 +336,10 @@ export async function* sendMessageStream(
   if (sessionId !== null) {
     headers["X-Session-Id"] = sessionId;
     body.session_id = sessionId;
+  }
+
+  if (options.debugRetrieval === true) {
+    body.debug_retrieval = true;
   }
 
   let res: Response;
