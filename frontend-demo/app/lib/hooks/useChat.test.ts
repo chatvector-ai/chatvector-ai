@@ -20,6 +20,8 @@ const mockPoll = vi.hoisted(() => ({
   errorMessage: undefined as string | undefined,
   queuePosition: undefined as number | undefined,
   fileName: undefined as string | undefined,
+  apiStatus: undefined as string | undefined,
+  statusDetail: undefined as string | undefined,
 }));
 
 vi.mock("../api", () => ({
@@ -85,6 +87,9 @@ describe("useChat", () => {
     mockPoll.fileName = undefined;
     mockPoll.chunks = undefined;
     mockPoll.processingTime = undefined;
+    mockPoll.errorMessage = undefined;
+    mockPoll.apiStatus = undefined;
+    mockPoll.statusDetail = undefined;
   });
 
   it("ignores a second synchronous send while a stream is in flight", async () => {
@@ -959,5 +964,256 @@ describe("useChat", () => {
     });
     expect(onUserQuestion).toHaveBeenCalledTimes(1);
     expect(onDocumentAttached).toHaveBeenCalledTimes(1);
+  });
+
+  it("replaces an existing attachment in place with the same documentId without calling deleteDocument or removeUploadedDocument", async () => {
+    const { deleteDocument } = await import("../api");
+    const { removeUploadedDocument, saveUploadedDocument } = await import(
+      "../documentStore"
+    );
+    vi.mocked(deleteDocument).mockClear();
+    vi.mocked(removeUploadedDocument).mockClear();
+    vi.mocked(saveUploadedDocument).mockClear();
+
+    const { result } = renderHook(() =>
+      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+    );
+
+    await waitFor(() => expect(result.current.historyLoading).toBe(false));
+
+    act(() => {
+      result.current.handleUploadAccepted({
+        fileName: "first.pdf",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+      });
+    });
+
+    expect(deleteDocument).not.toHaveBeenCalled();
+    expect(removeUploadedDocument).not.toHaveBeenCalled();
+    expect(saveUploadedDocument).toHaveBeenCalledWith({
+      documentId: "doc-1",
+      fileName: "first.pdf",
+    });
+
+    await waitFor(() =>
+      expect(result.current.attachment?.status).toBe("ready"),
+    );
+
+    act(() => {
+      result.current.handleUploadAccepted({
+        fileName: "second.pdf",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+      });
+    });
+
+    expect(deleteDocument).not.toHaveBeenCalled();
+    expect(removeUploadedDocument).not.toHaveBeenCalled();
+    expect(saveUploadedDocument).toHaveBeenLastCalledWith({
+      documentId: "doc-1",
+      fileName: "second.pdf",
+    });
+    expect(result.current.attachment?.documentId).toBe("doc-1");
+    expect(result.current.attachment?.fileName).toBe("second.pdf");
+
+    await waitFor(() =>
+      expect(result.current.attachment?.status).toBe("ready"),
+    );
+    expect(
+      result.current.messages.some((m) =>
+        m.text.includes('Document "second.pdf" is ready.'),
+      ),
+    ).toBe(true);
+  });
+
+  it("still calls deleteDocument and clears the chip on explicit handleRemoveAttachment", async () => {
+    const { deleteDocument } = await import("../api");
+    const { removeUploadedDocument } = await import("../documentStore");
+    vi.mocked(deleteDocument).mockClear();
+    vi.mocked(deleteDocument).mockResolvedValue({ status: "gone" });
+    vi.mocked(removeUploadedDocument).mockClear();
+
+    const { result } = renderHook(() =>
+      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+    );
+
+    await waitFor(() => expect(result.current.historyLoading).toBe(false));
+
+    act(() => {
+      result.current.handleUploadAccepted({
+        fileName: "first.pdf",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.attachment?.status).toBe("ready"),
+    );
+
+    await act(async () => {
+      await result.current.handleRemoveAttachment();
+    });
+
+    expect(deleteDocument).toHaveBeenCalledWith("doc-1");
+    expect(removeUploadedDocument).toHaveBeenCalledWith("doc-1");
+    expect(result.current.attachment).toBeNull();
+  });
+
+  it("restores the previous ready attachment and surfaces the failure when an in-place replacement fails", async () => {
+    const { saveUploadedDocument } = await import("../documentStore");
+    vi.mocked(saveUploadedDocument).mockClear();
+
+    const { result, rerender } = renderHook(() =>
+      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+    );
+
+    await waitFor(() => expect(result.current.historyLoading).toBe(false));
+
+    act(() => {
+      result.current.handleUploadAccepted({
+        fileName: "first.pdf",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.attachment?.status).toBe("ready"),
+    );
+
+    mockPoll.status = "processing";
+    mockPoll.stage = "queued";
+    mockPoll.errorMessage = undefined;
+
+    act(() => {
+      result.current.handleUploadAccepted({
+        fileName: "second.pdf",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+      });
+    });
+
+    expect(result.current.attachment?.status).toBe("processing");
+    expect(result.current.attachment?.fileName).toBe("second.pdf");
+
+    mockPoll.status = "failed";
+    mockPoll.stage = "embedding";
+    mockPoll.errorMessage = "Embedding provider exploded";
+    mockPoll.apiStatus = "completed";
+    mockPoll.statusDetail = "replacement_failed";
+    rerender();
+
+    await waitFor(() =>
+      expect(result.current.attachment?.status).toBe("ready"),
+    );
+    expect(result.current.attachment?.documentId).toBe("doc-1");
+    expect(result.current.attachment?.fileName).toBe("first.pdf");
+    expect(result.current.removeError).toBe("Embedding provider exploded");
+    expect(saveUploadedDocument).toHaveBeenLastCalledWith({
+      documentId: "doc-1",
+      fileName: "first.pdf",
+    });
+  });
+
+  it("keeps the previous completed document usable when replacement fails after a remount", async () => {
+    const { saveUploadedDocument } = await import("../documentStore");
+    vi.mocked(saveUploadedDocument).mockClear();
+    mockSendMessageStream.mockImplementation(async function* () {
+      yield {
+        type: "complete",
+        sources: [],
+        latency_ms: 10,
+        model: "m",
+        _raw: {},
+      };
+    });
+
+    mockGetSession.mockResolvedValue(sessionPayload("session-a", ["doc-1"]));
+    mockGetDocumentStatus.mockResolvedValue({
+      status: "completed",
+      status_detail: "replacement_in_progress",
+      file_name: "first.pdf",
+    });
+    mockPoll.status = "processing";
+    mockPoll.stage = "queued";
+    mockPoll.fileName = "first.pdf";
+    mockPoll.apiStatus = "completed";
+    mockPoll.statusDetail = "replacement_in_progress";
+
+    const { result, rerender } = renderHook(() =>
+      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+    );
+
+    await waitFor(() =>
+      expect(result.current.attachment?.status).toBe("processing"),
+    );
+    expect(result.current.attachment).toMatchObject({
+      documentId: "doc-1",
+      fileName: "first.pdf",
+    });
+    expect(result.current.removeError).toBeNull();
+
+    mockPoll.status = "failed";
+    mockPoll.stage = "embedding";
+    mockPoll.errorMessage = "Embedding provider exploded";
+    mockPoll.apiStatus = "completed";
+    mockPoll.statusDetail = "replacement_failed";
+    mockPoll.fileName = "first.pdf";
+    rerender();
+
+    await waitFor(() =>
+      expect(result.current.attachment?.status).toBe("ready"),
+    );
+    expect(result.current.attachment?.fileName).toBe("first.pdf");
+    expect(result.current.removeError).toBe("Embedding provider exploded");
+    expect(saveUploadedDocument).toHaveBeenCalledWith({
+      documentId: "doc-1",
+      fileName: "first.pdf",
+    });
+
+    act(() => {
+      result.current.setInput("What does the original say?");
+    });
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    expect(
+      result.current.messages.some((message) =>
+        message.text.includes("Please remove it and upload again."),
+      ),
+    ).toBe(false);
+    expect(mockSendMessageStream).toHaveBeenCalledWith(
+      "What does the original say?",
+      "doc-1",
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("restores a completed document and shows the error when a failed replacement is already on the session", async () => {
+    mockGetSession.mockResolvedValue(sessionPayload("session-a", ["doc-1"]));
+    mockGetDocumentStatus.mockResolvedValue({
+      status: "completed",
+      status_detail: "replacement_failed",
+      file_name: "first.pdf",
+      error: { message: "Embedding provider exploded" },
+    });
+
+    const { result } = renderHook(() =>
+      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+    );
+
+    await waitFor(() =>
+      expect(result.current.attachment?.status).toBe("ready"),
+    );
+    expect(result.current.attachment).toMatchObject({
+      documentId: "doc-1",
+      fileName: "first.pdf",
+      status: "ready",
+    });
+    expect(result.current.removeError).toBe("Embedding provider exploded");
   });
 });

@@ -19,7 +19,7 @@ const UploadButton = forwardRef<HTMLButtonElement, Props>(function UploadButton(
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
       className={`transition ${disabled ? "cursor-not-allowed text-muted/30" : "text-muted hover:text-foreground"}`}
-      title={disabled ? "Remove the current document before uploading a new one" : "Upload document"}
+      title={disabled ? "Wait for the current document to finish processing" : "Upload document"}
       aria-label="Upload document"
     >
       <Paperclip size={18} />

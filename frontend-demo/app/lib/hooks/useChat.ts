@@ -53,10 +53,25 @@ function documentStatusEndpoint(documentId: string): string {
   return `/documents/${documentId}/status`;
 }
 
-function mapApiStatusToAttachmentStatus(apiStatus: string): AttachmentState["status"] {
+function mapApiStatusToAttachmentStatus(
+  apiStatus: string,
+  statusDetail?: string
+): AttachmentState["status"] {
+  if (statusDetail === "replacement_in_progress") return "processing";
+  // A failed replacement leaves the previous completed content in place.
+  if (statusDetail === "replacement_failed" && apiStatus === "completed") {
+    return "ready";
+  }
   if (apiStatus === "completed") return "ready";
   if (apiStatus === "failed") return "failed";
   return "processing";
+}
+
+function replacementFailureMessage(
+  message: string | undefined
+): string {
+  const trimmed = message?.trim();
+  return trimmed ? trimmed : "Document replacement failed.";
 }
 
 function retrievalDebugFromCompleteRaw(
@@ -87,7 +102,11 @@ function restoredAttachmentFileName(
 
 async function restoreSessionAttachment(
   documentId: string
-): Promise<{ attachment: AttachmentState | null; notice: string | null }> {
+): Promise<{
+  attachment: AttachmentState | null;
+  notice: string | null;
+  replacementError: string | null;
+}> {
   const statusEndpoint = documentStatusEndpoint(documentId);
   const stored = getUploadedDocument(documentId);
 
@@ -102,20 +121,32 @@ async function restoreSessionAttachment(
         ),
         documentId,
         statusEndpoint,
-        status: mapApiStatusToAttachmentStatus(status.status),
+        status: mapApiStatusToAttachmentStatus(
+          status.status,
+          status.status_detail
+        ),
+        ...(status.queue_position !== undefined
+          ? { queue_position: status.queue_position }
+          : {}),
       },
       notice: null,
+      replacementError:
+        status.status_detail === "replacement_failed"
+          ? replacementFailureMessage(status.error?.message)
+          : null,
     };
   } catch (error) {
     if (error instanceof DocumentNotFoundError) {
       return {
         attachment: null,
         notice: DOCUMENT_GONE_NOTICE,
+        replacementError: null,
       };
     }
     return {
       attachment: null,
       notice: DOCUMENT_UNAVAILABLE_NOTICE,
+      replacementError: null,
     };
   }
 }
@@ -150,6 +181,7 @@ export function useChat(
   const [streaming, setStreaming] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const readyAnnouncedForDocRef = useRef<string | null>(null);
+  const previousAttachmentRef = useRef<AttachmentState | null>(null);
   const historyRequestRef = useRef(0);
   const chatEpochRef = useRef(0);
   const inflightRef = useRef(false);
@@ -254,6 +286,7 @@ export function useChat(
     setSessionNotice(null);
     setRemoveError(null);
     readyAnnouncedForDocRef.current = null;
+    previousAttachmentRef.current = null;
 
     setHistoryLoading(true);
     setMessages([]);
@@ -330,6 +363,9 @@ export function useChat(
           if (restored.attachment) {
             setAttachment(restored.attachment);
             setSessionNotice(null);
+            if (restored.replacementError) {
+              setRemoveError(restored.replacementError);
+            }
           } else if (restored.notice) {
             setAttachment(null);
             setSessionNotice(restored.notice);
@@ -380,6 +416,7 @@ export function useChat(
       return;
     }
     readyAnnouncedForDocRef.current = docId;
+    previousAttachmentRef.current = null;
     const statusName = poll.fileName?.trim();
     const name = statusName || attachment.fileName;
     setAttachment((curr) => {
@@ -411,12 +448,61 @@ export function useChat(
     }
     const docId = attachment.documentId;
     const statusName = poll.fileName?.trim();
+    const previous =
+      previousAttachmentRef.current?.documentId === docId
+        ? previousAttachmentRef.current
+        : null;
+    previousAttachmentRef.current = null;
+
+    if (previous) {
+      const fileName = statusName || previous.fileName;
+      saveUploadedDocument({
+        documentId: previous.documentId,
+        fileName,
+      });
+      setAttachment(
+        previous.status === "ready"
+          ? { ...previous, fileName }
+          : { ...previous, fileName, status: "failed" }
+      );
+      setRemoveError(replacementFailureMessage(poll.errorMessage));
+      return;
+    }
+
+    // Remount drops the in-memory chip snapshot. The server still has the
+    // previous completed content when status stays `completed`.
+    if (
+      poll.statusDetail === "replacement_failed" &&
+      poll.apiStatus === "completed"
+    ) {
+      const fileName = statusName || attachment.fileName;
+      saveUploadedDocument({ documentId: docId, fileName });
+      setAttachment((curr) =>
+        curr?.documentId === docId
+          ? { ...curr, fileName, status: "ready", stage: "completed" }
+          : curr
+      );
+      setRemoveError(replacementFailureMessage(poll.errorMessage));
+      return;
+    }
+
+    if (poll.statusDetail === "replacement_failed") {
+      setRemoveError(replacementFailureMessage(poll.errorMessage));
+    }
+
     setAttachment((curr) =>
       curr?.documentId === docId
         ? { ...curr, fileName: statusName || curr.fileName, status: "failed" }
         : curr
     );
-  }, [poll.status, poll.fileName, attachment]);
+  }, [
+    poll.status,
+    poll.errorMessage,
+    poll.fileName,
+    poll.statusDetail,
+    poll.apiStatus,
+    attachment,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -724,21 +810,6 @@ export function useChat(
     void handleSend();
   };
 
-  const handleBeforeUpload = async () => {
-    if (!attachment) return;
-    const out = await deleteDocument(attachment.documentId);
-    if (out.status === "gone") {
-      removeUploadedDocument(attachment.documentId);
-      setAttachment(null);
-      setRemoveError(null);
-      return;
-    }
-    if (out.status === "conflict") {
-      throw new Error(out.message);
-    }
-    throw new Error(out.message);
-  };
-
   const handleUploadAccepted = (payload: {
     fileName: string;
     documentId: string;
@@ -751,6 +822,15 @@ export function useChat(
         pendingFileRef.current = fileName;
       } else {
         labelEventsRef.current?.onDocumentAttached?.(sessionId, fileName);
+      }
+    }
+    readyAnnouncedForDocRef.current = null;
+    if (attachment && attachment.documentId === payload.documentId) {
+      previousAttachmentRef.current = attachment;
+    } else {
+      previousAttachmentRef.current = null;
+      if (attachment) {
+        removeUploadedDocument(attachment.documentId);
       }
     }
     setRemoveError(null);
@@ -774,6 +854,7 @@ export function useChat(
     try {
       const out = await deleteDocument(attachment.documentId);
       if (out.status === "gone") {
+        previousAttachmentRef.current = null;
         removeUploadedDocument(attachment.documentId);
         setAttachment(null);
         return;
@@ -806,7 +887,6 @@ export function useChat(
     poll,
     handleSend,
     handleKeyDown,
-    handleBeforeUpload,
     handleUploadAccepted,
     handleRemoveAttachment,
     stopStreaming,

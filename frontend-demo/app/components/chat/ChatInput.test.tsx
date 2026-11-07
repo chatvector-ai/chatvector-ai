@@ -14,6 +14,8 @@ const mockPoll = {
   fileName: undefined,
   errorMessage: undefined,
   status: undefined,
+  apiStatus: undefined,
+  statusDetail: undefined,
 };
 
 function renderChatInput(overrides: Partial<ComponentProps<typeof ChatInput>> = {}) {
@@ -159,5 +161,49 @@ describe("ChatInput", () => {
         "Tenant scope: searches the tenant's ready documents (can include documents other than the attached chip)."
       )
     ).toBeInTheDocument();
+  });
+
+  it("disables UploadButton while attachment is processing and enables it when ready or failed", () => {
+    const { rerender, props } = renderChatInput({
+      attachment: {
+        fileName: "guide.pdf",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+        status: "processing",
+      },
+    });
+
+    const uploadButton = screen.getByRole("button", { name: "Upload document" });
+    expect(uploadButton).toBeDisabled();
+    expect(uploadButton).toHaveAttribute(
+      "title",
+      "Wait for the current document to finish processing"
+    );
+
+    rerender(
+      <ChatInput
+        {...props}
+        attachment={{
+          fileName: "guide.pdf",
+          documentId: "doc-1",
+          statusEndpoint: "/documents/doc-1/status",
+          status: "ready",
+        }}
+      />
+    );
+    expect(screen.getByRole("button", { name: "Upload document" })).toBeEnabled();
+
+    rerender(
+      <ChatInput
+        {...props}
+        attachment={{
+          fileName: "guide.pdf",
+          documentId: "doc-1",
+          statusEndpoint: "/documents/doc-1/status",
+          status: "failed",
+        }}
+      />
+    );
+    expect(screen.getByRole("button", { name: "Upload document" })).toBeEnabled();
   });
 });

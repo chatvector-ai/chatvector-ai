@@ -23,6 +23,7 @@ export type UploadAcceptedPayload = {
 };
 
 export type UploadModalAttachment = {
+  documentId?: string;
   status: "processing" | "ready" | "failed";
   stage?: string;
   chunks?: { total: number; processed: number };
@@ -36,6 +37,8 @@ type Props = {
   sessionId?: string | null;
   /** Element to return focus to when the modal closes. */
   returnFocusRef?: RefObject<HTMLElement | null>;
+  /** Document ID of an existing ready/failed attachment to replace in place on POST /upload. */
+  replaceDocumentId?: string | null;
   /** Run before POST /upload (e.g. delete the prior document so replacement does not orphan rows). */
   onBeforeUpload?: () => Promise<void>;
   onUploadAccepted: (payload: UploadAcceptedPayload) => void;
@@ -47,6 +50,7 @@ export default function UploadModal({
   onClose,
   sessionId,
   returnFocusRef,
+  replaceDocumentId,
   onBeforeUpload,
   onUploadAccepted,
   attachment,
@@ -62,11 +66,26 @@ export default function UploadModal({
   );
   /** Until parent `attachment` reflects the new doc, avoid flashing the file picker after POST succeeds. */
   const [awaitingProcessing, setAwaitingProcessing] = useState(false);
+  /** Tracks whether an upload in this modal session has started or was already processing on open. */
+  const [hasActiveUpload, setHasActiveUpload] = useState(
+    attachment?.status === "processing"
+  );
   /** Tracks whether the pipeline animation has visually reached "completed". */
   const [pipelineVisuallyComplete, setPipelineVisuallyComplete] =
     useState(false);
 
+  const effectiveReplaceDocumentId =
+    replaceDocumentId !== undefined
+      ? replaceDocumentId
+      : attachment &&
+          (attachment.status === "ready" || attachment.status === "failed")
+        ? (attachment.documentId ?? null)
+        : null;
+
   useEffect(() => {
+    if (attachment?.status === "processing") {
+      setHasActiveUpload(true);
+    }
     if (
       attachment?.status === "processing" ||
       attachment?.status === "ready" ||
@@ -76,7 +95,10 @@ export default function UploadModal({
     }
   }, [attachment?.status]);
 
-  const showSuccess = attachment?.status === "ready";
+  const hasServerError =
+    attachment?.status === "failed" || Boolean(attachment?.errorMessage);
+  const showSuccess =
+    hasActiveUpload && attachment?.status === "ready" && !hasServerError;
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -134,7 +156,10 @@ export default function UploadModal({
         await onBeforeUpload();
       }
       const { documentId, statusEndpoint, queuePosition } =
-        await uploadDocument(file, sessionId);
+        effectiveReplaceDocumentId
+          ? await uploadDocument(file, sessionId, effectiveReplaceDocumentId)
+          : await uploadDocument(file, sessionId);
+      setHasActiveUpload(true);
       onUploadAccepted({
         fileName: file.name,
         documentId,
@@ -174,7 +199,11 @@ export default function UploadModal({
   const showHttpFailed = !isUploading && uploadHttpFailed;
   /** Server-side processing failure: document reached a failed state after upload succeeded. */
   const showServerFailed =
-    !isUploading && !uploadHttpFailed && attachment?.status === "failed";
+    hasActiveUpload &&
+    !isUploading &&
+    !awaitingProcessing &&
+    !uploadHttpFailed &&
+    hasServerError;
   const showFailed = showHttpFailed || showServerFailed;
 
   const showProcessing =
@@ -188,7 +217,9 @@ export default function UploadModal({
     !showProcessing &&
     !showFailed &&
     !showSuccess &&
-    (attachment === null || attachment.status === "ready");
+    (attachment === null ||
+      attachment.status === "ready" ||
+      attachment.status === "failed");
 
   const dropZoneInteractive = showPicker;
   // Keep "Dismiss and wait" visible until the animation visually reaches "completed",
