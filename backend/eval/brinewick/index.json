@@ -1,0 +1,621 @@
+{
+  "organization": "Brinewick Transit Cooperative",
+  "description": "Fictional ferry and coastal freight operator. Question labels use logical keys and assume fixed chunks of 1000 characters with overlap 200.",
+  "cases": {
+    "overlapping_policies": {
+      "documents": [
+        "hr-pto-policy",
+        "hr-parental-leave",
+        "finance-expense-policy",
+        "finance-travel-policy"
+      ],
+      "questions": [
+        "q-parental-paraphrase",
+        "q-leave-synthesis",
+        "q-dinner-conflict"
+      ]
+    },
+    "stale_version": {
+      "documents": [
+        "hr-pto-policy",
+        "hr-pto-policy-2022"
+      ],
+      "questions": [
+        "q-policy-number-pto",
+        "q-stale-pto-document"
+      ]
+    },
+    "similar_names": {
+      "documents": [
+        "product-harbor-pass",
+        "product-harbor-pass-plus",
+        "product-lantern-pass",
+        "customer-keel-and-co",
+        "customer-keel-cooperative"
+      ],
+      "questions": [
+        "q-harbor-pass",
+        "q-keel-berth"
+      ]
+    },
+    "department_hr": {
+      "documents": [
+        "hr-pto-policy",
+        "hr-pto-policy-2022",
+        "hr-parental-leave",
+        "hr-conduct-code"
+      ],
+      "questions": [
+        "q-policy-number-pto",
+        "q-stale-pto-document",
+        "q-parental-paraphrase",
+        "q-leave-synthesis",
+        "q-acronym-qbr",
+        "q-exact-phrase-lockout"
+      ]
+    },
+    "department_finance": {
+      "documents": [
+        "finance-expense-policy",
+        "finance-travel-policy",
+        "finance-vendor-payments",
+        "finance-payroll-calendar"
+      ],
+      "questions": [
+        "q-dinner-conflict",
+        "q-vendor-code",
+        "q-payroll-code"
+      ]
+    },
+    "department_security": {
+      "documents": [
+        "security-access-control",
+        "security-badge-draft",
+        "security-incident-response"
+      ],
+      "questions": [
+        "q-escort-near-dup",
+        "q-security-scope",
+        "q-security-playbook"
+      ]
+    },
+    "department_product": {
+      "documents": [
+        "product-harbor-pass",
+        "product-harbor-pass-plus",
+        "product-lantern-pass",
+        "product-roadmap"
+      ],
+      "questions": [
+        "q-harbor-pass",
+        "q-product-roadmap"
+      ]
+    },
+    "department_engineering": {
+      "documents": [
+        "engineering-oncall",
+        "engineering-release",
+        "engineering-runbook",
+        "ops-watch-log"
+      ],
+      "questions": [
+        "q-oncall",
+        "q-release",
+        "q-runbook-phrase",
+        "q-chunk-boundary"
+      ]
+    },
+    "department_support": {
+      "documents": [
+        "support-sla",
+        "support-escalation",
+        "support-refunds"
+      ],
+      "questions": [
+        "q-support-sla",
+        "q-support-escalation",
+        "q-support-refund"
+      ]
+    },
+    "department_contracts": {
+      "documents": [
+        "contracts-msa",
+        "contracts-nda",
+        "customer-keel-and-co",
+        "customer-keel-cooperative",
+        "customer-marrow-shipping"
+      ],
+      "questions": [
+        "q-msa",
+        "q-nda",
+        "q-keel-berth",
+        "q-marrow-cap"
+      ]
+    },
+    "department_incidents": {
+      "documents": [
+        "incidents-outage-2024-11",
+        "incidents-near-miss-log"
+      ],
+      "questions": [
+        "q-incident-code",
+        "q-near-miss"
+      ]
+    },
+    "department_pricing": {
+      "documents": [
+        "pricing-standard",
+        "pricing-partner"
+      ],
+      "questions": [
+        "q-pricing-usd",
+        "q-pricing-eur"
+      ]
+    },
+    "customer_terms": {
+      "documents": [
+        "customer-keel-and-co",
+        "customer-keel-cooperative",
+        "customer-marrow-shipping"
+      ],
+      "questions": [
+        "q-keel-berth",
+        "q-marrow-cap"
+      ]
+    },
+    "near_duplicate": {
+      "documents": [
+        "security-access-control",
+        "security-badge-draft"
+      ],
+      "questions": [
+        "q-escort-near-dup"
+      ]
+    },
+    "conflicting_facts": {
+      "documents": [
+        "finance-expense-policy",
+        "finance-travel-policy"
+      ],
+      "questions": [
+        "q-dinner-conflict"
+      ]
+    },
+    "long_document": {
+      "documents": [
+        "engineering-runbook"
+      ],
+      "questions": [
+        "q-runbook-phrase"
+      ]
+    },
+    "chunk_boundary": {
+      "documents": [
+        "ops-watch-log"
+      ],
+      "questions": [
+        "q-chunk-boundary"
+      ]
+    },
+    "metadata_department": {
+      "documents": [
+        "security-access-control",
+        "security-badge-draft",
+        "security-incident-response"
+      ],
+      "questions": [
+        "q-security-scope"
+      ]
+    },
+    "metadata_currency": {
+      "documents": [
+        "finance-vendor-payments",
+        "pricing-standard",
+        "pricing-partner"
+      ],
+      "questions": [
+        "q-vendor-code",
+        "q-pricing-usd",
+        "q-pricing-eur"
+      ]
+    },
+    "metadata_customer": {
+      "documents": [
+        "customer-keel-and-co",
+        "customer-keel-cooperative",
+        "customer-marrow-shipping"
+      ],
+      "questions": [
+        "q-keel-berth",
+        "q-marrow-cap"
+      ]
+    },
+    "policy_number": {
+      "documents": [],
+      "questions": [
+        "q-policy-number-pto",
+        "q-escort-near-dup",
+        "q-support-sla"
+      ]
+    },
+    "exact_identifier": {
+      "documents": [],
+      "questions": [
+        "q-policy-number-pto",
+        "q-release",
+        "q-msa",
+        "q-nda",
+        "q-incident-code"
+      ]
+    },
+    "paraphrase": {
+      "documents": [],
+      "questions": [
+        "q-parental-paraphrase"
+      ]
+    },
+    "multi_document": {
+      "documents": [],
+      "questions": [
+        "q-leave-synthesis"
+      ]
+    },
+    "acronym": {
+      "documents": [],
+      "questions": [
+        "q-acronym-qbr"
+      ]
+    },
+    "exact_phrase": {
+      "documents": [],
+      "questions": [
+        "q-exact-phrase-lockout"
+      ]
+    },
+    "code": {
+      "documents": [],
+      "questions": [
+        "q-vendor-code",
+        "q-payroll-code",
+        "q-security-playbook",
+        "q-product-roadmap",
+        "q-oncall",
+        "q-chunk-boundary",
+        "q-support-escalation",
+        "q-support-refund",
+        "q-incident-code",
+        "q-near-miss"
+      ]
+    },
+    "absent_fact": {
+      "documents": [],
+      "questions": [
+        "q-absent-sabbatical",
+        "q-refusal-address"
+      ]
+    }
+  },
+  "questions": {
+    "q-policy-number-pto": {
+      "evidence": [
+        {
+          "document": "hr-pto-policy",
+          "contains": "18 paid days off"
+        }
+      ],
+      "lexical_term": "POL-HR-014",
+      "absent_terms": []
+    },
+    "q-stale-pto-document": {
+      "evidence": [
+        {
+          "document": "hr-pto-policy-2022",
+          "contains": "15 paid days off"
+        }
+      ],
+      "lexical_term": null,
+      "absent_terms": []
+    },
+    "q-parental-paraphrase": {
+      "evidence": [
+        {
+          "document": "hr-parental-leave",
+          "contains": "twelve weeks of paid parental leave"
+        }
+      ],
+      "lexical_term": null,
+      "absent_terms": []
+    },
+    "q-leave-synthesis": {
+      "evidence": [
+        {
+          "document": "hr-parental-leave",
+          "contains": "twelve weeks of paid parental leave"
+        },
+        {
+          "document": "hr-pto-policy",
+          "contains": "18 paid days off"
+        }
+      ],
+      "lexical_term": null,
+      "absent_terms": []
+    },
+    "q-acronym-qbr": {
+      "evidence": [
+        {
+          "document": "hr-conduct-code",
+          "contains": "Brinewick Transit Cooperative Quarterly Berth Review"
+        }
+      ],
+      "lexical_term": "BTC-QBR",
+      "absent_terms": []
+    },
+    "q-exact-phrase-lockout": {
+      "evidence": [
+        {
+          "document": "hr-conduct-code",
+          "contains": "amber tide lockout"
+        }
+      ],
+      "lexical_term": "amber tide lockout",
+      "absent_terms": []
+    },
+    "q-dinner-conflict": {
+      "evidence": [
+        {
+          "document": "finance-expense-policy",
+          "contains": "The dinner reimbursement limit is 75 USD per person"
+        },
+        {
+          "document": "finance-travel-policy",
+          "contains": "The dinner reimbursement limit is 40 USD per person"
+        }
+      ],
+      "lexical_term": null,
+      "absent_terms": []
+    },
+    "q-vendor-code": {
+      "evidence": [
+        {
+          "document": "finance-vendor-payments",
+          "contains": "VND-8841"
+        }
+      ],
+      "lexical_term": "VND-8841",
+      "absent_terms": []
+    },
+    "q-payroll-code": {
+      "evidence": [
+        {
+          "document": "finance-payroll-calendar",
+          "contains": "PAY-CAL-03"
+        }
+      ],
+      "lexical_term": "PAY-CAL-03",
+      "absent_terms": []
+    },
+    "q-escort-near-dup": {
+      "evidence": [
+        {
+          "document": "security-access-control",
+          "contains": "remain unescorted for ten minutes"
+        }
+      ],
+      "lexical_term": "SEC-AC-221",
+      "absent_terms": []
+    },
+    "q-security-scope": {
+      "evidence": [
+        {
+          "document": "security-access-control",
+          "contains": "SEC-AC-221"
+        }
+      ],
+      "lexical_term": null,
+      "absent_terms": []
+    },
+    "q-security-playbook": {
+      "evidence": [
+        {
+          "document": "security-incident-response",
+          "contains": "IRP-SEC-1"
+        }
+      ],
+      "lexical_term": "IRP-SEC-1",
+      "absent_terms": []
+    },
+    "q-harbor-pass": {
+      "evidence": [
+        {
+          "document": "product-harbor-pass",
+          "contains": "HP-100"
+        }
+      ],
+      "lexical_term": null,
+      "absent_terms": []
+    },
+    "q-product-roadmap": {
+      "evidence": [
+        {
+          "document": "product-roadmap",
+          "contains": "PRD-ROAD-5"
+        }
+      ],
+      "lexical_term": "PRD-ROAD-5",
+      "absent_terms": []
+    },
+    "q-oncall": {
+      "evidence": [
+        {
+          "document": "engineering-oncall",
+          "contains": "ENG-OC-7"
+        }
+      ],
+      "lexical_term": "ENG-OC-7",
+      "absent_terms": []
+    },
+    "q-release": {
+      "evidence": [
+        {
+          "document": "engineering-release",
+          "contains": "REL-ENG-77"
+        }
+      ],
+      "lexical_term": "REL-ENG-77",
+      "absent_terms": []
+    },
+    "q-runbook-phrase": {
+      "evidence": [
+        {
+          "document": "engineering-runbook",
+          "contains": "saltmere cutover window"
+        }
+      ],
+      "lexical_term": null,
+      "absent_terms": []
+    },
+    "q-chunk-boundary": {
+      "evidence": [
+        {
+          "document": "ops-watch-log",
+          "contains": "QK-BOUNDARY-441"
+        },
+        {
+          "document": "ops-watch-log",
+          "contains": "north lantern steady"
+        }
+      ],
+      "lexical_term": "QK-BOUNDARY-441",
+      "absent_terms": []
+    },
+    "q-support-sla": {
+      "evidence": [
+        {
+          "document": "support-sla",
+          "contains": "30 minutes"
+        }
+      ],
+      "lexical_term": "SUP-SLA-2",
+      "absent_terms": []
+    },
+    "q-support-escalation": {
+      "evidence": [
+        {
+          "document": "support-escalation",
+          "contains": "ESC-SUP-12"
+        }
+      ],
+      "lexical_term": "ESC-SUP-12",
+      "absent_terms": []
+    },
+    "q-support-refund": {
+      "evidence": [
+        {
+          "document": "support-refunds",
+          "contains": "RFD-SUP-3"
+        }
+      ],
+      "lexical_term": "RFD-SUP-3",
+      "absent_terms": []
+    },
+    "q-msa": {
+      "evidence": [
+        {
+          "document": "contracts-msa",
+          "contains": "written renewal notice 60 days"
+        }
+      ],
+      "lexical_term": "MSA-4.2",
+      "absent_terms": []
+    },
+    "q-nda": {
+      "evidence": [
+        {
+          "document": "contracts-nda",
+          "contains": "four years"
+        }
+      ],
+      "lexical_term": "NDA-9",
+      "absent_terms": []
+    },
+    "q-incident-code": {
+      "evidence": [
+        {
+          "document": "incidents-outage-2024-11",
+          "contains": "lost channel 4 for eleven minutes"
+        }
+      ],
+      "lexical_term": "INC-4417",
+      "absent_terms": []
+    },
+    "q-near-miss": {
+      "evidence": [
+        {
+          "document": "incidents-near-miss-log",
+          "contains": "loose gangway pin"
+        }
+      ],
+      "lexical_term": "INC-4402",
+      "absent_terms": []
+    },
+    "q-pricing-usd": {
+      "evidence": [
+        {
+          "document": "pricing-standard",
+          "contains": "42 USD"
+        }
+      ],
+      "lexical_term": null,
+      "absent_terms": []
+    },
+    "q-pricing-eur": {
+      "evidence": [
+        {
+          "document": "pricing-partner",
+          "contains": "36 EUR"
+        }
+      ],
+      "lexical_term": null,
+      "absent_terms": []
+    },
+    "q-keel-berth": {
+      "evidence": [
+        {
+          "document": "customer-keel-and-co",
+          "contains": "04:00 to 06:00"
+        }
+      ],
+      "lexical_term": null,
+      "absent_terms": []
+    },
+    "q-marrow-cap": {
+      "evidence": [
+        {
+          "document": "customer-marrow-shipping",
+          "contains": "250000 USD"
+        }
+      ],
+      "lexical_term": null,
+      "absent_terms": []
+    },
+    "q-absent-sabbatical": {
+      "evidence": [],
+      "lexical_term": null,
+      "absent_terms": [
+        "sabbatical",
+        "stipend"
+      ]
+    },
+    "q-refusal-address": {
+      "evidence": [],
+      "lexical_term": null,
+      "absent_terms": [
+        "home street address",
+        "board chair"
+      ]
+    }
+  },
+  "notes": {
+    "chunk_boundary": "ops-watch-log.txt is one paragraph. Under the declared fixed chunker the contingency code and the pilot phrase land in consecutive chunks, and neither chunk contains both."
+  }
+}

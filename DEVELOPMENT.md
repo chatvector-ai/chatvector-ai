@@ -703,6 +703,8 @@ python -m backend.cli load-eval-corpus \
 
 Those chunk numbers have to match the running process. The manifest maps each logical key to the document id created for that run and records metadata plus the chunk settings actually used. Later evaluation artifacts that name a document copy both the logical key and the runtime id from that manifest. This command does not author the corpus files.
 
+A corpus is checked in at `backend/eval/brinewick/`. Load it with `--corpus-dir backend/eval/brinewick/corpus` and `--declaration backend/eval/brinewick/corpus.json`, then grade `backend/eval/brinewick/questions.json` with `--manifest` pointing at the file the loader wrote. `index.json` names the document or question for each overlap, version, name, department, identifier, paraphrase, metadata, conflict, absence, synthesis, length, near-duplicate, and chunk-boundary case. The question labels use logical keys and assume fixed chunks of size 1000 with overlap 200.
+
 ---
 
 ## Horizontal API scaling

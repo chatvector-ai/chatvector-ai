@@ -1,0 +1,326 @@
+{
+  "chunk_size": 1000,
+  "chunk_overlap": 200,
+  "chunking_strategy": "fixed",
+  "documents": [
+    {
+      "logical_key": "hr-pto-policy",
+      "file_name": "hr-pto-policy.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "hr",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "hr-pto-policy-2022",
+      "file_name": "hr-pto-policy-2022.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "hr",
+        "status": "stale",
+        "year": 2022
+      }
+    },
+    {
+      "logical_key": "hr-parental-leave",
+      "file_name": "hr-parental-leave.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "hr",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "hr-conduct-code",
+      "file_name": "hr-conduct-code.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "hr",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "finance-expense-policy",
+      "file_name": "finance-expense-policy.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "finance",
+        "currency": "USD",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "finance-travel-policy",
+      "file_name": "finance-travel-policy.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "finance",
+        "currency": "USD",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "finance-vendor-payments",
+      "file_name": "finance-vendor-payments.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "finance",
+        "currency": "EUR",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "finance-payroll-calendar",
+      "file_name": "finance-payroll-calendar.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "finance",
+        "currency": "USD",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "security-access-control",
+      "file_name": "security-access-control.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "security",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "security-badge-draft",
+      "file_name": "security-badge-draft.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "security",
+        "status": "draft",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "security-incident-response",
+      "file_name": "security-incident-response.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "security",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "product-harbor-pass",
+      "file_name": "product-harbor-pass.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "product",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "product-harbor-pass-plus",
+      "file_name": "product-harbor-pass-plus.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "product",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "product-lantern-pass",
+      "file_name": "product-lantern-pass.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "product",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "product-roadmap",
+      "file_name": "product-roadmap.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "product",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "engineering-oncall",
+      "file_name": "engineering-oncall.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "engineering",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "engineering-release",
+      "file_name": "engineering-release.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "engineering",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "engineering-runbook",
+      "file_name": "engineering-runbook.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "engineering",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "support-sla",
+      "file_name": "support-sla.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "support",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "support-escalation",
+      "file_name": "support-escalation.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "support",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "support-refunds",
+      "file_name": "support-refunds.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "support",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "contracts-msa",
+      "file_name": "contracts-msa.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "contracts",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "contracts-nda",
+      "file_name": "contracts-nda.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "contracts",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "incidents-outage-2024-11",
+      "file_name": "incidents-outage-2024-11.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "incidents",
+        "status": "current",
+        "year": 2024
+      }
+    },
+    {
+      "logical_key": "incidents-near-miss-log",
+      "file_name": "incidents-near-miss-log.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "incidents",
+        "status": "current",
+        "year": 2024
+      }
+    },
+    {
+      "logical_key": "pricing-standard",
+      "file_name": "pricing-standard.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "pricing",
+        "currency": "USD",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "pricing-partner",
+      "file_name": "pricing-partner.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "pricing",
+        "currency": "EUR",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "customer-keel-and-co",
+      "file_name": "customer-keel-and-co.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "contracts",
+        "customer": "keel-and-co",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "customer-keel-cooperative",
+      "file_name": "customer-keel-cooperative.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "contracts",
+        "customer": "keel-cooperative",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "customer-marrow-shipping",
+      "file_name": "customer-marrow-shipping.md",
+      "metadata": {
+        "org": "brinewick",
+        "department": "contracts",
+        "customer": "marrow-shipping",
+        "status": "current",
+        "year": 2026
+      }
+    },
+    {
+      "logical_key": "ops-watch-log",
+      "file_name": "ops-watch-log.txt",
+      "metadata": {
+        "org": "brinewick",
+        "department": "engineering",
+        "status": "current",
+        "year": 2026
+      }
+    }
+  ]
+}
