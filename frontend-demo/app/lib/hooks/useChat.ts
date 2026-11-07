@@ -15,6 +15,7 @@ import {
   type Message,
   type SessionHistoryMessage,
   type StreamEvent,
+  parseRetrievalDebug,
 } from "../api";
 import { useDocumentPolling } from "./useDocumentPolling";
 import {
@@ -93,11 +94,7 @@ function replacementFailureMessage(
 function retrievalDebugFromCompleteRaw(
   raw: Record<string, unknown> | undefined,
 ): Message["retrieval_debug"] | undefined {
-  const value = raw?.retrieval_debug;
-  if (value != null && typeof value === "object" && !Array.isArray(value)) {
-    return value as Message["retrieval_debug"];
-  }
-  return undefined;
+  return parseRetrievalDebug(raw?.retrieval_debug);
 }
 
 function isAbortError(error: unknown): boolean {
@@ -186,6 +183,7 @@ export function useChat(
   sessionId: string | null,
   retrievalSettings: RetrievalSettings,
   labelEvents?: ChatLabelEvents,
+  inspectMode = false,
 ) {
   const [messages, setMessages] = useState<Message[]>(welcomeMessages);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -736,6 +734,7 @@ export function useChat(
         scope: retrievalSettings.scope,
         sessionId,
         signal: controller.signal,
+        ...(inspectMode ? { debugRetrieval: true } : {}),
       };
 
       setMessages((prev) => [
@@ -772,7 +771,7 @@ export function useChat(
               sender: "ai",
               text: response.answer,
               question: response.question,
-              retrieval_debug: response.retrieval_debug,
+              retrieval_debug: parseRetrievalDebug(response.retrieval_debug),
               sources: response.sources,
               chunks: response.chunks,
               latency_ms: response.latency_ms,

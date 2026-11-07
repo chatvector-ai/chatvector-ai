@@ -8,21 +8,25 @@ const mockGetSessionHistory = vi.fn();
 const mockGetSession = vi.fn();
 const mockGetDocumentStatus = vi.fn();
 
-vi.mock("../api", () => ({
-  deleteDocument: vi.fn(),
-  sendMessage: vi.fn(),
-  sendMessageStream: vi.fn(),
-  getSessionHistory: (...args: unknown[]) => mockGetSessionHistory(...args),
-  getSession: (...args: unknown[]) => mockGetSession(...args),
-  getDocumentStatus: (...args: unknown[]) => mockGetDocumentStatus(...args),
-  DocumentNotFoundError: class DocumentNotFoundError extends Error {},
-  ChatError: class ChatError extends Error {
-    code = "unexpected";
-  },
-  StreamingDisabledError: class StreamingDisabledError extends Error {
-    name = "StreamingDisabledError";
-  },
-}));
+vi.mock("../api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../api")>();
+  return {
+    ...actual,
+    deleteDocument: vi.fn(),
+    sendMessage: vi.fn(),
+    sendMessageStream: vi.fn(),
+    getSessionHistory: (...args: unknown[]) => mockGetSessionHistory(...args),
+    getSession: (...args: unknown[]) => mockGetSession(...args),
+    getDocumentStatus: (...args: unknown[]) => mockGetDocumentStatus(...args),
+    DocumentNotFoundError: class DocumentNotFoundError extends Error {},
+    ChatError: class ChatError extends Error {
+      code = "unexpected";
+    },
+    StreamingDisabledError: class StreamingDisabledError extends Error {
+      name = "StreamingDisabledError";
+    },
+  };
+});
 
 vi.mock("./useDocumentPolling", () => ({
   useDocumentPolling: () => ({

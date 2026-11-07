@@ -15,6 +15,7 @@ import { useSessionManager } from "../lib/hooks/useSessionManager";
 export default function ChatPage() {
   const [showModal, setShowModal] = useState(false);
   const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false);
+  const [inspectMode, setInspectMode] = useState(false);
   const uploadButtonRef = useRef<HTMLButtonElement>(null);
   const {
     sessions,
@@ -50,11 +51,16 @@ export default function ChatPage() {
     handleUploadAccepted,
     handleRemoveAttachment,
     stopStreaming,
-  } = useChat(activeSessionId, settings, {
-    onUserQuestion: noteUserQuestion,
-    onDocumentAttached: noteDocumentAttached,
-    onHistoryLoaded: noteSessionHistory,
-  });
+  } = useChat(
+    activeSessionId,
+    settings,
+    {
+      onUserQuestion: noteUserQuestion,
+      onDocumentAttached: noteDocumentAttached,
+      onHistoryLoaded: noteSessionHistory,
+    },
+    inspectMode,
+  );
 
   if (!isLoaded || !retrievalLoaded) {
     return (
@@ -193,6 +199,8 @@ export default function ChatPage() {
               settings={settings}
               onScopeChange={setScope}
               onMatchCountChange={setMatchCount}
+              inspectMode={inspectMode}
+              onInspectModeChange={setInspectMode}
             />
           </div>
 
