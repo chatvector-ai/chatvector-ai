@@ -11,9 +11,9 @@ from db.base import ChunkMatch
 from services import eval_metrics
 from cli import cmd_eval
 from services.chat_service import RetrievalResult
-from services.eval_config import EffectiveRetrievalConfig
+from services.eval_config import EffectiveRetrievalConfig, ResolvedEnvironmentSnapshot
 from services.eval_fixtures import EvalDataset, load_dataset
-from services.eval_service import EvalRunResult, diff_arms, run_eval
+from services.eval_service import ArmResult, EvalRunResult, diff_arms, run_eval
 from services.query_service import QueryTransformResult
 from services.retrieval_config import RetrievalProcessDefaults, resolve_retrieval_config
 from services.metadata_filter import InvalidMetadataFilterError
@@ -488,6 +488,83 @@ async def test_export_snapshot_records_config_persona_chunks_and_transform(tmp_p
     assert environment["embedding_model"] == "text-embedding-test"
     assert environment["query_transformation_enabled"] is False
     assert environment["query_transformation_strategy"] == "stepback"
+
+
+@pytest.mark.asyncio
+async def test_retrieval_only_export_does_not_invent_an_llm_model(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "LLM_PROVIDER", "guessed-provider")
+    monkeypatch.setattr(config, "LLM_MODEL", "guessed-model")
+    dataset = load_dataset(FIXTURES_DIR / "basic_queries.json")
+    retrieval = _retrieval_result(
+        [_chunk("fixture-doc-01", 0)],
+        original_query="plain",
+        transformed_queries=["plain"],
+        primary_query="plain",
+        timing_ms={"total": 1},
+    )
+
+    async def fake_retrieve(*args, **kwargs):
+        del args, kwargs
+        return retrieval
+
+    arm = EffectiveRetrievalConfig(
+        label="current-config", hybrid_retrieval_enabled=False, enable_reranking=False
+    )
+    export_path = tmp_path / "retrieval-only.json"
+
+    with patch("services.eval_service.retrieve_for_documents", AsyncMock(side_effect=fake_retrieve)):
+        await run_eval(dataset, [arm], tenant_id="tenant-eval-test", export_path=export_path)
+
+    environment = json.loads(export_path.read_text(encoding="utf-8"))["arms"][0]["config_snapshot"][
+        "resolved_environment"
+    ]
+    assert environment["llm_provider"] is None
+    assert environment["llm_model"] is None
+    assert environment["embedding_model"] != "guessed-model"
+
+
+def test_export_includes_llm_identity_only_when_answer_generation_is_enabled(monkeypatch):
+    monkeypatch.setattr(config, "LLM_PROVIDER", "guessed-provider")
+    monkeypatch.setattr(config, "LLM_MODEL", "guessed-model")
+
+    ignored = ResolvedEnvironmentSnapshot.capture(
+        answer_generation_enabled=False,
+        llm_provider="anthropic",
+        llm_model="claude-from-generate-answer",
+    )
+    assert ignored.llm_provider is None
+    assert ignored.llm_model is None
+
+    supplied = ResolvedEnvironmentSnapshot.capture(
+        answer_generation_enabled=True,
+        llm_provider="anthropic",
+        llm_model="claude-from-generate-answer",
+    )
+    omitted = ResolvedEnvironmentSnapshot.capture(answer_generation_enabled=True)
+    assert omitted.llm_provider is None
+    assert omitted.llm_model is None
+
+    result = EvalRunResult(
+        run_id="run",
+        timestamp="t",
+        tool_version="v",
+        dataset_name="d",
+        dataset_hash="h",
+        arms=[
+            ArmResult(
+                config=EffectiveRetrievalConfig(
+                    label="generated",
+                    hybrid_retrieval_enabled=False,
+                    enable_reranking=False,
+                ),
+                resolved_env=supplied,
+            )
+        ],
+    )
+    environment = result.to_export_dict()["arms"][0]["config_snapshot"]["resolved_environment"]
+    assert environment["llm_provider"] == "anthropic"
+    assert environment["llm_model"] == "claude-from-generate-answer"
+    assert environment["llm_model"] != config.LLM_MODEL
 
 
 # ---------------------------------------------------------------------------

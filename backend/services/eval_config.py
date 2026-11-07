@@ -75,9 +75,25 @@ class ResolvedEnvironmentSnapshot:
     chunk_overlap: int
     chunking_strategy: str
     prompt_persona: str
+    # Answer-generation identity. Left null unless generation is enabled, and
+    # never filled from LLM_PROVIDER / LLM_MODEL on a retrieval-only capture.
+    llm_provider: str | None = None
+    llm_model: str | None = None
 
     @classmethod
-    def capture(cls) -> "ResolvedEnvironmentSnapshot":
+    def capture(
+        cls,
+        *,
+        answer_generation_enabled: bool = False,
+        llm_provider: str | None = None,
+        llm_model: str | None = None,
+    ) -> "ResolvedEnvironmentSnapshot":
+        if answer_generation_enabled:
+            generation_provider = llm_provider
+            generation_model = llm_model
+        else:
+            generation_provider = None
+            generation_model = None
         return cls(
             hybrid_retrieval_enabled=config.HYBRID_RETRIEVAL_ENABLED,
             enable_reranking=config.ENABLE_RERANKING,
@@ -92,6 +108,8 @@ class ResolvedEnvironmentSnapshot:
             chunk_overlap=config.CHUNK_OVERLAP,
             chunking_strategy=config.CHUNKING_STRATEGY,
             prompt_persona=config.PROMPT_PERSONA,
+            llm_provider=generation_provider,
+            llm_model=generation_model,
         )
 
     def as_dict(self) -> dict:
