@@ -1,8 +1,10 @@
 """Eval orchestration: dataset loading, per-arm retrieval, metrics, compare, export.
 
-Never imports or calls answer generation (``generate_answer`` /
-``generate_answer_stream``). Retrieval goes through
-``chat_service.retrieve_for_documents`` and stops at assembled context.
+The default path never imports or calls answer generation. Retrieval goes
+through ``chat_service.retrieve_for_documents`` and stops at assembled
+context. ``--answers`` opts a run into calling the injected
+``generate_answer`` for rows that carry answer labels, then scores those
+labels. ``generate_answer_stream`` is never called.
 """
 
 from __future__ import annotations
@@ -20,7 +22,14 @@ from services import eval_metrics
 from services.chat_service import retrieve_for_documents
 from services.eval_config import EffectiveRetrievalConfig, ResolvedEnvironmentSnapshot
 from services.history_config import prepare_turn_history
-from services.eval_fixtures import EvalDataset, EvalQuery, dataset_hash
+from services.eval_fixtures import (
+    EvalDataset,
+    EvalQuery,
+    ExpectedCitation,
+    ExpectedFact,
+    ExpectedRefusal,
+    dataset_hash,
+)
 from services.metadata_filter import InvalidMetadataFilterError, validate_metadata_filter
 
 EVAL_TOOL_VERSION = "0.1.0"
@@ -106,6 +115,8 @@ class QueryResult:
     timing_ms: dict | None = None
     # Per relevant chunk: retrieved, globally selected, and packed.
     evidence: list[dict] = field(default_factory=list)
+    # Set only when the answer arm generated this row.
+    answer: str | None = None
 
 
 @dataclass
@@ -114,6 +125,7 @@ class ArmResult:
     resolved_env: ResolvedEnvironmentSnapshot
     query_results: list[QueryResult] = field(default_factory=list)
     aggregate_metrics: dict[str, float] = field(default_factory=dict)
+    answer_generation: bool = False
 
 
 @dataclass
@@ -143,19 +155,7 @@ class EvalRunResult:
                     },
                     "aggregate_metrics": arm.aggregate_metrics,
                     "per_query_metrics": [
-                        {
-                            "query": qr.query,
-                            "original_query": qr.original_query,
-                            "transformed_queries": qr.transformed_queries,
-                            "effective_retrieval_query": qr.effective_retrieval_query,
-                            "timing_ms": qr.timing_ms,
-                            "metrics": qr.metrics,
-                            "evidence": qr.evidence,
-                            "candidates": qr.candidates,
-                            "context_preview": qr.context_preview,
-                            "metadata_filter": qr.metadata_filter,
-                            "filter_excluded_all_documents": qr.filter_excluded_all_documents,
-                        }
+                        _query_export(qr, include_answer=arm.answer_generation)
                         for qr in arm.query_results
                     ],
                 }
@@ -164,14 +164,131 @@ class EvalRunResult:
         }
 
 
-def _aggregate(query_results: list[QueryResult]) -> dict[str, float]:
-    if not query_results:
-        return {}
-    keys = query_results[0].metrics.keys()
-    return {
-        key: sum(qr.metrics[key] for qr in query_results) / len(query_results)
-        for key in keys
+def _query_export(qr: QueryResult, *, include_answer: bool) -> dict:
+    row = {
+        "query": qr.query,
+        "original_query": qr.original_query,
+        "transformed_queries": qr.transformed_queries,
+        "effective_retrieval_query": qr.effective_retrieval_query,
+        "timing_ms": qr.timing_ms,
+        "metrics": qr.metrics,
+        "evidence": qr.evidence,
+        "candidates": qr.candidates,
+        "context_preview": qr.context_preview,
+        "metadata_filter": qr.metadata_filter,
+        "filter_excluded_all_documents": qr.filter_excluded_all_documents,
     }
+    if include_answer:
+        row["answer"] = qr.answer
+    return row
+
+
+def _aggregate(query_results: list[QueryResult]) -> dict[str, float]:
+    """Mean of each metric over the rows that recorded it."""
+    totals: dict[str, list[float]] = {}
+    for qr in query_results:
+        for key, value in qr.metrics.items():
+            totals.setdefault(key, []).append(value)
+    return {key: sum(values) / len(values) for key, values in totals.items()}
+
+
+def _contains_label(text: str, label: str) -> bool:
+    return label.casefold() in text.casefold()
+
+
+def _fact_in_text(fact: ExpectedFact, text: str) -> bool:
+    if _contains_label(text, fact.text):
+        return True
+    return any(_contains_label(text, alternate) for alternate in fact.alternates)
+
+
+def _completeness(facts: list[ExpectedFact], answer: str) -> float:
+    matched = sum(1 for fact in facts if _fact_in_text(fact, answer))
+    return matched / len(facts)
+
+
+def _refusal_correctness(refusal: ExpectedRefusal, answer: str) -> float:
+    has_phrase = any(_contains_label(answer, phrase) for phrase in refusal.phrases)
+    has_forbidden = any(_contains_label(answer, forbidden) for forbidden in refusal.forbidden)
+    if has_phrase and not has_forbidden:
+        return 1.0
+    return 0.0
+
+
+def _citation_supported(
+    citation: ExpectedCitation,
+    packed_chunks: list,
+    logical_keys_by_document: dict[str, str],
+) -> bool:
+    """True when the citation target is on the packer's inclusion list.
+
+    A chunk that was only retrieved or only globally selected does not
+    count. The context string is not read.
+    """
+    targets = {citation.document}
+    if citation.resolved_document_id:
+        targets.add(citation.resolved_document_id)
+    for chunk in packed_chunks:
+        document_id = getattr(chunk, "document_id", None)
+        identities: set[str] = set()
+        if document_id:
+            identities.add(document_id)
+            logical_key = logical_keys_by_document.get(document_id)
+            if logical_key:
+                identities.add(logical_key)
+        if not (targets & identities):
+            continue
+        chunk_index = getattr(chunk, "chunk_index", None)
+        if citation.chunk_index is not None and chunk_index != citation.chunk_index:
+            continue
+        page_number = getattr(chunk, "page_number", None)
+        if citation.page is not None and page_number != citation.page:
+            continue
+        return True
+    return False
+
+
+def _groundedness(
+    facts: list[ExpectedFact],
+    must_not_claim: list[str],
+    answer: str,
+    context: str,
+) -> float:
+    for fact in facts:
+        if _fact_in_text(fact, answer) and not _fact_in_text(fact, context):
+            return 0.0
+    if any(_contains_label(answer, claim) for claim in must_not_claim):
+        return 0.0
+    return 1.0
+
+
+def _answer_metrics(
+    query: EvalQuery,
+    answer: str,
+    context: str,
+    packed_chunks: list,
+    logical_keys_by_document: dict[str, str],
+) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    if query.expected_facts:
+        metrics["completeness"] = _completeness(query.expected_facts, answer)
+    if query.expected_refusal is not None:
+        metrics["refusal_correctness"] = _refusal_correctness(query.expected_refusal, answer)
+    if query.expected_citation is not None:
+        supported = _citation_supported(
+            query.expected_citation,
+            packed_chunks,
+            logical_keys_by_document,
+        )
+        metrics["citation_support"] = 1.0 if supported else 0.0
+    if query.expected_facts or query.must_not_claim:
+        metrics["groundedness"] = _groundedness(
+            query.expected_facts,
+            query.must_not_claim,
+            answer,
+            context,
+        )
+    return metrics
 
 
 def _chunk_key(chunk):
@@ -289,8 +406,12 @@ async def _run_arm(
     tenant_id: str,
     k_values: tuple[int, ...],
     resolved_env: ResolvedEnvironmentSnapshot,
-) -> ArmResult:
+    answer_generation: bool = False,
+    generate_answer=None,
+) -> tuple[ArmResult, str | None, bool]:
     query_results: list[QueryResult] = []
+    recorded_model: str | None = None
+    saw_generation = False
 
     request_config = effective.to_request_config()
     metadata_filters = _validated_filters(dataset)
@@ -338,21 +459,33 @@ async def _run_arm(
             retrieved_chunks = retrieval.retrieved_chunks
             packed_chunks = retrieval.packed_chunks
 
-        ranked_keys = [
-            eval_metrics.chunk_match_key(c.document_id, c.chunk_index)
-            for c in candidates
-        ]
-        relevant = q.relevant_keys()
         logical_keys = _logical_keys_by_document(q)
         evidence = _evidence_for_query(q, retrieved_chunks, candidates, packed_chunks)
 
-        metrics: dict[str, float] = {"mrr": eval_metrics.mrr(ranked_keys, relevant)}
-        for k in k_values:
-            metrics[f"recall@{k}"] = eval_metrics.recall_at_k(ranked_keys, relevant, k)
-            metrics[f"ndcg@{k}"] = eval_metrics.ndcg_at_k(ranked_keys, relevant, k)
-        metrics["packed_presence"] = eval_metrics.packed_presence(
-            [row["packed"] for row in evidence]
-        )
+        metrics: dict[str, float] = {}
+        if q.relevant_doc_ids or q.relevant_chunks:
+            ranked_keys = [
+                eval_metrics.chunk_match_key(c.document_id, c.chunk_index)
+                for c in candidates
+            ]
+            relevant = q.relevant_keys()
+            metrics["mrr"] = eval_metrics.mrr(ranked_keys, relevant)
+            for k in k_values:
+                metrics[f"recall@{k}"] = eval_metrics.recall_at_k(ranked_keys, relevant, k)
+                metrics[f"ndcg@{k}"] = eval_metrics.ndcg_at_k(ranked_keys, relevant, k)
+            metrics["packed_presence"] = eval_metrics.packed_presence(
+                [row["packed"] for row in evidence]
+            )
+
+        answer: str | None = None
+        if answer_generation and q.has_answer_labels():
+            answer, _latency_ms, model_name = await generate_answer(q.query, context_preview)
+            if not saw_generation:
+                recorded_model = model_name
+            saw_generation = True
+            metrics.update(
+                _answer_metrics(q, answer, context_preview, packed_chunks, logical_keys)
+            )
 
         query_results.append(
             QueryResult(
@@ -373,14 +506,20 @@ async def _run_arm(
                 effective_retrieval_query=trace["effective_retrieval_query"],
                 timing_ms=trace["timing_ms"],
                 evidence=evidence,
+                answer=answer,
             )
         )
 
-    return ArmResult(
-        config=effective,
-        resolved_env=resolved_env,
-        query_results=query_results,
-        aggregate_metrics=_aggregate(query_results),
+    return (
+        ArmResult(
+            config=effective,
+            resolved_env=resolved_env,
+            query_results=query_results,
+            aggregate_metrics=_aggregate(query_results),
+            answer_generation=answer_generation,
+        ),
+        recorded_model,
+        saw_generation,
     )
 
 
@@ -391,25 +530,41 @@ async def run_eval(
     tenant_id: str,
     k_values: tuple[int, ...] = DEFAULT_K_VALUES,
     export_path: str | Path | None = None,
+    answer_generation: bool = False,
+    generate_answer=None,
 ) -> EvalRunResult:
     """Run one or more config arms against ``dataset``.
 
     Arms run sequentially so a comparison does not stampede the database.
     Each arm carries its own request-scoped config and does not mutate
-    process globals.
+    process globals. Answer generation stays off unless
+    ``answer_generation`` is set, and then only rows with answer labels
+    are sent to ``generate_answer``.
     """
-    resolved_env = ResolvedEnvironmentSnapshot.capture()
+    if answer_generation and generate_answer is None:
+        raise ValueError("answer generation requires generate_answer")
 
-    arm_results = [
-        await _run_arm(
+    resolved_env = ResolvedEnvironmentSnapshot.capture()
+    arm_results: list[ArmResult] = []
+    recorded_model: str | None = None
+    saw_generation = False
+    for effective in arms:
+        arm_result, model_name, generated = await _run_arm(
             dataset,
             effective,
             tenant_id=tenant_id,
             k_values=k_values,
             resolved_env=resolved_env,
+            answer_generation=answer_generation,
+            generate_answer=generate_answer,
         )
-        for effective in arms
-    ]
+        arm_results.append(arm_result)
+        if generated and not saw_generation:
+            saw_generation = True
+            recorded_model = model_name
+    if saw_generation:
+        resolved_env.llm_provider = config.LLM_PROVIDER
+        resolved_env.llm_model = recorded_model
 
     result = EvalRunResult(
         run_id=str(uuid.uuid4()),

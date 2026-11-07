@@ -646,7 +646,7 @@ webhooks.
 
 ## Retrieval evaluation
 
-`python -m backend.cli eval` measures retrieval quality against a JSON fixture. It calls `retrieve_for_documents`, the same boundary chat uses. It does not call the answer-generation LLM. The embedding cache stays off unless you pass `--allow-cache`.
+`python -m backend.cli eval` measures retrieval quality against a JSON fixture. It calls `retrieve_for_documents`, the same boundary chat uses. It does not call the answer-generation LLM unless you pass `--answers`. The embedding cache stays off unless you pass `--allow-cache`.
 
 ```bash
 python -m backend.cli eval \
@@ -658,7 +658,7 @@ python -m backend.cli eval \
   --export /tmp/eval.json
 ```
 
-Repeat `--config path/to/arm.json` to compare retrieval settings. Omit `--config` to score the current process defaults. The command stays local: there is no HTTP eval route, and this path does not call answer generation.
+Repeat `--config path/to/arm.json` to compare retrieval settings. Omit `--config` to score the current process defaults. The command stays local: there is no HTTP eval route. `--answers` is off unless you set it. With that flag, each row that has an answer label calls `generate_answer` with the question and the packed context. A row without those labels is left retrieval-only and is not sent to the generator.
 
 `--export` writes one JSON object:
 
@@ -668,21 +668,24 @@ Repeat `--config path/to/arm.json` to compare retrieval settings. Omit `--config
 
 `config_snapshot.effective_config` is that arm's retrieval config (`label`, `hybrid_retrieval_enabled`, `enable_reranking`, `reranker_provider`, `match_count`, `max_context_chars`, `allow_embedding_cache`, `query_transformation_enabled`, `query_transformation_strategy`, `skip_history_transform`) and `resolved`, the request config retrieval actually used. Each `resolved` entry is `{"value", "source"}`. The effective query transform is `resolved.query_transformation_enabled` and `resolved.query_transformation_strategy`.
 
-`config_snapshot.resolved_environment` records the process values captured for the run: `hybrid_retrieval_enabled`, `enable_reranking`, `reranker_provider`, `enable_embedding_cache`, `max_context_chars`, `embedding_provider`, `embedding_model`, `query_transformation_enabled`, `query_transformation_strategy`, `chunk_size`, `chunk_overlap`, `chunking_strategy`, and `prompt_persona`. `llm_provider` and `llm_model` are null on a retrieval-only run. They are set only when answer generation is enabled, to the provider and model string supplied for that generation. The export does not fill them from `LLM_PROVIDER` or `LLM_MODEL` when generation did not run.
+`config_snapshot.resolved_environment` records the process values captured for the run: `hybrid_retrieval_enabled`, `enable_reranking`, `reranker_provider`, `enable_embedding_cache`, `max_context_chars`, `embedding_provider`, `embedding_model`, `query_transformation_enabled`, `query_transformation_strategy`, `chunk_size`, `chunk_overlap`, `chunking_strategy`, and `prompt_persona`. `llm_provider` and `llm_model` are null on a retrieval-only run. They are set only when `--answers` calls `generate_answer`. `llm_model` is the model string that function returns, and `llm_provider` is the process provider used for that call. The export does not fill either field from `LLM_PROVIDER` or `LLM_MODEL` when generation did not run. Persona stays `prompt_persona`.
 
 Each object in `per_query_metrics` has:
 
 - `query` — the fixture query
 - `original_query`, `transformed_queries`, `effective_retrieval_query`, and `timing_ms` — copied from the retrieval result. `timing_ms` is the stage latency that retrieval already computed (`transform`, `embed`, `search`, `rerank`, `context`, `total`). The exporter does not time the stages again. All four are null when a metadata filter matches no documents and retrieval does not run.
-- `metrics` — the rank metrics above
+- `metrics` — `mrr`, `recall@k`, `ndcg@k`, and `packed_presence` when the row has relevance labels. A no-evidence row with no `relevant_chunks` and no `relevant_doc_ids` omits those metrics. With `--answers`, a row also records `completeness`, `refusal_correctness`, `citation_support`, and `groundedness` for the labels it carries. Aggregates are the mean of the rows that recorded each metric.
 - `candidates` — the same order as `RetrievalResult.chunks`. Each candidate has `id`, `document_id`, `chunk_index`, `similarity`, and `score_type`. `vector_score`, `full_text_score`, `rrf_score`, `reranker_score`, and `rerank_order` are present only when that chunk has them. When a manifest resolved the row, the candidate also has `logical_key` beside the runtime `document_id`.
-- `context_preview` — the assembled context string
+- `context_preview` — the assembled context string. With `--answers`, this is the packed context passed to `generate_answer`.
+- `answer` — present only when `--answers` is on. The generated text, or null when the row has no answer label.
 - `metadata_filter` — the validated fixture filter, or null
 - `filter_excluded_all_documents` — true when that filter removed every document
 
 Compare mode still prints how many queries produced different candidates across arms.
 
-Each query needs `relevant_chunks` (`[document_id, chunk_index]`) and/or `relevant_doc_ids`, or `expected_result` set to `no_supporting_evidence` or `refusal` when the correct result has no supporting chunk. A row with neither fails to load. `doc_ids` are the documents to search. Those ids may be logical keys from the corpus declaration. `--manifest` is the file written by `load-eval-corpus`; it resolves each logical key to that run's document id and keeps the logical key on the resolved query. Omit `--manifest` for unit fixtures that already use synthetic ids such as `fixture-doc-01`.
+Each query needs `relevant_chunks` (`[document_id, chunk_index]`) and/or `relevant_doc_ids`, or `expected_result` set to `no_supporting_evidence` or `refusal` when the correct result has no supporting chunk. A row with neither fails to load. Answer labels are optional on that same row and are the canonical score when `--answers` is on. `expected_facts` is a list of strings or `{"text", "alternates"}` objects. Completeness is the fraction of those facts found in the answer. A fact matches when the answer contains its text or one alternate, compared case-insensitively as a substring. `expected_refusal` is `{"phrases", "forbidden"}`. Refusal correctness passes when the answer contains one labeled phrase and none of the forbidden strings. `expected_citation` is `{"document", "chunk_index", "page"}`; `chunk_index` and `page` are optional. Citation support passes when that target is on the packer's inclusion list. A chunk that was only retrieved or only globally selected does not count, and the check does not read the context string. `document` may be a logical key or a runtime id. When a manifest resolves the key, the label keeps both. `must_not_claim` is a list of strings. Groundedness is true when every expected fact that appears in the answer also appears in the saved packed context, and every `must_not_claim` string is absent from the answer. Rows without those labels omit the metric. The scorer does not paraphrase and does not call a judge.
+
+`doc_ids` are the documents to search. Those ids may be logical keys from the corpus declaration. `--manifest` is the file written by `load-eval-corpus`; it resolves each logical key to that run's document id and keeps the logical key on the resolved query. Omit `--manifest` for unit fixtures that already use synthetic ids such as `fixture-doc-01`.
 
 The question file declares the chunk settings its labels assume:
 
