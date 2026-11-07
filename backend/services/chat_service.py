@@ -270,6 +270,30 @@ async def _retrieve_chunks_for_documents(
     return merged_chunks
 
 
+def _chunk_global_order_key(chunk) -> tuple:
+    """Sort key: higher effective score first, then document_id, then chunk_index.
+
+    ``ChunkMatch.similarity`` is the comparable score for the current mode
+    (cosine in vector mode, within-document RRF in hybrid). Missing similarity
+    sorts last. Ties do not preserve request order.
+    """
+    similarity = getattr(chunk, "similarity", None)
+    document_id = getattr(chunk, "document_id", None)
+    chunk_index = getattr(chunk, "chunk_index", None)
+    return (
+        similarity is None,
+        0.0 if similarity is None else -float(similarity),
+        document_id is None,
+        "" if document_id is None else str(document_id),
+        chunk_index is None,
+        -1 if chunk_index is None else chunk_index,
+    )
+
+
+def _order_chunks_by_effective_score(chunks: list) -> list:
+    return sorted(chunks, key=_chunk_global_order_key)
+
+
 async def _finalize_retrieved_chunks(
     question: str,
     chunks: list,
@@ -455,6 +479,8 @@ async def retrieve_for_documents(
             allowed_document_ids=document_ids,
         )
 
+    all_chunks = _order_chunks_by_effective_score(all_chunks)
+
     rerank_started = time.perf_counter()
     matching_chunks, reranker_debug = await _finalize_retrieved_chunks(
         primary_query,
@@ -463,6 +489,8 @@ async def retrieve_for_documents(
         **_rerank_overrides(effective_retrieval_config),
     )
     rerank_ms = int((time.perf_counter() - rerank_started) * 1000)
+    if reranker_debug is None:
+        matching_chunks = matching_chunks[: effective_retrieval_config.match_count]
 
     context_started = time.perf_counter()
     context_kwargs = {}
@@ -521,6 +549,27 @@ def _build_sources(chunks: list) -> list[dict]:
                 source[field] = value
         sources.append(source)
     return sources
+
+
+def _build_source_snapshot(
+    chunks: list, sources: list[dict] | None = None
+) -> list[dict]:
+    """Copy display and provenance fields stored on the assistant message.
+
+    Live ``_build_sources`` omits ``document_id``. The stored copy includes it
+    so a later reader can render the citation without looking the document up.
+    Pass the already-built live ``sources`` so display fields cannot drift and
+    ``_build_sources`` is not run twice.
+    """
+    live_sources = sources if sources is not None else _build_sources(chunks)
+    snapshot: list[dict] = []
+    for chunk, source in zip(chunks, live_sources):
+        item = dict(source)
+        document_id = getattr(chunk, "document_id", None)
+        if document_id is not None:
+            item["document_id"] = str(document_id)
+        snapshot.append(item)
+    return snapshot
 
 
 def _is_compare_style_batch_query(doc_ids: list[str]) -> bool:
@@ -658,6 +707,7 @@ def _build_stream_complete_payload(
     model: str,
     retrieval_debug: dict | None = None,
     request_latency_ms: int | None = None,
+    message_id: str | None = None,
 ) -> dict:
     payload = {
         "type": "complete",
@@ -670,6 +720,9 @@ def _build_stream_complete_payload(
         payload["request_latency_ms"] = request_latency_ms
     if retrieval_debug is not None:
         payload["retrieval_debug"] = retrieval_debug
+    # Present only after the assistant row is stored. Omitted otherwise.
+    if message_id:
+        payload["message_id"] = message_id
     return payload
 
 
@@ -768,12 +821,13 @@ async def answer_question_for_document(
     context = retrieval.context
     retrieval_debug = retrieval.to_debug_dict() if debug_retrieval else None
     answer, latency_ms, model_name = await generate_answer(question, context)
+    sources = _build_sources(matching_chunks)
     base: dict = {
         "question": question,
         "doc_id": doc_id,
         "chunks": len(matching_chunks),
         "answer": answer,
-        "sources": _build_sources(matching_chunks),
+        "sources": sources,
         "latency_ms": latency_ms,
         "model": model_name,
         "session_id": session_id,
@@ -800,6 +854,7 @@ async def answer_question_for_document(
                 question=question,
                 answer=answer,
                 tenant_id=tenant_id,
+                sources=_build_source_snapshot(matching_chunks, sources),
             )
         except Exception as e:
             logger.error(f"Failed to store chat turn for session {session_id}: {e}", exc_info=True)
@@ -934,15 +989,19 @@ async def answer_question_stream_for_document(
         if not full_answer.strip():
             full_answer = "No response."
 
+        assistant_message_id: str | None = None
         if session_id:
             try:
                 import db
-                await db.store_chat_turn(
+                _user_message_id, raw_assistant_id = await db.store_chat_turn(
                     session_id=session_id,
                     question=question,
                     answer=full_answer,
                     tenant_id=tenant_id,
+                    sources=_build_source_snapshot(matching_chunks, sources),
                 )
+                if isinstance(raw_assistant_id, str) and raw_assistant_id:
+                    assistant_message_id = raw_assistant_id
             except Exception as e:
                 logger.error(
                     f"Failed to store streaming chat turn for session {session_id}: {e}",
@@ -958,6 +1017,7 @@ async def answer_question_stream_for_document(
                 model=model_name,
                 retrieval_debug=retrieval_debug,
                 request_latency_ms=request_latency_ms,
+                message_id=assistant_message_id,
             ),
         )
         # Legacy completion marker — deprecated; retained for backward compatibility.
@@ -1244,6 +1304,7 @@ async def answer_questions_for_documents_batch(
                         question=query["question"],
                         answer=answer,
                         tenant_id=tenant_id,
+                        sources=_build_source_snapshot(matching_chunks, sources),
                     )
                 except Exception as e:
                     logger.error(

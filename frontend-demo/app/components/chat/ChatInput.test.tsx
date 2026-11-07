@@ -11,8 +11,11 @@ const mockPoll = {
   awaitingProcessing: false,
   queuePosition: undefined,
   processingTime: undefined,
+  fileName: undefined,
   errorMessage: undefined,
   status: undefined,
+  apiStatus: undefined,
+  statusDetail: undefined,
 };
 
 function renderChatInput(overrides: Partial<ComponentProps<typeof ChatInput>> = {}) {
@@ -43,6 +46,13 @@ describe("ChatInput", () => {
   it("disables send when input is empty", () => {
     renderChatInput({ sendDisabled: true, input: "" });
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+  });
+
+  it("shows typed markdown markers as plain text", () => {
+    renderChatInput({ input: "See **bold** and _emphasis_" });
+    expect(screen.getByRole("textbox", { name: "Message" })).toHaveValue(
+      "See **bold** and _emphasis_"
+    );
   });
 
   it("enables send when input has text and send is allowed", () => {
@@ -85,6 +95,27 @@ describe("ChatInput", () => {
     expect(
       screen.getByText("Document still processing — sending is disabled until it is ready.")
     ).toBeInTheDocument();
+  });
+
+  it("explains a failed attachment before the user sends", () => {
+    renderChatInput({
+      input: "",
+      sendDisabled: true,
+      attachment: {
+        fileName: "guide.pdf",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+        status: "failed",
+      },
+    });
+
+    expect(
+      screen.getByText("Document processing failed. Please remove it and upload again.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("guide.pdf")).toBeInTheDocument();
+    expect(screen.queryByText("Failed")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove attachment" })).toBeEnabled();
+    expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled();
   });
 
   it("shows the selected document name for session scope when a document is attached", () => {

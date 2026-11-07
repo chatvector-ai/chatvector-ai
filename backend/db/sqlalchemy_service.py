@@ -1,3 +1,4 @@
+import copy
 import logging
 import os
 import asyncio
@@ -8,7 +9,9 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
+    String,
     and_,
+    cast,
     delete,
     func,
     literal,
@@ -23,9 +26,9 @@ from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from core.models import Document, DocumentChunk, SessionRecord, SessionDocument
+from core.models import ChatMessage, Document, DocumentChunk, SessionRecord, SessionDocument
 from core.config import config
-from core.session import Session
+from core.session import NEW_SESSION_LABEL, Session
 from db.base import (
     REPLACEMENT_FAILED,
     REPLACEMENT_IN_PROGRESS,
@@ -109,6 +112,7 @@ def _document_row_to_dict(document: Document) -> dict:
 def _document_status_payload(document: Document) -> dict:
     return {
         "document_id": str(document.id),
+        "file_name": document.file_name,
         "status": document.status,
         "status_detail": document.status_detail,
         "chunks": document.chunks,
@@ -1117,8 +1121,11 @@ class SQLAlchemyService(DatabaseService):
         question: str,
         answer: str,
         tenant_id: str,
+        *,
+        sources: Optional[list] = None,
     ) -> tuple[str, str]:
         tenant_id = require_tenant_id(tenant_id, method="store_chat_turn")
+        assistant_sources = copy.deepcopy(sources) if sources is not None else None
         async with self.async_session() as session:
             from core.models import ChatMessage
 
@@ -1141,6 +1148,7 @@ class SQLAlchemyService(DatabaseService):
                         tenant_id=tenant_id,
                         role="assistant",
                         content=answer,
+                        sources=assistant_sources,
                     )
                 )
             logger.debug(
@@ -1183,6 +1191,7 @@ class SQLAlchemyService(DatabaseService):
                     "role": msg.role,
                     "content": msg.content,
                     "created_at": str(msg.created_at) if msg.created_at else None,
+                    "sources": msg.sources,
                 }
                 for msg in reversed(messages)
             ]
@@ -1190,7 +1199,10 @@ class SQLAlchemyService(DatabaseService):
     # ── Session persistence ──────────────────────────────────────────────────
 
     def _session_from_record(
-        self, record: SessionRecord, document_ids: list[str]
+        self,
+        record: SessionRecord,
+        document_ids: list[str],
+        display_label: str = NEW_SESSION_LABEL,
     ) -> Session:
         from datetime import timezone
 
@@ -1205,6 +1217,7 @@ class SQLAlchemyService(DatabaseService):
             created_at=_to_aware(record.created_at),
             last_active=_to_aware(record.last_active),
             document_ids=document_ids,
+            display_label=display_label,
         )
 
     async def _load_session_document_ids(
@@ -1251,7 +1264,12 @@ class SQLAlchemyService(DatabaseService):
                 )
                 return None
             doc_ids = await self._load_session_document_ids(db_session, session_id)
-            return self._session_from_record(record, doc_ids)
+            labels = await self._load_display_labels(db_session, [session_id])
+            return self._session_from_record(
+                record,
+                doc_ids,
+                labels.get(session_id, NEW_SESSION_LABEL),
+            )
 
     async def get_session_record(
         self, session_id: str, tenant_id: Optional[str]
@@ -1277,7 +1295,94 @@ class SQLAlchemyService(DatabaseService):
             await db_session.commit()
             await db_session.refresh(record)
             doc_ids = await self._load_session_document_ids(db_session, session_id)
-            return self._session_from_record(record, doc_ids)
+            labels = await self._load_display_labels(db_session, [session_id])
+            return self._session_from_record(
+                record,
+                doc_ids,
+                labels.get(session_id, NEW_SESSION_LABEL),
+            )
+
+    async def _load_display_labels(
+        self, db_session: AsyncSession, session_ids: list[str]
+    ) -> dict[str, str]:
+        """Compute display labels for a set of sessions in two queries.
+
+        The first query picks the earliest useful user message per session.
+        The second picks one attached file name per session. Neither loops
+        over sessions.
+        """
+        if not session_ids:
+            return {}
+
+        useful_content = func.regexp_replace(
+            ChatMessage.content, "[[:space:]]", "", "g"
+        )
+        question_rank = func.row_number().over(
+            partition_by=ChatMessage.session_id,
+            order_by=(ChatMessage.created_at.asc(), ChatMessage.id.asc()),
+        )
+        question_rows = (
+            select(
+                ChatMessage.session_id.label("session_id"),
+                ChatMessage.content.label("content"),
+                question_rank.label("rn"),
+            )
+            .where(
+                ChatMessage.session_id.in_(session_ids),
+                ChatMessage.role == "user",
+                useful_content != "",
+            )
+            .subquery()
+        )
+        question_result = await db_session.execute(
+            select(question_rows.c.session_id, question_rows.c.content).where(
+                question_rows.c.rn == 1
+            )
+        )
+        questions: dict[str, str] = {}
+        for session_id, content in question_result.all():
+            collapsed = " ".join((content or "").split())
+            if collapsed:
+                questions[session_id] = collapsed
+
+        doc_id_text = cast(Document.id, String)
+        useful_file_name = func.regexp_replace(
+            Document.file_name, "[[:space:]]", "", "g"
+        )
+        file_rank = func.row_number().over(
+            partition_by=SessionDocument.session_id,
+            order_by=(Document.created_at.desc(), doc_id_text.asc()),
+        )
+        file_rows = (
+            select(
+                SessionDocument.session_id.label("session_id"),
+                Document.file_name.label("file_name"),
+                file_rank.label("rn"),
+            )
+            .join(Document, doc_id_text == SessionDocument.document_id)
+            .where(
+                SessionDocument.session_id.in_(session_ids),
+                useful_file_name != "",
+            )
+            .subquery()
+        )
+        file_result = await db_session.execute(
+            select(file_rows.c.session_id, file_rows.c.file_name).where(
+                file_rows.c.rn == 1
+            )
+        )
+        file_names: dict[str, str] = {}
+        for session_id, file_name in file_result.all():
+            cleaned = (file_name or "").strip()
+            if cleaned:
+                file_names[session_id] = cleaned
+
+        return {
+            session_id: questions.get(session_id)
+            or file_names.get(session_id)
+            or NEW_SESSION_LABEL
+            for session_id in session_ids
+        }
 
     async def list_session_records(self, tenant_id: Optional[str]) -> list[Session]:
         async with self.async_session() as db_session:
@@ -1302,8 +1407,13 @@ class SQLAlchemyService(DatabaseService):
             for session_id, document_id in doc_result.all():
                 docs_by_session[session_id].append(document_id)
 
+            labels = await self._load_display_labels(db_session, session_ids)
             return [
-                self._session_from_record(record, docs_by_session.get(record.id, []))
+                self._session_from_record(
+                    record,
+                    docs_by_session.get(record.id, []),
+                    labels.get(record.id, NEW_SESSION_LABEL),
+                )
                 for record in records
             ]
 

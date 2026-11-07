@@ -502,6 +502,8 @@ async def store_chat_turn(
     question: str,
     answer: str,
     tenant_id: str,
+    *,
+    sources: list | None = None,
 ) -> tuple[str, str]:
     tenant_id = require_tenant_id(tenant_id, method="store_chat_turn")
     service = get_db_service()
@@ -510,6 +512,7 @@ async def store_chat_turn(
         question=question,
         answer=answer,
         tenant_id=tenant_id,
+        sources=sources,
     )
 
 

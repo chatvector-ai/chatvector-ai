@@ -150,6 +150,42 @@ describe("parseRawEvent", () => {
     // session_id should NOT be present in the result
     expect(result).not.toHaveProperty("session_id");
   });
+
+  it("accepts complete events with and without message_id", () => {
+    const withId = {
+      type: "complete",
+      session_id: "sess-1",
+      message_id: "asst-msg-9",
+      sources: [],
+      latency_ms: 10,
+      model: "m",
+    };
+    const withoutId = {
+      type: "complete",
+      session_id: "sess-1",
+      sources: [],
+      latency_ms: 10,
+      model: "m",
+    };
+
+    const present = parseRawEvent(
+      `event: complete\ndata: ${JSON.stringify(withId)}`,
+    );
+    const absent = parseRawEvent(
+      `event: complete\ndata: ${JSON.stringify(withoutId)}`,
+    );
+
+    expect(present).toMatchObject({
+      type: "complete",
+      message_id: "asst-msg-9",
+      session_id: "sess-1",
+    });
+    expect(absent).toMatchObject({
+      type: "complete",
+      session_id: "sess-1",
+    });
+    expect(absent).not.toHaveProperty("message_id");
+  });
 });
 
 // ---------------------------------------------------------------------------

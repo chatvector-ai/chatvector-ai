@@ -138,7 +138,7 @@ Unknown preset names return 400 `preset_not_found` on `/chat`, `/chat/stream`, a
 
 ## Ingestion status
 
-`GET /documents/{id}/status` and the status SSE stream report pipeline state. Typical values include `uploaded`, `queued`, `extracting`, `chunking`, `embedding`, `storing`, `retrying`, `completed`, and `failed`. `retrying` is not terminal: status clients should keep reading, and `ingestion.failed` is not sent, until retries are exhausted or the error is not retryable. Terminal success sends `ingestion.completed` only when webhooks are enabled.
+`GET /documents/{id}/status` and the status SSE stream report pipeline state. Typical values include `uploaded`, `queued`, `extracting`, `chunking`, `embedding`, `storing`, `retrying`, `completed`, and `failed`. `retrying` is not terminal: status clients should keep reading, and `ingestion.failed` is not sent, until retries are exhausted or the error is not retryable. Terminal success sends `ingestion.completed` only when webhooks are enabled. Both payloads include `file_name` from the document row when it is set. During a replacement that name stays the previous file until cutover, then becomes the new file's name.
 
 The optional `job` object can include `attempt`, timestamps, and `failure_class` on a terminal failure. A missing durable artifact is a terminal failure with a `job_payload_missing` classification.
 

@@ -98,6 +98,11 @@ export default function ChatInput({
           Document still processing — sending is disabled until it is ready.
         </p>
       )}
+      {attachment?.status === "failed" && (
+        <p className="px-4 pb-1 text-xs text-red-400 bg-background">
+          Document processing failed. Please remove it and upload again.
+        </p>
+      )}
       {sessionNotice && !attachment && (
         <p className="px-4 pb-1 text-xs text-amber-400 bg-background">{sessionNotice}</p>
       )}

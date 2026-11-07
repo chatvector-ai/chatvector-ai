@@ -21,11 +21,8 @@ function chipLabel(
   chunks: Props["chunks"],
   awaitingProcessing: boolean
 ): string {
-  if (status === "ready") {
+  if (status === "ready" || status === "failed") {
     return fileName;
-  }
-  if (status === "failed") {
-    return STAGE_LABELS.failed;
   }
   if (awaitingProcessing && !stage) {
     return "Processing…";
@@ -68,6 +65,7 @@ export default function AttachmentChip({
     awaitingProcessing
   );
   const tone = iconAndTextClass(status);
+  const statusLabel = label === fileName ? null : label;
 
   // Surface the upload queue position only while the document waits its turn.
   // Once polling reports active progress (awaitingProcessing flips false) the
@@ -86,8 +84,11 @@ export default function AttachmentChip({
         <span
           className={`min-w-0 max-w-[min(100%,14rem)] truncate text-xs font-medium sm:max-w-[18rem] ${tone}`}
         >
-          {label}
+          {fileName}
         </span>
+        {statusLabel && (
+          <span className={`shrink-0 text-xs font-medium ${tone}`}>{statusLabel}</span>
+        )}
         {status === "ready" && processingTime && (
           <span className="shrink-0 text-[10px] text-subtle" title={`Processed in ${processingTime}`}>
             {processingTime}

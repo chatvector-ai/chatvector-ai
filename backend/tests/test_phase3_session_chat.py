@@ -711,7 +711,10 @@ async def test_empty_stream_persists_no_response():
         patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
         patch("services.chat_service.generate_answer_stream", new=empty_stream),
         patch("services.providers.get_llm_provider", return_value=mock_provider),
-        patch("db.store_chat_turn", new=AsyncMock()) as mock_turn,
+        patch(
+            "db.store_chat_turn",
+            new=AsyncMock(return_value=("user-msg", "assistant-msg")),
+        ) as mock_turn,
     ):
         events = []
         async for chunk in answer_question_stream_for_document(

@@ -174,6 +174,12 @@ def build_document_status_response(
     if status_payload.get("error") is not None:
         response["error"] = status_payload["error"]
 
+    # Present when the document row has a name. Omitted when the payload has
+    # no file_name so older callers still receive the rest of the status.
+    file_name = status_payload.get("file_name")
+    if isinstance(file_name, str):
+        response["file_name"] = file_name
+
     if queue_position is not None:
         response["queue_position"] = queue_position
 

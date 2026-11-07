@@ -275,6 +275,7 @@ class DocumentStatus:
     status_detail: str | None = None
     job: JSONDict | None = None
     metadata: JSONDict | None = None
+    file_name: str | None = None
     raw: JSONDict = field(default_factory=dict, repr=False)
 
     @classmethod
@@ -296,6 +297,7 @@ class DocumentStatus:
             status_detail=_optional_str(payload.get("status_detail")),
             job=dict(job) if isinstance(job, Mapping) else None,
             metadata=dict(metadata) if isinstance(metadata, Mapping) else None,
+            file_name=_optional_str(payload.get("file_name")),
             raw=raw,
         )
 
@@ -321,6 +323,8 @@ class DocumentStatus:
             payload["job"] = dict(self.job)
         if self.metadata is not None:
             payload["metadata"] = dict(self.metadata)
+        if self.file_name is not None:
+            payload["file_name"] = self.file_name
         return payload
 
 
@@ -468,6 +472,7 @@ class SessionHistoryMessage:
     role: str
     content: str
     created_at: str | None = None
+    sources: list[JSONDict] | None = None
     raw: JSONDict = field(default_factory=dict, repr=False)
 
     @classmethod
@@ -479,6 +484,7 @@ class SessionHistoryMessage:
             role=str(payload.get("role", "")),
             content=str(payload.get("content", "")),
             created_at=_optional_str(payload.get("created_at")),
+            sources=_parse_history_sources(payload.get("sources")),
             raw=raw,
         )
 
@@ -488,6 +494,7 @@ class SessionHistoryMessage:
             "id": self.id,
             "role": self.role,
             "content": self.content,
+            "sources": self.sources,
         }
         if self.created_at is not None:
             payload["created_at"] = self.created_at
@@ -528,6 +535,7 @@ class Session:
     last_active: str
     metadata: JSONDict
     document_ids: list[str]
+    display_label: str = "New session"
     raw: JSONDict = field(default_factory=dict, repr=False)
 
     @classmethod
@@ -535,6 +543,7 @@ class Session:
         """Build a session model from an API response payload."""
         raw = dict(payload)
         metadata = payload.get("metadata")
+        label = payload.get("display_label")
         return cls(
             id=str(payload.get("id", "")),
             tenant_id=_optional_str(payload.get("tenant_id")),
@@ -542,6 +551,7 @@ class Session:
             last_active=str(payload.get("last_active", "")),
             metadata=dict(metadata) if isinstance(metadata, Mapping) else {},
             document_ids=_string_list(payload.get("document_ids")),
+            display_label=label if isinstance(label, str) and label else "New session",
             raw=raw,
         )
 
@@ -554,6 +564,7 @@ class Session:
             "last_active": self.last_active,
             "metadata": dict(self.metadata),
             "document_ids": list(self.document_ids),
+            "display_label": self.display_label,
         }
 
 
@@ -669,6 +680,7 @@ class StreamChatEvent:
     latency_ms: int = 0
     model: str = ""
     retrieval_debug: RetrievalDebugMetadata | None = None
+    message_id: str | None = None
 
     @classmethod
     def token(cls, content: str) -> "StreamChatEvent":
@@ -684,8 +696,14 @@ class StreamChatEvent:
         latency_ms: int,
         model: str,
         retrieval_debug: RetrievalDebugMetadata | None = None,
+        message_id: str | None = None,
     ) -> "StreamChatEvent":
-        """Build a structured completion event."""
+        """Build a structured completion event.
+
+        ``message_id`` is optional. It is the persisted assistant message id
+        when the server stored the turn, and ``None`` when the payload omits
+        it. A missing id is not an error.
+        """
         return cls(
             type="complete",
             session_id=session_id,
@@ -693,6 +711,7 @@ class StreamChatEvent:
             latency_ms=latency_ms,
             model=model,
             retrieval_debug=retrieval_debug,
+            message_id=message_id,
         )
 
 
@@ -930,6 +949,19 @@ def _parse_sources(value: Any) -> list[ChatSource]:
     if not isinstance(value, list):
         return []
     return [ChatSource.from_dict(item) for item in value if isinstance(item, Mapping)]
+
+
+def _parse_history_sources(value: Any) -> list[JSONDict] | None:
+    """Parse a stored history snapshot, keeping ``None`` distinct from ``[]``.
+
+    Extra location keys such as ``page_end`` are copied through rather than
+    stripped so a later reader can render the citation from this JSON alone.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        return None
+    return [dict(item) for item in value if isinstance(item, Mapping)]
 
 
 def _parse_retrieval_debug(value: Any) -> RetrievalDebugMetadata | None:

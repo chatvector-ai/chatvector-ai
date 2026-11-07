@@ -27,11 +27,19 @@ set-tenant-key-expiry
 set-tenant-key-external-user-id
     Assign or clear external_user_id on a key.
 
+load-eval-corpus
+    Load a fixed corpus into one tenant through the production extract,
+    chunk, embed, and store stages. Does not call the public upload route.
+    Writes a manifest from stable logical keys to the document ids created
+    for that run. A repeat run replaces only that tenant's documents.
+
 eval
     Run retrieval evaluation/benchmarking against a query fixture dataset.
     Computes recall@k, MRR, and nDCG@k; supports comparing multiple
     retrieval config "arms" in one run and exporting a reproducible JSON
-    artifact. Never calls answer-generation. See DEVELOPMENT.md
+    artifact. Never calls answer-generation. Optional --manifest resolves
+    logical keys to document ids and refuses a chunk-setting mismatch
+    before scoring. See DEVELOPMENT.md
     ("Retrieval evaluation") for the dataset and config-arm schema.
 """
 
@@ -211,6 +219,7 @@ async def cmd_eval(
     match_count: int,
     export_path: str | None,
     allow_cache: bool,
+    manifest_path: str | None = None,
 ) -> None:
     from core.config import config as core_config
     from services import context_service
@@ -218,7 +227,7 @@ async def cmd_eval(
     from services.eval_fixtures import load_dataset
     from services.eval_service import diff_arms, run_eval
 
-    dataset = load_dataset(dataset_path)
+    dataset = load_dataset(dataset_path, manifest_path=manifest_path)
 
     if config_paths:
         arms = []
@@ -293,6 +302,25 @@ async def cmd_eval(
 
     if export_path:
         print(f"Exported full run artifact to {export_path}")
+
+
+async def cmd_load_eval_corpus(
+    corpus_dir: str,
+    declaration_path: str,
+    tenant_id: str,
+    manifest_path: str,
+) -> None:
+    from services.eval_corpus import load_eval_corpus
+
+    manifest = await load_eval_corpus(
+        corpus_dir,
+        declaration_path,
+        tenant_id,
+        manifest_path,
+    )
+    count = len(manifest["documents"])
+    print(f"Loaded {count} documents into tenant {tenant_id!r}.")
+    print(f"Manifest: {manifest_path}")
 
 
 def main() -> None:
@@ -423,6 +451,39 @@ def main() -> None:
         action="store_true",
         help="Allow the embedding cache during eval (default: forced off for reproducibility)",
     )
+    eval_parser.add_argument(
+        "--manifest",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Corpus manifest mapping logical keys to this run's document ids. "
+            "Chunk settings must match the question file or the run stops before scoring."
+        ),
+    )
+
+    load_parser = subparsers.add_parser(
+        "load-eval-corpus",
+        help="Load a fixed evaluation corpus into one tenant",
+    )
+    load_parser.add_argument(
+        "--corpus-dir",
+        required=True,
+        metavar="PATH",
+        help="Directory of corpus files named by the declaration",
+    )
+    load_parser.add_argument(
+        "--declaration",
+        required=True,
+        metavar="PATH",
+        help="JSON file of logical keys, file names, metadata, and chunk settings",
+    )
+    load_parser.add_argument("--tenant-id", required=True, metavar="ID")
+    load_parser.add_argument(
+        "--manifest",
+        required=True,
+        metavar="PATH",
+        help="Where to write the logical-key to document-id manifest",
+    )
 
     args = parser.parse_args()
 
@@ -466,18 +527,40 @@ def main() -> None:
             )
         )
     elif args.command == "eval":
+        from services.eval_fixtures import EvalDatasetError
+
         k_values = [int(x) for x in args.k.split(",") if x.strip()]
-        asyncio.run(
-            cmd_eval(
-                args.dataset,
-                args.tenant_id,
-                k_values,
-                args.config_paths,
-                args.match_count,
-                args.export_path,
-                args.allow_cache,
+        try:
+            asyncio.run(
+                cmd_eval(
+                    args.dataset,
+                    args.tenant_id,
+                    k_values,
+                    args.config_paths,
+                    args.match_count,
+                    args.export_path,
+                    args.allow_cache,
+                    args.manifest,
+                )
             )
-        )
+        except EvalDatasetError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
+    elif args.command == "load-eval-corpus":
+        from services.eval_corpus import EvalCorpusError
+
+        try:
+            asyncio.run(
+                cmd_load_eval_corpus(
+                    args.corpus_dir,
+                    args.declaration,
+                    args.tenant_id,
+                    args.manifest,
+                )
+            )
+        except EvalCorpusError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
     else:
         parser.print_help()
         sys.exit(1)

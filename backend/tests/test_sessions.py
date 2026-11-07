@@ -81,7 +81,11 @@ async def test_list_sessions():
         "routes.sessions.session_service.list_sessions",
         new=AsyncMock(
             return_value=[
-                Session(id="test-id-1", tenant_id="tenant-1"),
+                Session(
+                    id="test-id-1",
+                    tenant_id="tenant-1",
+                    display_label="Who approves expenses?",
+                ),
                 Session(id="test-id-2", tenant_id="tenant-1"),
             ]
         ),
@@ -91,6 +95,8 @@ async def test_list_sessions():
         assert isinstance(result, SessionListResponse)
         assert len(result.sessions) == 2
         assert result.sessions[0].id == "test-id-1"
+        assert result.sessions[0].display_label == "Who approves expenses?"
+        assert result.sessions[1].display_label == "New session"
         mock_list.assert_awaited_once_with(tenant_id="tenant-1")
 
 
@@ -157,6 +163,67 @@ async def test_get_session_history_success():
             tenant_id="tenant-1",
             limit=20,
         )
+        assert result.messages[0].sources is None
+        assert result.messages[1].sources is None
+
+
+@pytest.mark.asyncio
+async def test_get_session_history_returns_stored_sources():
+    history = [
+        {
+            "id": "msg-user",
+            "role": "user",
+            "content": "Hello",
+            "created_at": "2026-01-01T00:00:00Z",
+            "sources": None,
+        },
+        {
+            "id": "msg-empty",
+            "role": "assistant",
+            "content": "No citations",
+            "created_at": "2026-01-01T00:00:01Z",
+            "sources": [],
+        },
+        {
+            "id": "msg-asst",
+            "role": "assistant",
+            "content": "Cited answer",
+            "created_at": "2026-01-01T00:00:02Z",
+            "sources": [
+                {
+                    "document_id": "doc-1",
+                    "file_name": "old.pdf",
+                    "page_number": 2,
+                    "chunk_index": 1,
+                    "page_end": 4,
+                }
+            ],
+        },
+    ]
+
+    with patch(
+        "routes.sessions.session_service.get_session",
+        new=AsyncMock(return_value=Session(id="test-id", tenant_id="tenant-1")),
+    ), patch(
+        "routes.sessions.db.get_session_history",
+        new=AsyncMock(return_value=history),
+    ):
+        result = await get_session_history(
+            "test-id",
+            auth=AuthContext(tenant_id="tenant-1"),
+        )
+
+    assert result.messages[0].sources is None
+    assert result.messages[1].sources == []
+    assert result.messages[2].sources == [
+        {
+            "document_id": "doc-1",
+            "file_name": "old.pdf",
+            "page_number": 2,
+            "chunk_index": 1,
+            "page_end": 4,
+        }
+    ]
 
 
 @pytest.mark.asyncio

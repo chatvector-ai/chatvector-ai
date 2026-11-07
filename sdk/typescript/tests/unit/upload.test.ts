@@ -41,9 +41,15 @@ describe("uploadDocument", () => {
       tmpdir(),
       `chatvector-sdk-missing-${process.pid}-${Date.now()}.pdf`,
     );
-    await expect(
+    const error = await captureRejection(
       makeClient(fetch).uploadDocument({ path: missingPath }),
-    ).rejects.toBeInstanceOf(TypeError);
+    );
+    // Node 22 and 24.21 report a missing file as TypeError
+    // ERR_INVALID_ARG_VALUE. Node 24.22+ reports the stat failure as ENOENT.
+    expect(error).toBeInstanceOf(Error);
+    expect(["ENOENT", "ERR_INVALID_ARG_VALUE"]).toContain(
+      (error as { code?: string }).code,
+    );
     expect(fetch).not.toHaveBeenCalled();
   });
 

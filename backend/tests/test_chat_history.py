@@ -121,7 +121,10 @@ async def test_stream_finalization_persistence():
          patch("services.chat_service.get_session", new=AsyncMock(return_value=None)), \
          patch("services.chat_service.generate_answer_stream") as mock_stream, \
          patch("db.get_session_history", new=AsyncMock(return_value=[])) as mock_history, \
-         patch("db.store_chat_turn", new=AsyncMock()) as mock_store:
+         patch(
+             "db.store_chat_turn",
+             new=AsyncMock(return_value=("user-msg", "assistant-msg")),
+         ) as mock_store:
          
         async def fake_stream(*args, **kwargs):
             yield "stream part 1 "

@@ -504,6 +504,7 @@ async def test_answer_question_stream_for_document_success():
         assert complete_event == "complete"
         assert complete_data["type"] == "complete"
         assert complete_data["session_id"] is None
+        assert "message_id" not in complete_data
         assert complete_data["sources"] == []
         assert complete_data["latency_ms"] >= 0
         assert complete_data["request_latency_ms"] >= complete_data["latency_ms"]
@@ -577,7 +578,7 @@ async def test_stream_history_loaded_and_bounded_before_transform():
         patch("services.chat_service.build_context_from_chunks", return_value="ctx"),
         patch("services.chat_service.generate_answer_stream", new=mock_stream),
         patch("db.get_session_history", new=AsyncMock(return_value=full_history)),
-        patch("db.store_chat_turn", new=AsyncMock()),
+        patch("db.store_chat_turn", new=AsyncMock(return_value=("user-msg", "assistant-msg"))),
     ):
         async for _ in answer_question_stream_for_document(
             "follow-up?", "doc-1", match_count=5,
@@ -668,7 +669,7 @@ async def test_stream_complete_event_includes_sources_and_session_id():
         patch("services.chat_service.generate_answer_stream", new=mock_generate_stream),
         patch("services.providers.get_llm_provider", return_value=mock_provider),
         patch("db.get_session_history", new=AsyncMock(return_value=[])),
-        patch("db.store_chat_turn", new=AsyncMock()),
+        patch("db.store_chat_turn", new=AsyncMock(return_value=("user-msg", "assistant-msg"))),
     ):
         events = []
         async for event in answer_question_stream_for_document(
@@ -776,6 +777,131 @@ async def test_stream_legacy_done_follows_complete_event():
 
     event_names = [_parse_sse_event(event)[0] for event in events]
     assert event_names == ["token", "complete", "done"]
+
+
+@pytest.mark.asyncio
+async def test_stream_complete_includes_persisted_assistant_message_id():
+    """A stored assistant row's id is the optional complete.message_id."""
+    from services.chat_service import answer_question_stream_for_document
+
+    async def mock_generate_stream(q, c):
+        yield "answer"
+
+    mock_store = AsyncMock(return_value=("user-msg-1", "asst-msg-9"))
+    with (
+        patch("services.chat_service._resolve_retrieval_doc_ids", new=AsyncMock(return_value=["doc-1"])),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(return_value=_mock_transform_result("q")),
+        ),
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="context"),
+        patch("services.chat_service.generate_answer_stream", new=mock_generate_stream),
+        patch("services.providers.get_llm_provider", return_value=MagicMock(model_name="m")),
+        patch("db.get_session_history", new=AsyncMock(return_value=[])),
+        patch("db.store_chat_turn", new=mock_store),
+    ):
+        events = [
+            event
+            async for event in answer_question_stream_for_document(
+                "Q?",
+                "doc-1",
+                session_id="sess-stored",
+                auth=TEST_AUTH,
+            )
+        ]
+
+    event_names = [_parse_sse_event(event)[0] for event in events]
+    assert event_names == ["token", "complete", "done"]
+    _, complete_data = _parse_sse_event(events[-2])
+    assert complete_data["message_id"] == "asst-msg-9"
+    assert complete_data["session_id"] == "sess-stored"
+    assert "user-msg-1" not in complete_data.values()
+    mock_store.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_stream_complete_omits_message_id_when_nothing_is_persisted():
+    """No session means no store and no message_id, and complete still emits."""
+    from services.chat_service import answer_question_stream_for_document
+
+    async def mock_generate_stream(q, c):
+        yield "answer"
+
+    mock_store = AsyncMock(return_value=("user-msg-1", "asst-msg-9"))
+    with (
+        patch("services.chat_service._resolve_retrieval_doc_ids", new=AsyncMock(return_value=["doc-1"])),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(return_value=_mock_transform_result("q")),
+        ),
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="context"),
+        patch("services.chat_service.generate_answer_stream", new=mock_generate_stream),
+        patch("services.providers.get_llm_provider", return_value=MagicMock(model_name="m")),
+        patch("db.store_chat_turn", new=mock_store),
+    ):
+        events = [
+            event
+            async for event in answer_question_stream_for_document(
+                "Q?",
+                "doc-1",
+                auth=TEST_AUTH,
+            )
+        ]
+
+    event_names = [_parse_sse_event(event)[0] for event in events]
+    assert "error" not in event_names
+    assert event_names[-2:] == ["complete", "done"]
+    _, complete_data = _parse_sse_event(events[-2])
+    assert complete_data["type"] == "complete"
+    assert "message_id" not in complete_data
+    mock_store.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stream_complete_omits_message_id_when_store_fails():
+    """A failed store still emits complete and does not invent message_id."""
+    from services.chat_service import answer_question_stream_for_document
+
+    async def mock_generate_stream(q, c):
+        yield "answer"
+
+    mock_store = AsyncMock(side_effect=RuntimeError("db down"))
+    with (
+        patch("services.chat_service._resolve_retrieval_doc_ids", new=AsyncMock(return_value=["doc-1"])),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(return_value=_mock_transform_result("q")),
+        ),
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch("services.chat_service._retrieve_chunks_for_documents", new=AsyncMock(return_value=[])),
+        patch("services.chat_service.build_context_from_chunks", return_value="context"),
+        patch("services.chat_service.generate_answer_stream", new=mock_generate_stream),
+        patch("services.providers.get_llm_provider", return_value=MagicMock(model_name="m")),
+        patch("db.get_session_history", new=AsyncMock(return_value=[])),
+        patch("db.store_chat_turn", new=mock_store),
+    ):
+        events = [
+            event
+            async for event in answer_question_stream_for_document(
+                "Q?",
+                "doc-1",
+                session_id="sess-store-fail",
+                auth=TEST_AUTH,
+            )
+        ]
+
+    event_names = [_parse_sse_event(event)[0] for event in events]
+    assert "error" not in event_names
+    assert event_names == ["token", "complete", "done"]
+    _, complete_data = _parse_sse_event(events[-2])
+    assert complete_data["type"] == "complete"
+    assert complete_data["session_id"] == "sess-store-fail"
+    assert "message_id" not in complete_data
+    mock_store.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

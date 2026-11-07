@@ -76,6 +76,21 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(summary.status_detail, "replacement_in_progress")
         self.assertEqual(summary.to_dict()["status_detail"], "replacement_in_progress")
 
+    def test_document_status_parses_file_name_when_present(self) -> None:
+        status = DocumentStatus.from_dict(
+            {"document_id": "d", "status": "completed", "file_name": "notes.txt"}
+        )
+        self.assertEqual(status.file_name, "notes.txt")
+        self.assertEqual(status.to_dict()["file_name"], "notes.txt")
+        self.assertEqual(status.status, "completed")
+
+    def test_document_status_omits_file_name_when_absent(self) -> None:
+        status = DocumentStatus.from_dict({"document_id": "d", "status": "queued"})
+        self.assertIsNone(status.file_name)
+        self.assertNotIn("file_name", status.to_dict())
+        self.assertEqual(status.to_dict()["document_id"], "d")
+        self.assertEqual(status.to_dict()["status"], "queued")
+
 
 class SyncClientTests(unittest.TestCase):
     def setUp(self) -> None:

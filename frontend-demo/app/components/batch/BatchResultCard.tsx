@@ -68,7 +68,7 @@ export function BatchResultCard({
         }
         zeroChunksMessage="No chunks retrieved for this query."
         showZeroChunks={showBody && !isError}
-        textClassName="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground"
+        textClassName="break-words text-sm leading-relaxed text-foreground"
         citationClassName="text-xs text-muted"
         metadataClassName="text-xs text-muted"
         zeroChunksClassName="text-sm text-muted italic"

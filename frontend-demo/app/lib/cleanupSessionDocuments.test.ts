@@ -27,6 +27,7 @@ describe("cleanupSessionDocuments", () => {
       last_active: "2026-01-01T00:00:00Z",
       metadata: {},
       document_ids: ["doc-a", "doc-b"],
+      display_label: "New session",
     });
     vi.mocked(deleteDocument).mockResolvedValue({ status: "gone" });
 
@@ -45,6 +46,7 @@ describe("cleanupSessionDocuments", () => {
       last_active: "2026-01-01T00:00:00Z",
       metadata: {},
       document_ids: ["doc-processing"],
+      display_label: "New session",
     });
     vi.mocked(deleteDocument).mockResolvedValue({
       status: "conflict",

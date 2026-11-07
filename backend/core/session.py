@@ -2,6 +2,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 
+# Computed session list label when there is no useful question or file name.
+NEW_SESSION_LABEL = "New session"
+
 
 @dataclass
 class Session:
@@ -16,6 +19,7 @@ class Session:
     last_active: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict = field(default_factory=dict)
     document_ids: list[str] = field(default_factory=list)
+    display_label: str = NEW_SESSION_LABEL
 
 
 @dataclass

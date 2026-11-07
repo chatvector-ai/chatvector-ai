@@ -803,6 +803,44 @@ describe("getDocumentStatus", () => {
     });
   });
 
+  it("returns file_name when the status payload includes one", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: "completed",
+          file_name: "notes.txt",
+          chunks: { processed: 1, total: 1 },
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(getDocumentStatus("/documents/doc-123/status")).resolves.toEqual({
+      status: "completed",
+      file_name: "notes.txt",
+      chunks: { processed: 1, total: 1 },
+    });
+  });
+
+  it("omits a missing or blank file_name", async () => {
+    for (const fileName of [undefined, "", "   "]) {
+      vi.mocked(globalThis.fetch).mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            status: "embedding",
+            stage: "embedding",
+            ...(fileName === undefined ? {} : { file_name: fileName }),
+          }),
+          { status: 200 }
+        )
+      );
+
+      const result = await getDocumentStatus("/documents/doc-123/status");
+      expect(result.file_name).toBeUndefined();
+      expect(result.status).toBe("embedding");
+    }
+  });
+
   it("drops queue_position when absent so non-queued responses stay clean", async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(
@@ -1054,6 +1092,7 @@ describe("session API", () => {
     last_active: "2026-01-01T00:00:00Z",
     metadata: {},
     document_ids: [],
+    display_label: "Who approves expenses?",
   };
 
   beforeEach(() => {
@@ -1079,6 +1118,19 @@ describe("session API", () => {
         body: JSON.stringify({}),
       })
     );
+  });
+
+  it("defaults a missing display_label to New session", async () => {
+    const withoutLabel = Object.fromEntries(
+      Object.entries(SESSION_PAYLOAD).filter(([key]) => key !== "display_label")
+    );
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify(withoutLabel), { status: 200 })
+    );
+
+    const result = await getSession("session-abc");
+
+    expect(result.display_label).toBe("New session");
   });
 
   it("listSessions returns parsed sessions array", async () => {

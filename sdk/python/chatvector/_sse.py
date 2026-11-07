@@ -148,6 +148,7 @@ def _dispatch_sse_event(
             latency_ms=int(payload.get("latency_ms") or 0),
             model=str(payload.get("model") or ""),
             retrieval_debug=_parse_retrieval_debug(payload.get("retrieval_debug")),
+            message_id=_optional_str(payload.get("message_id")),
         )
 
     raise ChatVectorAPIError(

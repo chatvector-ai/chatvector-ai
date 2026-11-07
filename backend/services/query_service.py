@@ -182,9 +182,14 @@ async def _call_standalone_resolution(
     system_instruction = (
         "You are a query resolution assistant. Given a conversation history and a "
         "follow-up question, rewrite the follow-up as a complete standalone question "
-        'that does not rely on context from the conversation. Resolve pronouns ("it", '
-        '"they", "that"), references ("the second option", "the earlier plan"), and '
-        "omitted subjects. If the question is already standalone, return it unchanged. "
+        "that does not rely on context from the conversation. Resolve pronouns "
+        '("it", "they", "that", "she"), references ("the second option", '
+        '"the earlier plan", "that clause"), and omitted subjects by substituting '
+        "the prior entity they refer to. When the current question introduces a "
+        "named entity, keep that entity. Do not replace it with an entity that "
+        "appears only in prior turns. Preserve ordinals and the relation being "
+        "asked about; that relation is what the user is asking, not a nearby fact "
+        "from history. If the question is already standalone, return it unchanged. "
         "Return only the rewritten question, nothing else."
     )
     user_text = (
@@ -216,10 +221,11 @@ async def _resolve_to_standalone(question: str, history: list[dict]) -> str:
 #
 # Skip the LLM when:
 # - the history window is empty after filtering (caller passes an empty list)
-# - the question is already standalone: no unresolved anaphora or elliptical
-#   follow-up, and it is long enough to be a full query
+# - the question is already standalone: no unresolved reference, and it either
+#   names a subject or is long enough to be a full query
 # - an explicit topic-switch cue is present and the question is otherwise
-#   standalone (cues do not override pronouns or elliptical patterns)
+#   standalone (cues do not override pronouns, demonstratives, elliptical
+#   patterns, or other referential cues)
 #
 # Unresolved references (case-insensitive, word boundaries):
 # - pronouns: it, they, them, their, theirs, he, she, him, her, his, hers, its
@@ -228,6 +234,9 @@ async def _resolve_to_standalone(question: str, history: list[dict]) -> str:
 # - elliptical patterns: "what about …", "how about …", "and the …",
 #   "and what …", "and how …", "what else …", "tell me more …",
 #   "more about …", and "how much was that"
+# - one-anaphora and discourse cues: "which one", "second one", "other one",
+#   "the latter", "the former", "going back", and "I meant".
+#   The substring "second" inside "secondary" is not a cue.
 #
 # Topic-switch cues (conservative; ignored when a reference is also present):
 # new topic, switch/switching topic(s), change of subject, changing the
@@ -235,7 +244,12 @@ async def _resolve_to_standalone(question: str, history: list[dict]) -> str:
 # ignore the previous, ignore previous context, starting over.
 #
 # Length: 6 or more words, or 4 or more words ending in "?", with none of the
-# reference signals above, is standalone. Shorter fragments resolve.
+# reference signals above, is standalone. Those cutoffs are unchanged.
+# Shorter fragments resolve only when every word is closed-class ("Why?",
+# "Can you tell me"). A shorter question with an open-class word already
+# names a subject ("Explain the indemnification clause.", "Who approves
+# expenses?") and is standalone. That check is a lexicon lookup, not a new
+# word-count cutoff and not a syntactic subject parse.
 _ANAPHORA_RE = re.compile(
     r"\b(?:it|they|them|their|theirs|he|she|him|her|his|hers|its)\b",
     re.IGNORECASE,
@@ -249,6 +263,18 @@ _ELLIPTICAL_RE = re.compile(
     r"|\bhow much was that\b)",
     re.IGNORECASE,
 )
+# Referential follow-ups that are not pronouns, demonstratives, or ellipsis.
+# Word boundaries keep "secondary" from matching "second".
+_REFERENTIAL_RE = re.compile(
+    r"\bwhich\s+ones?\b"
+    r"|\bsecond\s+ones?\b"
+    r"|\bother\s+ones?\b"
+    r"|\bthe\s+latter\b"
+    r"|\bthe\s+former\b"
+    r"|\bgoing\s+back\b"
+    r"|\bi\s+meant\b",
+    re.IGNORECASE,
+)
 _TOPIC_SWITCH_RE = re.compile(
     r"\b(?:new topic|switch(?:ing)? topics?|change of subject|changing the subject|"
     r"different question|unrelated question|forget the previous|ignore the previous|"
@@ -257,10 +283,127 @@ _TOPIC_SWITCH_RE = re.compile(
 )
 _STANDALONE_MIN_WORDS = 6
 _STANDALONE_MIN_QUESTION_WORDS = 4
+# Function words and bare follow-up frames. A token outside this set is an
+# open-class word and counts as naming a subject. Anaphoric cues are handled
+# by the reference patterns above, before this set is consulted.
+_CLOSED_CLASS_WORDS = frozenset(
+    {
+        "a",
+        "about",
+        "again",
+        "also",
+        "am",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "been",
+        "but",
+        "by",
+        "can",
+        "could",
+        "describe",
+        "did",
+        "do",
+        "does",
+        "else",
+        "explain",
+        "for",
+        "former",
+        "from",
+        "had",
+        "has",
+        "have",
+        "he",
+        "her",
+        "here",
+        "him",
+        "his",
+        "how",
+        "i",
+        "if",
+        "in",
+        "into",
+        "is",
+        "it",
+        "its",
+        "just",
+        "latter",
+        "many",
+        "may",
+        "me",
+        "might",
+        "more",
+        "much",
+        "must",
+        "my",
+        "no",
+        "nor",
+        "not",
+        "now",
+        "of",
+        "ok",
+        "okay",
+        "on",
+        "one",
+        "ones",
+        "or",
+        "other",
+        "our",
+        "over",
+        "please",
+        "second",
+        "shall",
+        "she",
+        "should",
+        "show",
+        "so",
+        "tell",
+        "than",
+        "the",
+        "their",
+        "them",
+        "then",
+        "there",
+        "they",
+        "to",
+        "too",
+        "under",
+        "was",
+        "we",
+        "were",
+        "what",
+        "when",
+        "where",
+        "which",
+        "who",
+        "whom",
+        "whose",
+        "why",
+        "will",
+        "with",
+        "would",
+        "yes",
+        "you",
+        "your",
+    }
+)
+_WORD_RE = re.compile(r"[A-Za-z]+(?:'[A-Za-z]+)?")
 
 
 def _has_unresolved_demonstrative(question: str) -> bool:
     return bool(_DEMONSTRATIVE_RE.search(question))
+
+
+def _has_open_class_word(question: str) -> bool:
+    """Return whether the question contains a word outside the closed class."""
+    for token in _WORD_RE.findall(question):
+        for part in token.lower().split("'"):
+            if part and part not in _CLOSED_CLASS_WORDS:
+                return True
+    return False
 
 
 def question_needs_history_resolution(question: str, history: list[dict]) -> tuple[bool, str | None]:
@@ -278,6 +421,7 @@ def question_needs_history_resolution(question: str, history: list[dict]) -> tup
         _ANAPHORA_RE.search(text)
         or _has_unresolved_demonstrative(text)
         or _ELLIPTICAL_RE.search(text)
+        or _REFERENTIAL_RE.search(text)
     )
     if has_reference:
         return True, None
@@ -288,6 +432,8 @@ def question_needs_history_resolution(question: str, history: list[dict]) -> tup
     if len(words) >= _STANDALONE_MIN_WORDS or (
         text.endswith("?") and len(words) >= _STANDALONE_MIN_QUESTION_WORDS
     ):
+        return False, "standalone_question"
+    if _has_open_class_word(text):
         return False, "standalone_question"
     return True, None
 

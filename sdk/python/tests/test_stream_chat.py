@@ -128,10 +128,53 @@ class StreamChatTests(unittest.TestCase):
         self.assertEqual(events[1].content, "world")
         self.assertEqual(events[2].type, "complete")
         self.assertEqual(events[2].session_id, "sess-1")
+        self.assertIsNone(events[2].message_id)
         self.assertEqual(events[2].latency_ms, 321)
         self.assertEqual(events[2].model, "gemini-2.5-flash")
         self.assertEqual(events[2].sources[0].file_name, "guide.pdf")
         self.assertEqual(events[2].sources[0].score_type, "reranked")
+
+    def test_iter_stream_chat_events_reads_optional_message_id(self) -> None:
+        """A complete payload may include message_id, and omitting it is not an error."""
+        with_id = [
+            "event: complete",
+            "data: "
+            + json.dumps(
+                {
+                    "type": "complete",
+                    "session_id": "sess-1",
+                    "message_id": "asst-msg-9",
+                    "sources": [],
+                    "latency_ms": 10,
+                    "model": "m",
+                }
+            ),
+            "",
+        ]
+        without_id = [
+            "event: complete",
+            "data: "
+            + json.dumps(
+                {
+                    "type": "complete",
+                    "session_id": "sess-1",
+                    "sources": [],
+                    "latency_ms": 10,
+                    "model": "m",
+                }
+            ),
+            "",
+        ]
+
+        present = list(iter_stream_chat_events(iter(with_id), map_error=map_stream_error))
+        absent = list(iter_stream_chat_events(iter(without_id), map_error=map_stream_error))
+
+        self.assertEqual(len(present), 1)
+        self.assertEqual(present[0].type, "complete")
+        self.assertEqual(present[0].message_id, "asst-msg-9")
+        self.assertEqual(len(absent), 1)
+        self.assertEqual(absent[0].type, "complete")
+        self.assertIsNone(absent[0].message_id)
 
     def test_iter_stream_chat_events_ignores_legacy_done(self) -> None:
         """Legacy ``done`` events should be ignored for compatibility."""

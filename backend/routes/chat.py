@@ -319,8 +319,11 @@ async def chat_stream(
       (unchanged from earlier clients).
     - ``complete`` — final structured payload with ``sources``, ``latency_ms``
       (generation only), ``request_latency_ms`` (full request including history
-      and retrieval), ``model``, ``session_id``, and optional ``retrieval_debug``
-      when requested.
+      and retrieval), ``model``, ``session_id``, optional ``retrieval_debug``
+      when requested, and optional ``message_id``. ``message_id`` is the
+      persisted assistant message id. It is present only after that message
+      is stored successfully, and omitted when the turn is not persisted
+      (no session, or a failed store). A missing ``message_id`` is not an error.
     - ``done`` — legacy completion marker ``[DONE]`` (deprecated; retained for
       backward compatibility).
     - ``error`` — structured JSON object ``{"type": "error", "code": "...", "message": "..."}``.

@@ -54,6 +54,28 @@ describe("getDocumentStatus", () => {
     });
   });
 
+  it("maps file_name when present and omits it when absent", async () => {
+    const withName = {
+      document_id: DOCUMENT_ID,
+      status: "completed",
+      file_name: "notes.txt",
+    };
+    const named = await makeClient(createFetchMock(jsonResponse(withName))).getDocumentStatus(
+      DOCUMENT_ID,
+    );
+    expect(named.fileName).toBe("notes.txt");
+    expect(named.status).toBe("completed");
+    expect(named._raw).toEqual(withName);
+
+    const withoutName = { document_id: DOCUMENT_ID, status: "queued" };
+    const unnamed = await makeClient(
+      createFetchMock(jsonResponse(withoutName)),
+    ).getDocumentStatus(DOCUMENT_ID);
+    expect(unnamed.fileName).toBeUndefined();
+    expect(unnamed.status).toBe("queued");
+    expect(unnamed.documentId).toBe(DOCUMENT_ID);
+  });
+
   it("types document metadata and preserves unknown raw fields", async () => {
     const payload = {
       ...queuedStatusPayload,

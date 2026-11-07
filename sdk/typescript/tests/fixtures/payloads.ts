@@ -129,6 +129,7 @@ export const sessionPayload = {
   last_active: "2026-07-14T10:01:00+00:00",
   metadata: { source: "sdk" },
   document_ids: [DOCUMENT_ID],
+  display_label: "Who approves expenses?",
   future_session_field: "kept in raw",
 };
 

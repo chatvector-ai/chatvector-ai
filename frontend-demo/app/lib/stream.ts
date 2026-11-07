@@ -11,6 +11,8 @@ export type CompleteEvent = {
   latency_ms: number;
   model: string;
   session_id?: string;
+  /** Persisted assistant message id. Absent when the turn was not stored. */
+  message_id?: string;
   /** Full backend complete payload, including opt-in fields such as `retrieval_debug`. */
   _raw?: Record<string, unknown>;
 };
@@ -147,6 +149,9 @@ function parseCompleteEvent(data: string): CompleteEvent | null {
       model: (payload.model ?? "") as string,
       ...(typeof payload.session_id === "string"
         ? { session_id: payload.session_id }
+        : {}),
+      ...(typeof payload.message_id === "string"
+        ? { message_id: payload.message_id }
         : {}),
       _raw: payload,
     };

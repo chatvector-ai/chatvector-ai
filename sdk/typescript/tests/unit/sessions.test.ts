@@ -40,6 +40,7 @@ describe("session methods", () => {
       lastActive: "2026-07-14T10:01:00+00:00",
       metadata: { source: "sdk" },
       documentIds: [sessionPayload.document_ids[0]],
+      displayLabel: "Who approves expenses?",
       _raw: sessionPayload,
     });
   });
@@ -83,6 +84,7 @@ describe("session methods", () => {
       tenantId: null,
       metadata: {},
       documentIds: [],
+      displayLabel: "New session",
       _raw: secondSessionPayload,
     });
     expect(result._raw).toEqual(payload);
@@ -107,6 +109,7 @@ describe("session methods", () => {
       lastActive: "",
       metadata: {},
       documentIds: ["doc-1"],
+      displayLabel: "New session",
     });
   });
 
@@ -130,6 +133,59 @@ describe("session methods", () => {
       method === "get" ? client.getSession(id) : client.deleteSession(id);
     expect(await captureRejection(promise)).toBeInstanceOf(TypeError);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("maps history sources and accepts a payload that omits them", async () => {
+    const fetch = createFetchMock(
+      jsonResponse({
+        messages: [
+          {
+            id: "msg-omitted",
+            role: "user",
+            content: "Hello",
+          },
+          {
+            id: "msg-null",
+            role: "assistant",
+            content: "Old row",
+            sources: null,
+          },
+          {
+            id: "msg-empty",
+            role: "assistant",
+            content: "No citations",
+            sources: [],
+          },
+          {
+            id: "msg-asst",
+            role: "assistant",
+            content: "Cited",
+            sources: [
+              {
+                document_id: "doc-1",
+                file_name: "old.pdf",
+                page_number: 2,
+                chunk_index: 1,
+                page_end: 4,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const history = await makeClient(fetch).getSessionHistory(SESSION_ID);
+    expect(history.messages[0]?.sources).toBeUndefined();
+    expect(history.messages[1]?.sources).toBeNull();
+    expect(history.messages[2]?.sources).toEqual([]);
+    expect(history.messages[3]?.sources).toEqual([
+      {
+        document_id: "doc-1",
+        file_name: "old.pdf",
+        page_number: 2,
+        chunk_index: 1,
+        page_end: 4,
+      },
+    ]);
   });
 
   it("does not retry session creation or deletion", async () => {

@@ -159,6 +159,46 @@ describe("streamChat", () => {
     });
   });
 
+  it("accepts complete events with and without message_id", async () => {
+    const withId = {
+      ...completePayload,
+      message_id: "asst-msg-9",
+    };
+    const withoutId = { ...completePayload };
+
+    async function read(payload: Record<string, unknown>) {
+      const fetch = createFetchMock(
+        sseResponse(
+          ["event: complete", `data: ${JSON.stringify(payload)}`, ""].join("\n"),
+        ),
+      );
+      const events = [];
+      for await (const event of makeClient(fetch).streamChat({
+        question: "Q",
+        docId: DOCUMENT_ID,
+      })) {
+        events.push(event);
+      }
+      return events;
+    }
+
+    const present = await read(withId);
+    const absent = await read(withoutId);
+
+    expect(present).toHaveLength(1);
+    expect(present[0]).toMatchObject({
+      type: "complete",
+      messageId: "asst-msg-9",
+      sessionId: "session-1",
+    });
+    expect(absent).toHaveLength(1);
+    expect(absent[0]).toMatchObject({
+      type: "complete",
+      sessionId: "session-1",
+    });
+    expect(absent[0]).not.toHaveProperty("messageId");
+  });
+
   it("ignores legacy done events", async () => {
     const fetch = createFetchMock(
       sseResponse(['event: done', "data: [DONE]", ""].join("\n")),

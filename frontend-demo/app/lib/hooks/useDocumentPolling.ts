@@ -29,8 +29,7 @@ function isFailedStatusPayload(payload: {
     return false;
   }
   return (
-    payload.status === "failed" ||
-    payload.status_detail === "replacement_failed"
+    payload.status === "failed" || payload.status_detail === "replacement_failed"
   );
 }
 
@@ -48,6 +47,16 @@ function isTerminalStatusPayload(payload: {
   );
 }
 
+function payloadStatusDetail(raw: unknown): string | undefined {
+  return typeof raw === "string" && raw.length > 0 ? raw : undefined;
+}
+
+function statusFileName(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 /** Format a duration in milliseconds to a human-readable string. */
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -58,9 +67,10 @@ function formatDuration(ms: number): string {
   return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
 }
 function stagesBefore(currentStage: string): string[] {
+  if (currentStage === "retrying") return [];
   const idx = PIPELINE_STAGES.indexOf(currentStage as never);
   if (idx <= 0) return [];
-  return Array.from(PIPELINE_STAGES.slice(0, idx));
+  return PIPELINE_STAGES.slice(0, idx).filter((stage) => stage !== "retrying");
 }
 
 /**
@@ -69,6 +79,12 @@ function stagesBefore(currentStage: string): string[] {
  * - On failure: use error.stage (the pipeline step that failed) so the
  *   pipeline list can highlight the correct row. Fall back to the last
  *   known non-failure stage string.
+ * - A replacement keeps `status` at `completed` or `failed` and reports
+ *   progress on `status_detail`. While that detail is
+ *   `replacement_in_progress`, show the live stage (or "queued") instead of
+ *   the prior document's terminal stage.
+ * - "retrying" is a non-terminal state shown on its own row while a retryable
+ *   attempt is in flight.
  * - "uploaded" is only emitted by the synchronous path and maps to "queued"
  *   (the nearest PIPELINE_STAGES entry) to avoid an indexOf miss.
  * - "failed" itself is not a pipeline step — handled via the `failed` flag.
@@ -81,19 +97,27 @@ function resolveDisplayStage(payload: {
 }): string {
   if (isFailedStatusPayload(payload)) {
     const errorStage = payload.error?.stage;
-    if (errorStage && errorStage !== "failed" && PIPELINE_STAGES.indexOf(errorStage as never) >= 0) {
+    if (
+      errorStage &&
+      errorStage !== "failed" &&
+      errorStage !== "retrying" &&
+      PIPELINE_STAGES.indexOf(errorStage as never) >= 0
+    ) {
       return errorStage;
     }
-    if (
-      typeof payload.stage === "string" &&
-      payload.stage.length > 0 &&
-      payload.stage !== "completed" &&
-      payload.stage !== "failed"
-    ) {
-      return payload.stage;
+    if (payload.status_detail === "replacement_failed") {
+      if (
+        typeof payload.stage === "string" &&
+        payload.stage.length > 0 &&
+        payload.stage !== "completed" &&
+        payload.stage !== "failed"
+      ) {
+        return payload.stage;
+      }
+      return "extracting";
     }
-    // fall back to a safe default
-    return "extracting";
+    // fall back to the last stage field the server sent, or a safe default
+    return payload.stage ?? "extracting";
   }
   if (payload.status_detail === "replacement_in_progress") {
     if (
@@ -105,6 +129,9 @@ function resolveDisplayStage(payload: {
       return payload.stage === "uploaded" ? "queued" : payload.stage;
     }
     return "queued";
+  }
+  if (payload.status === "retrying") {
+    return "retrying";
   }
   if (payload.status === "uploaded" || payload.stage === "uploaded") {
     return "queued";
@@ -133,6 +160,12 @@ export function useDocumentPolling(
    * the upload-time value when the live one is not yet known.
    */
   queuePosition: number | undefined;
+  /** Latest non-blank file_name from a status payload. */
+  fileName: string | undefined;
+  /** Raw document status from the latest payload, before UI mapping. */
+  apiStatus: string | undefined;
+  /** Raw `status_detail` from the latest payload, when the server sent one. */
+  statusDetail: string | undefined;
 } {
   const [polledUiStatus, setPolledUiStatus] = useState<
     PolledDocumentStatus | undefined
@@ -146,6 +179,9 @@ export function useDocumentPolling(
   const [processingTime, setProcessingTime] = useState<string | undefined>(undefined);
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
   const [queuePosition, setQueuePosition] = useState<number | undefined>(undefined);
+  const [fileName, setFileName] = useState<string | undefined>(undefined);
+  const [apiStatus, setApiStatus] = useState<string | undefined>(undefined);
+  const [statusDetail, setStatusDetail] = useState<string | undefined>(undefined);
 
   // A toggle for environments/situations where SSE fails
   const [useFallbackPolling, setUseFallbackPolling] = useState(false);
@@ -175,6 +211,9 @@ export function useDocumentPolling(
       setProcessingTime(undefined);
       setErrorMessage(undefined);
       setQueuePosition(undefined);
+      setFileName(undefined);
+      setApiStatus(undefined);
+      setStatusDetail(undefined);
     }
     prevStatusRef.current = status;
   }, [docKey, status, isRestartingProcessing, enabled]);
@@ -212,7 +251,9 @@ export function useDocumentPolling(
 
           const rawStage = resolveDisplayStage(payload);
           setStage(rawStage);
-          setCompletedStages(stagesBefore(rawStage));
+          setCompletedStages((prev) =>
+            rawStage === "retrying" ? prev : stagesBefore(rawStage)
+          );
           if (isFailedStatusPayload(payload)) {
             setErrorMessage(
               payload.error?.message ||
@@ -249,6 +290,11 @@ export function useDocumentPolling(
             setQueuePosition(payload.queue_position);
           }
 
+          const streamedFileName = statusFileName(payload.file_name);
+          if (streamedFileName) setFileName(streamedFileName);
+
+          setApiStatus(typeof payload.status === "string" ? payload.status : undefined);
+          setStatusDetail(payloadStatusDetail(payload.status_detail));
           const ui = mapApiStatusToUi(payload.status, payload.status_detail);
           setPolledUiStatus(ui);
 
@@ -302,7 +348,9 @@ export function useDocumentPolling(
 
           const rawStage = resolveDisplayStage(payload);
           setStage(rawStage);
-          setCompletedStages(stagesBefore(rawStage));
+          setCompletedStages((prev) =>
+            rawStage === "retrying" ? prev : stagesBefore(rawStage)
+          );
           if (isFailedStatusPayload(payload)) {
             setErrorMessage(
               payload.error?.message ||
@@ -313,7 +361,6 @@ export function useDocumentPolling(
           } else {
             setErrorMessage(undefined);
           }
-          
 
           const c = payload.chunks;
           if (
@@ -336,6 +383,11 @@ export function useDocumentPolling(
             setQueuePosition(payload.queue_position);
           }
 
+          const polledFileName = statusFileName(payload.file_name);
+          if (polledFileName) setFileName(polledFileName);
+
+          setApiStatus(payload.status);
+          setStatusDetail(payloadStatusDetail(payload.status_detail));
           const ui = mapApiStatusToUi(payload.status, payload.status_detail);
           setPolledUiStatus(ui);
 
@@ -387,5 +439,8 @@ export function useDocumentPolling(
     processingTime: shouldReset ? undefined : processingTime,
     errorMessage: shouldReset ? undefined : errorMessage,
     queuePosition: shouldReset ? undefined : queuePosition,
+    fileName: shouldReset ? undefined : fileName,
+    apiStatus: shouldReset ? undefined : apiStatus,
+    statusDetail: shouldReset ? undefined : statusDetail,
   };
 }

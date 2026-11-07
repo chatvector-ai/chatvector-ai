@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { hasPartialBatchResult } from "./BatchResultCard";
+import { render, screen } from "@testing-library/react";
+import { BatchResultCard, hasPartialBatchResult } from "./BatchResultCard";
 import type { BatchResultItem } from "../../lib/api";
 
 describe("BatchResultCard helpers", () => {
@@ -26,5 +27,26 @@ describe("BatchResultCard helpers", () => {
       error: { code: "query_processing_failed", message: "Failed." },
     };
     expect(hasPartialBatchResult(errorOnly)).toBe(false);
+  });
+
+  it("renders the answer through the assistant markdown path", () => {
+    render(
+      <BatchResultCard
+        title="Notes"
+        result={{
+          status: "ok",
+          question: "Q?",
+          doc_ids: ["doc-1"],
+          answer: "Use **bold**.",
+          sources: [],
+          chunks: 1,
+          model: "m",
+          latency_ms: 10,
+        }}
+      />
+    );
+
+    expect(screen.getByText("bold").tagName).toBe("STRONG");
+    expect(screen.queryByText(/\*\*bold\*\*/)).not.toBeInTheDocument();
   });
 });

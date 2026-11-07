@@ -32,6 +32,15 @@ const welcomeMessages: Message[] = [
   },
 ];
 
+const DOCUMENT_GONE_NOTICE =
+  "The document attached to this session is no longer available. You can upload another.";
+const DOCUMENT_UNAVAILABLE_NOTICE =
+  "The document attached to this session could not be checked. You can upload another.";
+const SESSION_HISTORY_FAILED_NOTICE =
+  "This chat could not be loaded. You can upload a document and continue from here.";
+const SESSION_DETAILS_FAILED_NOTICE =
+  "This session could not be fully restored. You can upload a document to continue.";
+
 function mapHistoryToMessages(history: SessionHistoryMessage[]): Message[] {
   return history.map((entry, index) => ({
     id: index + 1,
@@ -49,9 +58,20 @@ function mapApiStatusToAttachmentStatus(
   statusDetail?: string
 ): AttachmentState["status"] {
   if (statusDetail === "replacement_in_progress") return "processing";
+  // A failed replacement leaves the previous completed content in place.
+  if (statusDetail === "replacement_failed" && apiStatus === "completed") {
+    return "ready";
+  }
   if (apiStatus === "completed") return "ready";
   if (apiStatus === "failed") return "failed";
   return "processing";
+}
+
+function replacementFailureMessage(
+  message: string | undefined
+): string {
+  const trimmed = message?.trim();
+  return trimmed ? trimmed : "Document replacement failed.";
 }
 
 function retrievalDebugFromCompleteRaw(
@@ -68,18 +88,37 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
+function restoredAttachmentFileName(
+  documentId: string,
+  statusFileName: string | undefined,
+  storedFileName: string | undefined,
+): string {
+  const fromStatus = statusFileName?.trim();
+  if (fromStatus) return fromStatus;
+  const fromStore = storedFileName?.trim();
+  if (fromStore) return fromStore;
+  return `Document ${documentId.slice(0, 8)}`;
+}
+
 async function restoreSessionAttachment(
   documentId: string
-): Promise<{ attachment: AttachmentState | null; notice: string | null }> {
+): Promise<{
+  attachment: AttachmentState | null;
+  notice: string | null;
+  replacementError: string | null;
+}> {
   const statusEndpoint = documentStatusEndpoint(documentId);
   const stored = getUploadedDocument(documentId);
-  const fileName = stored?.fileName ?? `Document ${documentId.slice(0, 8)}`;
 
   try {
     const status = await getDocumentStatus(statusEndpoint);
     return {
       attachment: {
-        fileName,
+        fileName: restoredAttachmentFileName(
+          documentId,
+          status.file_name,
+          stored?.fileName,
+        ),
         documentId,
         statusEndpoint,
         status: mapApiStatusToAttachmentStatus(
@@ -91,24 +130,47 @@ async function restoreSessionAttachment(
           : {}),
       },
       notice: null,
+      replacementError:
+        status.status_detail === "replacement_failed"
+          ? replacementFailureMessage(status.error?.message)
+          : null,
     };
   } catch (error) {
     if (error instanceof DocumentNotFoundError) {
       return {
         attachment: null,
-        notice: "The document attached to this session is no longer available.",
+        notice: DOCUMENT_GONE_NOTICE,
+        replacementError: null,
       };
     }
     return {
       attachment: null,
-      notice: "Could not restore the session document. You can upload a new one.",
+      notice: DOCUMENT_UNAVAILABLE_NOTICE,
+      replacementError: null,
     };
   }
 }
 
 type ResetTurnMode = "stop" | "session" | "unmount";
 
-export function useChat(sessionId: string | null, retrievalSettings: RetrievalSettings) {
+export type ChatLabelEvents = {
+  onUserQuestion?: (sessionId: string, text: string) => void;
+  onDocumentAttached?: (sessionId: string, fileName: string) => void;
+  onHistoryLoaded?: (sessionId: string, hasUsefulUserQuestion: boolean) => void;
+};
+
+function hasUsefulUserQuestion(messages: SessionHistoryMessage[]): boolean {
+  return messages.some(
+    (message) =>
+      message.role === "user" && message.content.trim().replace(/\s+/g, " ").length > 0
+  );
+}
+
+export function useChat(
+  sessionId: string | null,
+  retrievalSettings: RetrievalSettings,
+  labelEvents?: ChatLabelEvents,
+) {
   const [messages, setMessages] = useState<Message[]>(welcomeMessages);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [input, setInput] = useState("");
@@ -129,6 +191,12 @@ export function useChat(sessionId: string | null, retrievalSettings: RetrievalSe
   const rafIdRef = useRef<number | null>(null);
   const streamingMsgIdRef = useRef<number | null>(null);
   const tokenFlushEpochRef = useRef<number | null>(null);
+  const labelEventsRef = useRef(labelEvents);
+  labelEventsRef.current = labelEvents;
+  const questionLockedRef = useRef(false);
+  const historyReadyRef = useRef(false);
+  const pendingQuestionRef = useRef<string | null>(null);
+  const pendingFileRef = useRef<string | null>(null);
 
   const resetTurn = useCallback((mode: ResetTurnMode) => {
     abortControllerRef.current?.abort();
@@ -207,6 +275,10 @@ export function useChat(sessionId: string | null, retrievalSettings: RetrievalSe
     const requestId = historyRequestRef.current + 1;
     historyRequestRef.current = requestId;
     chatEpochRef.current += 1;
+    questionLockedRef.current = false;
+    historyReadyRef.current = false;
+    pendingQuestionRef.current = null;
+    pendingFileRef.current = null;
     resetTurn("session");
 
     setInput("");
@@ -220,12 +292,26 @@ export function useChat(sessionId: string | null, retrievalSettings: RetrievalSe
     setMessages([]);
 
     void (async () => {
+      const historyPromise = getSessionHistory(sessionId);
+      const sessionPromise = getSession(sessionId);
+
       try {
-        const [historyResult, sessionResult] = await Promise.all([
-          getSessionHistory(sessionId),
-          getSession(sessionId),
-        ]);
-        if (historyRequestRef.current !== requestId) return;
+        let historyResult: Awaited<ReturnType<typeof getSessionHistory>>;
+        try {
+          historyResult = await historyPromise;
+        } catch {
+          await sessionPromise.catch(() => undefined);
+          if (historyRequestRef.current !== requestId) return;
+          setMessages(welcomeMessages);
+          setAttachment(null);
+          setSessionNotice(SESSION_HISTORY_FAILED_NOTICE);
+          return;
+        }
+
+        if (historyRequestRef.current !== requestId) {
+          void sessionPromise.catch(() => undefined);
+          return;
+        }
 
         setMessages(
           historyResult.messages.length > 0
@@ -233,23 +319,63 @@ export function useChat(sessionId: string | null, retrievalSettings: RetrievalSe
             : welcomeMessages
         );
 
+        historyReadyRef.current = true;
+        const historyHasQuestion = hasUsefulUserQuestion(historyResult.messages);
+        if (historyHasQuestion) {
+          questionLockedRef.current = true;
+          pendingQuestionRef.current = null;
+          pendingFileRef.current = null;
+          labelEventsRef.current?.onHistoryLoaded?.(sessionId, true);
+        } else {
+          labelEventsRef.current?.onHistoryLoaded?.(sessionId, false);
+          const pendingQuestion = pendingQuestionRef.current;
+          const pendingFile = pendingFileRef.current;
+          pendingQuestionRef.current = null;
+          pendingFileRef.current = null;
+          if (pendingQuestion) {
+            questionLockedRef.current = true;
+            labelEventsRef.current?.onUserQuestion?.(sessionId, pendingQuestion);
+          } else if (pendingFile) {
+            labelEventsRef.current?.onDocumentAttached?.(sessionId, pendingFile);
+          }
+        }
+
+        let sessionResult: Awaited<ReturnType<typeof getSession>>;
+        try {
+          sessionResult = await sessionPromise;
+        } catch {
+          if (historyRequestRef.current !== requestId) return;
+          setAttachment(null);
+          setSessionNotice(SESSION_DETAILS_FAILED_NOTICE);
+          return;
+        }
+
+        if (historyRequestRef.current !== requestId) return;
+
         const documentIds = sessionResult.document_ids;
         if (documentIds.length === 0) return;
 
         const documentId = documentIds[documentIds.length - 1];
-        const restored = await restoreSessionAttachment(documentId);
-        if (historyRequestRef.current !== requestId) return;
+        try {
+          const restored = await restoreSessionAttachment(documentId);
+          if (historyRequestRef.current !== requestId) return;
 
-        if (restored.attachment) {
-          setAttachment(restored.attachment);
-          setSessionNotice(null);
-        } else if (restored.notice) {
+          if (restored.attachment) {
+            setAttachment(restored.attachment);
+            setSessionNotice(null);
+            if (restored.replacementError) {
+              setRemoveError(restored.replacementError);
+            }
+          } else if (restored.notice) {
+            setAttachment(null);
+            setSessionNotice(restored.notice);
+          }
+        } catch {
+          // A document-restore failure must not replace a transcript that already loaded.
+          if (historyRequestRef.current !== requestId) return;
           setAttachment(null);
-          setSessionNotice(restored.notice);
+          setSessionNotice(DOCUMENT_UNAVAILABLE_NOTICE);
         }
-      } catch {
-        if (historyRequestRef.current !== requestId) return;
-        setMessages(welcomeMessages);
       } finally {
         if (historyRequestRef.current === requestId) {
           setHistoryLoading(false);
@@ -273,6 +399,15 @@ export function useChat(sessionId: string | null, retrievalSettings: RetrievalSe
   }, [attachment?.documentId]);
 
   useEffect(() => {
+    const statusName = poll.fileName?.trim();
+    if (!statusName) return;
+    setAttachment((curr) => {
+      if (!curr || curr.fileName === statusName) return curr;
+      return { ...curr, fileName: statusName };
+    });
+  }, [poll.fileName]);
+
+  useEffect(() => {
     if (poll.status !== "ready" || !attachment || attachment.status !== "processing") {
       return;
     }
@@ -282,13 +417,15 @@ export function useChat(sessionId: string | null, retrievalSettings: RetrievalSe
     }
     readyAnnouncedForDocRef.current = docId;
     previousAttachmentRef.current = null;
-    const name = attachment.fileName;
+    const statusName = poll.fileName?.trim();
+    const name = statusName || attachment.fileName;
     setAttachment((curr) => {
       if (!curr || curr.documentId !== docId || curr.status !== "processing") {
         return curr;
       }
       return {
         ...curr,
+        fileName: statusName || curr.fileName,
         status: "ready",
         stage: "completed",
         chunks: poll.chunks,
@@ -303,13 +440,14 @@ export function useChat(sessionId: string | null, retrievalSettings: RetrievalSe
         text: `Document "${name}" is ready. You can ask questions about it.`,
       },
     ]);
-  }, [poll.status, poll.chunks, poll.processingTime, attachment]);
+  }, [poll.status, poll.chunks, poll.processingTime, poll.fileName, attachment]);
 
   useEffect(() => {
     if (poll.status !== "failed" || !attachment || attachment.status !== "processing") {
       return;
     }
     const docId = attachment.documentId;
+    const statusName = poll.fileName?.trim();
     const previous =
       previousAttachmentRef.current?.documentId === docId
         ? previousAttachmentRef.current
@@ -317,23 +455,54 @@ export function useChat(sessionId: string | null, retrievalSettings: RetrievalSe
     previousAttachmentRef.current = null;
 
     if (previous) {
+      const fileName = statusName || previous.fileName;
       saveUploadedDocument({
         documentId: previous.documentId,
-        fileName: previous.fileName,
+        fileName,
       });
       setAttachment(
         previous.status === "ready"
-          ? previous
-          : { ...previous, status: "failed" }
+          ? { ...previous, fileName }
+          : { ...previous, fileName, status: "failed" }
       );
-      setRemoveError(poll.errorMessage ?? "Document replacement failed.");
+      setRemoveError(replacementFailureMessage(poll.errorMessage));
       return;
     }
 
+    // Remount drops the in-memory chip snapshot. The server still has the
+    // previous completed content when status stays `completed`.
+    if (
+      poll.statusDetail === "replacement_failed" &&
+      poll.apiStatus === "completed"
+    ) {
+      const fileName = statusName || attachment.fileName;
+      saveUploadedDocument({ documentId: docId, fileName });
+      setAttachment((curr) =>
+        curr?.documentId === docId
+          ? { ...curr, fileName, status: "ready", stage: "completed" }
+          : curr
+      );
+      setRemoveError(replacementFailureMessage(poll.errorMessage));
+      return;
+    }
+
+    if (poll.statusDetail === "replacement_failed") {
+      setRemoveError(replacementFailureMessage(poll.errorMessage));
+    }
+
     setAttachment((curr) =>
-      curr?.documentId === docId ? { ...curr, status: "failed" } : curr
+      curr?.documentId === docId
+        ? { ...curr, fileName: statusName || curr.fileName, status: "failed" }
+        : curr
     );
-  }, [poll.status, poll.errorMessage, attachment]);
+  }, [
+    poll.status,
+    poll.errorMessage,
+    poll.fileName,
+    poll.statusDetail,
+    poll.apiStatus,
+    attachment,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -523,6 +692,15 @@ export function useChat(sessionId: string | null, retrievalSettings: RetrievalSe
       return;
     }
 
+    if (sessionId && !questionLockedRef.current) {
+      if (!historyReadyRef.current) {
+        pendingQuestionRef.current = text;
+      } else {
+        questionLockedRef.current = true;
+        labelEventsRef.current?.onUserQuestion?.(sessionId, text);
+      }
+    }
+
     const base = Date.now();
     setMessages((prev) => [
       ...prev,
@@ -638,6 +816,14 @@ export function useChat(sessionId: string | null, retrievalSettings: RetrievalSe
     statusEndpoint: string;
     queuePosition?: number;
   }) => {
+    const fileName = payload.fileName.trim();
+    if (sessionId && fileName && !questionLockedRef.current) {
+      if (!historyReadyRef.current) {
+        pendingFileRef.current = fileName;
+      } else {
+        labelEventsRef.current?.onDocumentAttached?.(sessionId, fileName);
+      }
+    }
     readyAnnouncedForDocRef.current = null;
     if (attachment && attachment.documentId === payload.documentId) {
       previousAttachmentRef.current = attachment;

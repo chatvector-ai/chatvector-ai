@@ -21,6 +21,7 @@ from services.chat_service import (
 from services.query_service import (
     QueryTransformResult,
     StandaloneResolutionCall,
+    _call_standalone_resolution,
     question_needs_history_resolution,
     transform_query,
 )
@@ -69,6 +70,10 @@ def test_gate_runs_for_pronouns_and_elliptical_followups():
     assert question_needs_history_resolution(_WHAT_ABOUT, _HISTORY) == (True, None)
     assert question_needs_history_resolution("How much was that?", _HISTORY) == (True, None)
     assert question_needs_history_resolution("And the termination clause?", _HISTORY) == (True, None)
+    assert question_needs_history_resolution(
+        "What does she require of the customer?",
+        _HISTORY,
+    ) == (True, None)
 
 
 def test_gate_runs_for_demonstrative_followups():
@@ -100,6 +105,68 @@ def test_gate_skips_standalone_topic_switch_and_empty_history():
     # A topic cue does not override an unresolved pronoun.
     mixed = "New topic: what does it say about fees?"
     assert question_needs_history_resolution(mixed, _HISTORY)[0] is True
+
+
+def test_gate_runs_for_referential_followups():
+    referential = (
+        "What does the second one require?",
+        "Which one has the lower cancellation penalty?",
+        "What does the latter agreement require of the customer?",
+        "What does the former agreement require of the customer?",
+        "What does the other one require from the customer?",
+        "Going back to the renewal clause, what is the notice period?",
+        "No, I meant the enterprise agreement.",
+        "Why?",
+    )
+    for question in referential:
+        assert question_needs_history_resolution(question, _HISTORY) == (True, None)
+
+
+def test_gate_does_not_treat_secondary_substring_as_a_reference():
+    assert question_needs_history_resolution(
+        "What is the secondary liability cap in the master services agreement?",
+        _HISTORY,
+    ) == (False, "standalone_question")
+    assert question_needs_history_resolution(_STANDALONE, _HISTORY) == (
+        False,
+        "standalone_question",
+    )
+
+
+def test_gate_empty_history_skips_referential_question():
+    assert question_needs_history_resolution(
+        "Which one has the lower cancellation penalty?",
+        [],
+    ) == (False, "empty_history")
+    assert question_needs_history_resolution("No, I meant the enterprise agreement.", []) == (
+        False,
+        "empty_history",
+    )
+
+
+def test_gate_topic_switch_does_not_override_which_one():
+    assert question_needs_history_resolution(
+        "New topic: which one is cheaper?",
+        _HISTORY,
+    ) == (True, None)
+
+
+def test_gate_skips_short_questions_that_name_a_subject():
+    assert question_needs_history_resolution(
+        "Explain the indemnification clause.",
+        _HISTORY,
+    ) == (False, "standalone_question")
+    assert question_needs_history_resolution(
+        "Who approves expenses?",
+        _HISTORY,
+    ) == (False, "standalone_question")
+
+
+def test_gate_keeps_length_thresholds_for_fragments_without_a_subject():
+    """Bare fragments still resolve. The 6-word and 4-word cutoffs stay."""
+    assert question_needs_history_resolution("Why not now?", _HISTORY) == (True, None)
+    assert question_needs_history_resolution("How much?", _HISTORY) == (True, None)
+    assert question_needs_history_resolution("Can you tell me", _HISTORY) == (True, None)
 
 
 @pytest.mark.asyncio
@@ -563,7 +630,7 @@ async def test_stream_followup_uses_resolved_query(monkeypatch):
         patch("services.chat_service.generate_answer_stream", new=fake_stream),
         patch("services.providers.get_llm_provider", return_value=provider),
         patch("db.get_session_history", new=AsyncMock(return_value=list(_HISTORY))),
-        patch("db.store_chat_turn", new=AsyncMock()),
+        patch("db.store_chat_turn", new=AsyncMock(return_value=("user-msg", "assistant-msg"))),
     ):
         async for _event in answer_question_stream_for_document(
             _PRONOUN,
@@ -678,3 +745,184 @@ async def test_eval_skips_history_unless_row_requests_simulation(monkeypatch, tm
     loaded = load_dataset(path)
     assert loaded.queries[0].simulate_session is True
     assert loaded.queries[0].session_history[0]["role"] == "user"
+
+
+_PLAN_HISTORY = [
+    {"role": "user", "content": "Compare the termination notice for Plan A and Plan B."},
+    {
+        "role": "assistant",
+        "content": "Plan A requires 30 days notice. Plan B requires 60 days notice.",
+    },
+]
+_ENTERPRISE_QUESTION = "What is the notice period for the enterprise termination notice?"
+_ENTERPRISE_RESOLVED = "What notice period does the enterprise termination notice require?"
+_MARIA_HISTORY = [
+    {"role": "user", "content": "What does Maria require of the customer?"},
+    {
+        "role": "assistant",
+        "content": "Maria requires the customer to give written notice.",
+    },
+]
+_SHE_QUESTION = "What does she require of the customer?"
+_SHE_RESOLVED = "What does Maria require of the customer?"
+
+
+class _CapturingResolutionProvider:
+    """Fake LLM provider. Records the resolver messages and returns one completion."""
+
+    def __init__(self, completion: str) -> None:
+        self.completion = completion
+        self.calls: list[dict[str, str]] = []
+
+    async def generate(
+        self,
+        prompt: str,
+        *,
+        system_instruction: str,
+        temperature: float,
+        max_output_tokens: int,
+    ) -> str:
+        self.calls.append({"prompt": prompt, "system_instruction": system_instruction})
+        return self.completion
+
+
+class _RaisingResolutionProvider:
+    """Fake LLM provider whose generate call fails."""
+
+    async def generate(
+        self,
+        prompt: str,
+        *,
+        system_instruction: str,
+        temperature: float,
+        max_output_tokens: int,
+    ) -> str:
+        raise RuntimeError("resolver unavailable")
+
+
+def _patch_resolution_provider(monkeypatch, provider: object) -> None:
+    monkeypatch.setattr("services.query_service.get_llm_provider", lambda: provider)
+
+
+def _assert_resolution_instruction(instruction: str) -> None:
+    """The inline instruction still resolves anaphora and returns only the question."""
+    lowered = instruction.casefold()
+    assert '"it"' in instruction
+    assert '"they"' in instruction
+    assert '"that"' in instruction
+    assert '"she"' in instruction
+    assert "that clause" in lowered
+    assert "the second option" in lowered
+    assert "the earlier plan" in lowered
+    assert "omitted subjects" in lowered
+    assert "substituting the prior entity they refer to" in lowered
+    assert "if the question is already standalone, return it unchanged" in lowered
+    assert "return only the rewritten question, nothing else" in lowered
+
+
+def _assert_enterprise_messages(instruction: str, user_text: str) -> None:
+    """Messages forbid attaching enterprise termination to Plan A or Plan B."""
+    _assert_resolution_instruction(instruction)
+    lowered = instruction.casefold()
+    assert "when the current question introduces a named entity, keep that entity" in lowered
+    assert "do not replace it with an entity that appears only in prior turns" in lowered
+    assert "preserve ordinals and the relation being asked about" in lowered
+    assert "not a nearby fact from history" in lowered
+    history, separator, follow_up = user_text.partition("Follow-up question:")
+    assert separator
+    assert "Plan A" in history
+    assert "Plan B" in history
+    assert "enterprise termination" not in history.casefold()
+    assert "enterprise termination" in follow_up.casefold()
+    assert "Plan A" not in follow_up
+    assert "Plan B" not in follow_up
+
+
+def _assert_pronoun_messages(instruction: str, user_text: str) -> None:
+    """Messages still require substituting the prior entity for a pronoun."""
+    _assert_resolution_instruction(instruction)
+    history, separator, follow_up = user_text.partition("Follow-up question:")
+    assert separator
+    assert "Maria" in history
+    assert "she" in follow_up.casefold()
+
+
+@pytest.mark.asyncio
+async def test_resolver_keeps_introduced_enterprise_entity(monkeypatch):
+    """A newly named entity and its relation stay off entities from earlier turns.
+
+    The gate is not what this fixture exercises. The resolver is called directly
+    so the prompt contract is checked whenever resolution runs.
+    """
+    provider = _CapturingResolutionProvider(_ENTERPRISE_RESOLVED)
+    _patch_resolution_provider(monkeypatch, provider)
+
+    call = await _call_standalone_resolution(_ENTERPRISE_QUESTION, _PLAN_HISTORY)
+    result = await transform_query(
+        _ENTERPRISE_QUESTION,
+        history=_PLAN_HISTORY,
+        resolution_policy=HistoryResolutionPolicy(run=True, use_gate=False),
+    )
+
+    assert provider.calls
+    for recorded in provider.calls:
+        _assert_enterprise_messages(recorded["system_instruction"], recorded["prompt"])
+    assert call.failed is False
+    assert call.query == _ENTERPRISE_RESOLVED
+    assert result.queries == [_ENTERPRISE_RESOLVED]
+    assert result.history_resolved_query == _ENTERPRISE_RESOLVED
+
+
+@pytest.mark.asyncio
+async def test_resolver_still_resolves_pronoun_from_history(monkeypatch):
+    """A pronoun still resolves to the prior entity, and the caller keeps that rewrite."""
+    provider = _CapturingResolutionProvider(_SHE_RESOLVED)
+    _patch_resolution_provider(monkeypatch, provider)
+
+    call = await _call_standalone_resolution(_SHE_QUESTION, _MARIA_HISTORY)
+    result = await transform_query(
+        _SHE_QUESTION,
+        history=_MARIA_HISTORY,
+        resolution_policy=HistoryResolutionPolicy(run=True, use_gate=True),
+    )
+
+    assert provider.calls
+    for recorded in provider.calls:
+        _assert_pronoun_messages(recorded["system_instruction"], recorded["prompt"])
+    assert call.failed is False
+    assert call.query == _SHE_RESOLVED
+    assert result.queries == [_SHE_RESOLVED]
+    assert result.history_resolved_query == _SHE_RESOLVED
+
+
+@pytest.mark.asyncio
+async def test_resolver_exception_returns_original_question(monkeypatch):
+    _patch_resolution_provider(monkeypatch, _RaisingResolutionProvider())
+
+    call = await _call_standalone_resolution(_PRONOUN, _HISTORY)
+
+    assert call.failed is True
+    assert call.query == _PRONOUN
+
+
+@pytest.mark.asyncio
+async def test_chat_resolver_exception_keeps_original_question(monkeypatch):
+    """A resolver exception does not fail the chat request."""
+    monkeypatch.setattr(config, "QUERY_TRANSFORMATION_ENABLED", False)
+    monkeypatch.setattr(config, "HISTORY_AWARE_RETRIEVAL_DEFAULT", True)
+    captured: dict = {}
+    _patch_resolution_provider(monkeypatch, _RaisingResolutionProvider())
+
+    with _service_patches(_embed_capture(captured)):
+        result = await answer_question_for_document(
+            question=_PRONOUN,
+            doc_id="doc-1",
+            session_id="sess-1",
+            auth=TEST_AUTH,
+            debug_retrieval=True,
+        )
+
+    assert result["status"] == "ok"
+    assert captured["texts"] == [_PRONOUN]
+    assert result["retrieval_debug"]["history_resolution_fallback_reason"] == "llm_failure"
+    assert "history_resolved_query" not in result["retrieval_debug"]

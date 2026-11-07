@@ -264,8 +264,14 @@ class DatabaseService(ABC):
         question: str,
         answer: str,
         tenant_id: str,
+        *,
+        sources: Optional[list] = None,
     ) -> tuple[str, str]:
-        """Store a user/assistant chat turn atomically for a tenant-owned session."""
+        """Store a user/assistant chat turn atomically for a tenant-owned session.
+
+        ``sources`` is copied onto the assistant row only. ``None`` (the default)
+        leaves that column null; ``[]`` stores an empty generated-answer snapshot.
+        """
         pass
 
     @abstractmethod

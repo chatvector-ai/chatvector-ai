@@ -456,7 +456,18 @@ export type DocumentStatusPayload = {
    * be processed. Optional because non-queued responses omit the field.
    */
   queue_position?: number;
+  /**
+   * File name from the document row. Omitted when the payload has no
+   * non-blank name, so the chip can fall back without treating "" as a label.
+   */
+  file_name?: string;
 };
+
+function parseStatusFileName(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
 
 function parseChunks(raw: unknown): { total: number; processed: number } | undefined {
   if (raw == null || typeof raw !== "object") return undefined;
@@ -522,6 +533,7 @@ export async function getDocumentStatus(
   const createdAt = data?.created_at as string | null | undefined;
   const updatedAt = data?.updated_at as string | null | undefined;
   const queuePosition = parseQueuePosition(data?.queue_position);
+  const fileName = parseStatusFileName(data?.file_name);
   return {
     status,
     ...(statusDetail !== undefined ? { status_detail: statusDetail } : {}),
@@ -531,6 +543,7 @@ export async function getDocumentStatus(
     ...(createdAt !== undefined ? { created_at: createdAt } : {}),
     ...(updatedAt !== undefined ? { updated_at: updatedAt } : {}),
     ...(queuePosition !== undefined ? { queue_position: queuePosition } : {}),
+    ...(fileName !== undefined ? { file_name: fileName } : {}),
   };
 }
 
@@ -698,11 +711,16 @@ export type SessionResponse = {
   last_active: string;
   metadata: Record<string, unknown>;
   document_ids: string[];
+  display_label: string;
 };
 
 export type SessionListResponse = {
   sessions: SessionResponse[];
 };
+
+function parseDisplayLabel(value: unknown): string {
+  return typeof value === "string" && value.length > 0 ? value : "New session";
+}
 
 function parseSessionResponse(data: unknown): SessionResponse {
   if (!data || typeof data !== "object") {
@@ -727,6 +745,7 @@ function parseSessionResponse(data: unknown): SessionResponse {
     document_ids: Array.isArray(record.document_ids)
       ? record.document_ids.filter((item): item is string => typeof item === "string")
       : [],
+    display_label: parseDisplayLabel(record.display_label),
   };
 }
 

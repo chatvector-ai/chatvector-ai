@@ -143,6 +143,8 @@ export type SessionHistoryMessage = {
   role: string;
   content: string;
   createdAt?: string | null;
+  /** Answer-time citation snapshot. ``null``/omitted is a pre-snapshot row. */
+  sources?: Record<string, unknown>[] | null;
   _raw?: Record<string, unknown>;
 };
 
@@ -211,6 +213,8 @@ export type DocumentStatus = {
   job?: Record<string, unknown> | null;
   /** Document metadata when the status payload includes it. */
   metadata?: Record<string, unknown>;
+  /** Document file name when the status payload includes it. */
+  fileName?: string | null;
   _raw?: Record<string, unknown>;
 };
 
@@ -223,6 +227,11 @@ export type ChatStreamEvent =
       latencyMs: number;
       model: string;
       retrievalDebug?: RetrievalDebugMetadata;
+      /**
+       * Persisted assistant message id. Omitted when the server did not store
+       * the turn. Absence is not an error.
+       */
+      messageId?: string;
       _raw?: Record<string, unknown>;
     };
 
@@ -271,6 +280,7 @@ export type Session = {
   lastActive: string;
   metadata: Record<string, unknown>;
   documentIds: string[];
+  displayLabel: string;
   _raw?: Record<string, unknown>;
 };
 

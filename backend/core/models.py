@@ -93,6 +93,7 @@ class ChatMessage(Base):
     tenant_id = Column(String, nullable=True, index=True)
     role = Column(String, nullable=False)
     content = Column(String, nullable=False)
+    sources = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

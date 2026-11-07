@@ -365,6 +365,7 @@ type Session = {
   lastActive: string;
   metadata: Record<string, unknown>;
   documentIds: string[];
+  displayLabel: string;
   _raw?: Record<string, unknown>;
 };
 
