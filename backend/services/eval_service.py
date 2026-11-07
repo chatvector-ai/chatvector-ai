@@ -36,19 +36,35 @@ _COMPONENT_SCORE_FIELDS = (
 )
 
 
-def _candidate_summary(chunk: ChunkMatch) -> dict:
+def _candidate_summary(chunk: ChunkMatch, *, logical_key: str | None = None) -> dict:
     summary = {
         "id": chunk.id,
         "document_id": chunk.document_id,
-        "chunk_index": chunk.chunk_index,
-        "similarity": chunk.similarity,
-        "score_type": chunk.score_type,
     }
+    if logical_key is not None:
+        summary["logical_key"] = logical_key
+    summary["chunk_index"] = chunk.chunk_index
+    summary["similarity"] = chunk.similarity
+    summary["score_type"] = chunk.score_type
     for field_name in _COMPONENT_SCORE_FIELDS:
         value = getattr(chunk, field_name, None)
         if value is not None:
             summary[field_name] = value
     return summary
+
+
+def _logical_keys_by_document(query: EvalQuery) -> dict[str, str]:
+    """Map runtime document ids back to manifest logical keys.
+
+    Empty when the dataset was not resolved through a manifest.
+    """
+    if not query.logical_doc_ids:
+        return {}
+    return {
+        document_id: logical_key
+        for logical_key, document_id in zip(query.logical_doc_ids, query.doc_ids)
+        if document_id
+    }
 
 
 def _copied_retrieval_trace(retrieval) -> dict:
@@ -247,6 +263,7 @@ async def _run_arm(
             for c in candidates
         ]
         relevant = q.relevant_keys()
+        logical_keys = _logical_keys_by_document(q)
 
         metrics: dict[str, float] = {"mrr": eval_metrics.mrr(ranked_keys, relevant)}
         for k in k_values:
@@ -256,7 +273,13 @@ async def _run_arm(
         query_results.append(
             QueryResult(
                 query=q.query,
-                candidates=[_candidate_summary(c) for c in candidates],
+                candidates=[
+                    _candidate_summary(
+                        c,
+                        logical_key=logical_keys.get(c.document_id) if c.document_id else None,
+                    )
+                    for c in candidates
+                ],
                 metrics=metrics,
                 context_preview=context_preview,
                 metadata_filter=metadata_filter,

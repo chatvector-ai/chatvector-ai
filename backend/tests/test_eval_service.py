@@ -322,6 +322,109 @@ async def test_export_keeps_chunk_order_and_present_component_scores(tmp_path):
     assert plain["similarity"] == 0.5
 
 
+def _manifest_dataset(tmp_path: Path) -> EvalDataset:
+    questions = {
+        "name": "resolved",
+        "chunk_settings": {
+            "chunking_strategy": "fixed",
+            "chunk_size": 1000,
+            "chunk_overlap": 200,
+        },
+        "queries": [
+            {
+                "query": "How long is the retention period?",
+                "doc_ids": ["retention-policy", "handbook"],
+                "relevant_chunks": [["retention-policy", 0]],
+            }
+        ],
+    }
+    manifest = {
+        "tenant_id": "eval-tenant",
+        "chunk_settings": {
+            "CHUNK_SIZE": 1000,
+            "CHUNK_OVERLAP": 200,
+            "CHUNKING_STRATEGY": "fixed",
+        },
+        "documents": [
+            {
+                "logical_key": "retention-policy",
+                "file_name": "retention.txt",
+                "document_id": "run-doc-retention",
+                "status": "completed",
+            },
+            {
+                "logical_key": "handbook",
+                "file_name": "handbook.txt",
+                "document_id": "run-doc-handbook",
+                "status": "completed",
+            },
+        ],
+    }
+    question_path = tmp_path / "queries.json"
+    manifest_path = tmp_path / "manifest.json"
+    question_path.write_text(json.dumps(questions), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    return load_dataset(question_path, manifest_path)
+
+
+@pytest.mark.asyncio
+async def test_export_keeps_logical_key_and_runtime_document_id(tmp_path):
+    dataset = _manifest_dataset(tmp_path)
+    resolved = dataset.queries[0]
+    assert resolved.doc_ids == ["run-doc-retention", "run-doc-handbook"]
+    assert resolved.logical_doc_ids == ["retention-policy", "handbook"]
+
+    retrieval = _retrieval_result(
+        [
+            _chunk("run-doc-handbook", 1, score=0.2),
+            _chunk("run-doc-retention", 0, score=0.8),
+            _chunk("not-in-manifest", 4, score=0.3),
+        ],
+        original_query="How long is the retention period?",
+        transformed_queries=["How long is the retention period?"],
+        primary_query="How long is the retention period?",
+        timing_ms={"transform": 1, "embed": 1, "search": 1, "rerank": 0, "context": 1, "total": 4},
+    )
+
+    async def fake_retrieve(*args, **kwargs):
+        del args, kwargs
+        return retrieval
+
+    arm = EffectiveRetrievalConfig(
+        label="current-config", hybrid_retrieval_enabled=False, enable_reranking=False
+    )
+    export_path = tmp_path / "resolved.json"
+
+    with patch("services.eval_service.retrieve_for_documents", AsyncMock(side_effect=fake_retrieve)):
+        await run_eval(dataset, [arm], tenant_id="tenant-eval-test", export_path=export_path)
+
+    candidates = json.loads(export_path.read_text(encoding="utf-8"))["arms"][0]["per_query_metrics"][0]["candidates"]
+    assert [(row["document_id"], row.get("logical_key")) for row in candidates] == [
+        ("run-doc-handbook", "handbook"),
+        ("run-doc-retention", "retention-policy"),
+        ("not-in-manifest", None),
+    ]
+    assert "logical_key" not in candidates[2]
+
+    plain = load_dataset(FIXTURES_DIR / "basic_queries.json")
+    plain_retrieval = _retrieval_result(
+        [_chunk("fixture-doc-01", 0)],
+        original_query="plain",
+        transformed_queries=["plain"],
+        primary_query="plain",
+        timing_ms={"total": 1},
+    )
+
+    async def fake_plain(*args, **kwargs):
+        del args, kwargs
+        return plain_retrieval
+
+    with patch("services.eval_service.retrieve_for_documents", AsyncMock(side_effect=fake_plain)):
+        plain_result = await run_eval(plain, [arm], tenant_id="tenant-eval-test")
+
+    assert "logical_key" not in plain_result.arms[0].query_results[0].candidates[0]
+
+
 # ---------------------------------------------------------------------------
 # No answer-generation call anywhere in the eval path
 # ---------------------------------------------------------------------------
