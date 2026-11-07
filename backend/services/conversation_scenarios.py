@@ -77,7 +77,7 @@ class ExpectedRefusal:
 
 @dataclass(frozen=True)
 class ResolutionContains:
-    """Resolution ran, and the changed query still contains this text."""
+    """Resolution ran, and the effective query still contains this text."""
 
     text: str
 
@@ -608,6 +608,11 @@ def _resolution_failures(turn: ConversationTurn, debug: dict) -> list[str]:
             ]
         return []
     resolved = debug.get("history_resolved_query")
+    # An applied echo omits history_resolved_query. The user line is the query.
+    if applied is True and not isinstance(resolved, str):
+        original = debug.get("original_query")
+        if isinstance(original, str):
+            resolved = original
     if (
         applied is not True
         or not isinstance(resolved, str)

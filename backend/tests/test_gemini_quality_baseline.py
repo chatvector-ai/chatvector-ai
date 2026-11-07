@@ -24,7 +24,11 @@ _REQUIRED_HEADINGS = (
     "## Conversation",
     "## Latency",
     "## Integration support is not quality validation",
+    "## Erratum",
 )
+
+# Question file scored by the recorded run. Later label corrections do not replace it.
+SCORED_QUESTION_FILE_SHA256 = "bd79fa95e097c2df5acef9da38380b8adc36955bebe49ec0833bc8ae43f02a64"
 
 _RANK_TOKENS = ("MRR", "recall@5", "nDCG@5", "recall@10", "nDCG@10")
 
@@ -58,8 +62,19 @@ def test_report_contains_required_sections_and_reference_configuration():
     assert "reranking" in configuration.lower()
     assert "match_count" in configuration
     assert "brinewick-transit-cooperative" in configuration
-    corpus_hash = hashlib.sha256(QUESTIONS.read_bytes()).hexdigest()
-    assert corpus_hash in configuration
+    assert SCORED_QUESTION_FILE_SHA256 in configuration
+    live_hash = hashlib.sha256(QUESTIONS.read_bytes()).hexdigest()
+    if live_hash != SCORED_QUESTION_FILE_SHA256:
+        erratum = _section(text, "## Erratum")
+        assert live_hash in erratum
+        assert SCORED_QUESTION_FILE_SHA256 in erratum
+        assert "q-release" in erratum
+        assert "q-stale-pto-document" in erratum
+        assert "q-chunk-boundary" in erratum
+        assert "0.9138" in erratum
+        assert "contradictory_sources" in erratum
+        assert "not re-run" in erratum
+        assert live_hash not in configuration
 
     retrieval = _section(text, "## Retrieval")
     for token in _RANK_TOKENS:
@@ -69,6 +84,7 @@ def test_report_contains_required_sections_and_reference_configuration():
     answers = _section(text, "## Answers")
     for token in ("Completeness", "Groundedness", "Citation support", "Refusal correctness"):
         assert token in answers
+    assert "0.9138" in answers
 
     conversation = _section(text, "## Conversation")
     assert "follow-up" in conversation.lower()

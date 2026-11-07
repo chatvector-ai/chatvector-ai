@@ -129,9 +129,16 @@ def _two_turn_script(tmp_path, *, max_turns: int = 2):
     )
 
 
-def _chat(answer: str, *, reason: str | None, applied: bool, resolved: str | None = None):
+def _chat(
+    answer: str,
+    *,
+    reason: str | None,
+    applied: bool,
+    resolved: str | None = None,
+    original: str | None = None,
+):
     debug = {
-        "original_query": "stored-on-the-turn",
+        "original_query": "stored-on-the-turn" if original is None else original,
         "history_resolution_applied": applied,
         "effective_config": {"match_count": {"value": 5, "source": "env"}},
     }
@@ -333,6 +340,66 @@ async def test_contains_label_matches_the_resolved_query_case_insensitively(tmp_
     failed = await _run(tmp_path, scenario, mismatch)
     assert not failed.passed
     assert "pol-hr-014" in failed.scenarios[0].error
+
+
+async def test_contains_label_accepts_an_applied_echo_of_the_user_line(tmp_path):
+    user = (
+        "And what is the dinner reimbursement limit when travel orders "
+        "send a captain away from Saltmere overnight?"
+    )
+    scenario = _write_script(
+        tmp_path,
+        [
+            {
+                "user": user,
+                "resolution": {"contains": "travel orders"},
+                "expected_facts": ["40 USD"],
+            }
+        ],
+        max_turns=1,
+        scenario_id="echo-contains",
+    )
+    echoed = await _run(
+        tmp_path,
+        scenario,
+        _player([_chat("The limit is 40 USD.", reason=None, applied=True, original=user)]),
+    )
+    assert echoed.passed
+
+    dropped = await _run(
+        tmp_path,
+        scenario,
+        _player(
+            [
+                _chat(
+                    "The limit is 40 USD.",
+                    reason=None,
+                    applied=True,
+                    original=user,
+                    resolved="What is the dinner reimbursement limit?",
+                )
+            ]
+        ),
+    )
+    assert not dropped.passed
+    assert "travel orders" in dropped.scenarios[0].error
+
+    missing = await _run(
+        tmp_path,
+        scenario,
+        _player(
+            [
+                _chat(
+                    "The limit is 40 USD.",
+                    reason=None,
+                    applied=True,
+                    original="What is the dinner reimbursement limit overnight?",
+                )
+            ]
+        ),
+    )
+    assert not missing.passed
+    assert "travel orders" in missing.scenarios[0].error
 
 
 async def test_refusal_label_uses_the_answer_phrase_rule(tmp_path):
