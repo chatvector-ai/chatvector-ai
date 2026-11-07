@@ -496,11 +496,18 @@ async def retrieve_for_documents(
     context_kwargs = {}
     if max_context_chars is not None:
         context_kwargs["max_chars"] = max_context_chars
-    context = build_context_from_chunks(
+    packed = build_context_from_chunks(
         matching_chunks,
         session_context=session_context,
         **context_kwargs,
     )
+    # Tests stub the packer with a plain string. The real packer returns both.
+    if isinstance(getattr(packed, "text", None), str):
+        context = packed.text
+    elif isinstance(packed, str):
+        context = packed
+    else:
+        raise TypeError("build_context_from_chunks must return a string or PackedContext")
     context_ms = int((time.perf_counter() - context_started) * 1000)
 
     return RetrievalResult(
