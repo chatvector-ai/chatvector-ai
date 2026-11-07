@@ -1200,6 +1200,128 @@ describe("session API", () => {
     );
   });
 
+  it("getSessionHistory keeps citation fields and page_end from a source snapshot", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          messages: [
+            {
+              id: "asst-1",
+              role: "assistant",
+              content: "Ten days.",
+              created_at: "2026-01-01T00:00:00Z",
+              model: "gpt-test",
+              latency_ms: 1200,
+              retrieval_debug: { original_query: "What is the limit?" },
+              sources: [
+                {
+                  document_id: "doc-old",
+                  file_name: "handbook-v1.pdf",
+                  page_number: 3,
+                  page_end: 5,
+                  chunk_index: 2,
+                  score: 0.91,
+                  score_type: "vector",
+                  chunk_text: "do not restore this",
+                },
+                {
+                  file_name: "notes.txt",
+                  chunk_index: 0,
+                  score: 0.4,
+                },
+                { page_number: 9 },
+                null,
+              ],
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    );
+
+    const result = await getSessionHistory("session-abc");
+
+    expect(result.messages).toEqual([
+      {
+        id: "asst-1",
+        role: "assistant",
+        content: "Ten days.",
+        created_at: "2026-01-01T00:00:00Z",
+        sources: [
+          {
+            file_name: "handbook-v1.pdf",
+            page_number: 3,
+            page_end: 5,
+            chunk_index: 2,
+            score: 0.91,
+            score_type: "vector",
+          },
+          {
+            file_name: "notes.txt",
+            chunk_index: 0,
+            score: 0.4,
+          },
+        ],
+      },
+    ]);
+    expect(result.messages[0]).not.toHaveProperty("model");
+    expect(result.messages[0]).not.toHaveProperty("latency_ms");
+    expect(result.messages[0]).not.toHaveProperty("retrieval_debug");
+    expect(result.messages[0].sources?.[0]).not.toHaveProperty("document_id");
+    expect(result.messages[0].sources?.[0]).not.toHaveProperty("chunk_text");
+    expect(result.messages[0].sources?.[1]).not.toHaveProperty("page_number");
+  });
+
+  it.each([
+    ["null snapshot", null],
+    ["missing sources field", undefined],
+    ["non-array sources", { file_name: "handbook-v1.pdf" }],
+  ])("getSessionHistory treats a %s as no citation and does not throw", async (_label, sources) => {
+    const message: Record<string, unknown> = {
+      id: "asst-1",
+      role: "assistant",
+      content: "Ten days.",
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    if (sources !== undefined) message.sources = sources;
+
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify({ messages: [message] }), { status: 200 })
+    );
+
+    const result = await getSessionHistory("session-abc");
+
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0].content).toBe("Ten days.");
+    if (sources === undefined) {
+      expect(result.messages[0]).not.toHaveProperty("sources");
+    } else {
+      expect(result.messages[0].sources).toBeNull();
+    }
+  });
+
+  it("getSessionHistory keeps an empty source snapshot as an empty list", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          messages: [
+            {
+              id: "asst-1",
+              role: "assistant",
+              content: "No citations.",
+              sources: [],
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    );
+
+    const result = await getSessionHistory("session-abc");
+
+    expect(result.messages[0].sources).toEqual([]);
+  });
+
   it("getSession returns parsed session metadata", async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(JSON.stringify(SESSION_PAYLOAD), { status: 200 })

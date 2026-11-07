@@ -52,6 +52,8 @@ export function authHeaders(): Record<string, string> {
 export type ChatSource = {
   file_name: string;
   page_number?: number | null;
+  /** Inclusive end page when a chunk spans more than one PDF page. */
+  page_end?: number | null;
   chunk_index?: number | null;
   score?: number | null;
   score_type?: string | null;
@@ -80,6 +82,8 @@ export type RetrievalInspectorData = {
 
 export type Message = {
   id: number;
+  /** Server id of the history row. Present on bubbles restored from a session. */
+  historyId?: string;
   sender: "user" | "ai";
   text: string;
   document_id?: string;
@@ -836,11 +840,66 @@ export type SessionHistoryMessage = {
   role: "user" | "assistant" | string;
   content: string;
   created_at?: string | null;
+  /**
+   * Answer-time citation snapshot. `null` is a user row or a pre-snapshot
+   * assistant row. Omitted means the payload had no `sources` field.
+   */
+  sources?: ChatSource[] | null;
 };
 
 export type SessionHistoryResponse = {
   messages: SessionHistoryMessage[];
 };
+
+function parseFiniteNumber(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  return value;
+}
+
+const HISTORY_SOURCE_NUMBER_KEYS = [
+  "page_number",
+  "page_end",
+  "chunk_index",
+  "score",
+  "vector_score",
+  "full_text_score",
+  "rrf_score",
+  "reranker_score",
+  "rerank_order",
+] as const;
+
+function parseHistorySource(value: unknown): ChatSource | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.file_name !== "string" || record.file_name.trim() === "") {
+    return null;
+  }
+
+  const source: ChatSource = { file_name: record.file_name };
+  for (const key of HISTORY_SOURCE_NUMBER_KEYS) {
+    const parsed = parseFiniteNumber(record[key]);
+    if (parsed !== undefined) source[key] = parsed;
+  }
+  if (typeof record.score_type === "string" && record.score_type.trim() !== "") {
+    source.score_type = record.score_type;
+  }
+  return source;
+}
+
+/**
+ * History snapshots are answer-time JSON. A missing field, null, or a
+ * non-array is an empty citation, not a failed transcript.
+ */
+function parseHistorySources(value: unknown): ChatSource[] | null | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return null;
+  const sources: ChatSource[] = [];
+  for (const item of value) {
+    const source = parseHistorySource(item);
+    if (source) sources.push(source);
+  }
+  return sources;
+}
 
 function parseSessionHistoryMessage(data: unknown): SessionHistoryMessage {
   if (!data || typeof data !== "object") {
@@ -853,11 +912,13 @@ function parseSessionHistoryMessage(data: unknown): SessionHistoryMessage {
   if (typeof id !== "string" || typeof role !== "string" || typeof content !== "string") {
     throw new ChatError("unexpected", "Invalid session history response from server.");
   }
+  const sources = parseHistorySources(record.sources);
   return {
     id,
     role,
     content,
     created_at: typeof record.created_at === "string" ? record.created_at : null,
+    ...(sources !== undefined ? { sources } : {}),
   };
 }
 
