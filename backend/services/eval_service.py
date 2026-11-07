@@ -38,6 +38,28 @@ def _candidate_summary(chunk: ChunkMatch) -> dict:
     }
 
 
+def _copied_retrieval_trace(retrieval) -> dict:
+    """Copy query text and stage timings already stored on the retrieval result.
+
+    Does not transform the query again or start a new clock.
+    """
+    transform = retrieval.transform_result
+    return {
+        "original_query": transform.original_query,
+        "transformed_queries": list(transform.queries),
+        "effective_retrieval_query": retrieval.primary_query,
+        "timing_ms": dict(retrieval.timing_ms),
+    }
+
+
+_NO_RETRIEVAL_TRACE = {
+    "original_query": None,
+    "transformed_queries": None,
+    "effective_retrieval_query": None,
+    "timing_ms": None,
+}
+
+
 @dataclass
 class QueryResult:
     query: str
@@ -48,6 +70,11 @@ class QueryResult:
     metadata_filter: dict | None = None
     # True when ``metadata_filter`` removed every document: nothing was searched.
     filter_excluded_all_documents: bool = False
+    # Copied from RetrievalResult. Null when retrieval did not run.
+    original_query: str | None = None
+    transformed_queries: list[str] | None = None
+    effective_retrieval_query: str | None = None
+    timing_ms: dict | None = None
 
 
 @dataclass
@@ -87,6 +114,10 @@ class EvalRunResult:
                     "per_query_metrics": [
                         {
                             "query": qr.query,
+                            "original_query": qr.original_query,
+                            "transformed_queries": qr.transformed_queries,
+                            "effective_retrieval_query": qr.effective_retrieval_query,
+                            "timing_ms": qr.timing_ms,
                             "metrics": qr.metrics,
                             "candidates": qr.candidates,
                             "context_preview": qr.context_preview,
@@ -183,6 +214,7 @@ async def _run_arm(
             # documents: nothing is searched and metrics score no candidates.
             candidates: list[ChunkMatch] = []
             context_preview = ""
+            trace = dict(_NO_RETRIEVAL_TRACE)
         else:
             retrieval = await retrieve_for_documents(
                 q.query,
@@ -195,6 +227,7 @@ async def _run_arm(
             )
             candidates = retrieval.chunks
             context_preview = retrieval.context
+            trace = _copied_retrieval_trace(retrieval)
 
         ranked_keys = [
             eval_metrics.chunk_match_key(c.document_id, c.chunk_index)
@@ -215,6 +248,10 @@ async def _run_arm(
                 context_preview=context_preview,
                 metadata_filter=metadata_filter,
                 filter_excluded_all_documents=filter_excluded_all,
+                original_query=trace["original_query"],
+                transformed_queries=trace["transformed_queries"],
+                effective_retrieval_query=trace["effective_retrieval_query"],
+                timing_ms=trace["timing_ms"],
             )
         )
 

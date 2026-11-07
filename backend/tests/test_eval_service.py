@@ -10,9 +10,12 @@ from core.config import config
 from db.base import ChunkMatch
 from services import eval_metrics
 from cli import cmd_eval
+from services.chat_service import RetrievalResult
 from services.eval_config import EffectiveRetrievalConfig
 from services.eval_fixtures import EvalDataset, load_dataset
 from services.eval_service import EvalRunResult, diff_arms, run_eval
+from services.query_service import QueryTransformResult
+from services.retrieval_config import RetrievalProcessDefaults, resolve_retrieval_config
 from services.metadata_filter import InvalidMetadataFilterError
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "eval"
@@ -169,6 +172,76 @@ async def test_export_writes_expected_schema(tmp_path):
     assert "aggregate_metrics" in arm_payload
     assert "per_query_metrics" in arm_payload
     assert len(arm_payload["per_query_metrics"]) == len(dataset.queries)
+
+
+def _retrieval_result(
+    chunks: list[ChunkMatch],
+    *,
+    original_query: str,
+    transformed_queries: list[str],
+    primary_query: str,
+    timing_ms: dict,
+    context: str = "packed context",
+) -> RetrievalResult:
+    return RetrievalResult(
+        chunks=list(chunks),
+        queries=list(transformed_queries),
+        primary_query=primary_query,
+        context=context,
+        timing_ms=dict(timing_ms),
+        transform_result=QueryTransformResult(
+            queries=list(transformed_queries),
+            original_query=original_query,
+        ),
+        effective_config=resolve_retrieval_config({}, RetrievalProcessDefaults.from_process()),
+    )
+
+
+@pytest.mark.asyncio
+async def test_export_copies_transformed_queries_and_timings_from_retrieval(tmp_path):
+    dataset = load_dataset(FIXTURES_DIR / "basic_queries.json")
+    timing_ms = {
+        "transform": 11,
+        "embed": 22,
+        "search": 33,
+        "rerank": 44,
+        "context": 55,
+        "total": 66,
+    }
+    retrieval = _retrieval_result(
+        [_chunk("fixture-doc-01", 2, score=0.4)],
+        original_query="asked before transform",
+        transformed_queries=["embedded query", "expanded query"],
+        primary_query="embedded query",
+        timing_ms=timing_ms,
+        context="assembled context",
+    )
+
+    async def fake_retrieve(*args, **kwargs):
+        del args, kwargs
+        return retrieval
+
+    arm = EffectiveRetrievalConfig(
+        label="current-config", hybrid_retrieval_enabled=False, enable_reranking=False
+    )
+    export_path = tmp_path / "run.json"
+
+    with patch("services.eval_service.retrieve_for_documents", AsyncMock(side_effect=fake_retrieve)):
+        result = await run_eval(dataset, [arm], tenant_id="tenant-eval-test", export_path=export_path)
+
+    row = result.arms[0].query_results[0]
+    assert row.original_query == retrieval.transform_result.original_query
+    assert row.transformed_queries == retrieval.transform_result.queries
+    assert row.effective_retrieval_query == retrieval.primary_query
+    assert row.timing_ms == retrieval.timing_ms
+    assert list(row.timing_ms) == list(retrieval.timing_ms)
+
+    exported = json.loads(export_path.read_text(encoding="utf-8"))["arms"][0]["per_query_metrics"][0]
+    assert exported["original_query"] == retrieval.transform_result.original_query
+    assert exported["transformed_queries"] == list(retrieval.transform_result.queries)
+    assert exported["effective_retrieval_query"] == retrieval.primary_query
+    assert exported["timing_ms"] == retrieval.timing_ms
+    assert list(exported["timing_ms"]) == ["transform", "embed", "search", "rerank", "context", "total"]
 
 
 # ---------------------------------------------------------------------------
@@ -479,6 +552,10 @@ async def test_metadata_filter_excluding_everything_searches_nothing(tmp_path):
     assert per_query["metadata_filter"] == {"department": "finance"}
     assert per_query["filter_excluded_all_documents"] is True
     assert per_query["candidates"] == []
+    assert per_query["original_query"] is None
+    assert per_query["transformed_queries"] is None
+    assert per_query["effective_retrieval_query"] is None
+    assert per_query["timing_ms"] is None
 
 
 @pytest.mark.asyncio
