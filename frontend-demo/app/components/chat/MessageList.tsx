@@ -19,6 +19,9 @@ type Props = {
 function shouldAnimate(msg: Message): boolean {
   if (msg.sender !== "ai") return false;
   if (msg.id === 1) return false;
+  // A restored row already finished. Replaying the typewriter would hide its
+  // snapshot citation until the animation ended.
+  if (msg.historyId) return false;
   if (msg.isStreaming !== undefined) return false; // real streaming — no fake animation
   if (msg.sources === undefined && msg.chunks === undefined && !msg.error) return false;
   return true;
