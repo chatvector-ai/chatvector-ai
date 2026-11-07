@@ -5,14 +5,25 @@ import { useState, useEffect, useRef } from "react";
 import { Bot, User } from "lucide-react";
 import { type Message } from "../../lib/api";
 import AiResponseContent from "./AiResponseContent";
+import AnswerFeedback from "./AnswerFeedback";
 
 type Props = {
   messages: Message[];
   inflight: boolean;
   streaming: boolean;
   historyLoading?: boolean;
+  sessionId?: string | null;
   bottomRef: RefObject<HTMLDivElement | null>;
 };
+
+function canRate(msg: Message): msg is Message & { messageId: string } {
+  return (
+    msg.sender === "ai" &&
+    typeof msg.messageId === "string" &&
+    msg.messageId.trim() !== "" &&
+    msg.isStreaming !== true
+  );
+}
 
 // Welcome message (id: 1) and transport errors (no sources/chunks) skip animation.
 // Streamed messages also skip the fake animation — they render tokens in real time.
@@ -43,6 +54,7 @@ export default function MessageList({
   inflight,
   streaming,
   historyLoading = false,
+  sessionId = null,
   bottomRef,
 }: Props) {
   const [animatingId, setAnimatingId] = useState<number | null>(null);
@@ -147,18 +159,26 @@ export default function MessageList({
               {msg.sender === "user" ? (
                 text
               ) : (
-                <AiResponseContent
-                  text={text}
-                  error={msg.error}
-                  sources={msg.sources}
-                  chunks={msg.chunks}
-                  model={msg.model}
-                  latencyMs={msg.latency_ms}
-                  question={msg.question}
-                  retrievalDebug={msg.retrieval_debug}
-                  detailsVisible={detailsVisible}
-                  isStreaming={isRealStreaming}
-                />
+                <>
+                  <AiResponseContent
+                    text={text}
+                    error={msg.error}
+                    sources={msg.sources}
+                    chunks={msg.chunks}
+                    model={msg.model}
+                    latencyMs={msg.latency_ms}
+                    question={msg.question}
+                    retrievalDebug={msg.retrieval_debug}
+                    detailsVisible={detailsVisible}
+                    isStreaming={isRealStreaming}
+                  />
+                  {canRate(msg) && detailsVisible ? (
+                    <AnswerFeedback
+                      sessionId={sessionId}
+                      messageId={msg.messageId}
+                    />
+                  ) : null}
+                </>
               )}
             </div>
           </div>
