@@ -1,4 +1,4 @@
-"""Pure-Python retrieval metrics: recall@k, MRR, nDCG@k.
+"""Pure-Python retrieval metrics: recall@k, MRR, nDCG@k, packed presence.
 
 No third-party numerics dependency is used — none is present in
 requirements.txt and these are small enough not to warrant adding one.
@@ -44,6 +44,17 @@ def ndcg_at_k(
     ideal_hits = min(len(relevant_keys), k)
     idcg = sum(1.0 / math.log2(i + 2) for i in range(ideal_hits))
     return dcg / idcg if idcg else 0.0
+
+
+def packed_presence(packed_flags: list[bool]) -> float:
+    """Fraction of relevant chunks whose packed flag is true.
+
+    Not recall@k: the flags already say whether each relevant chunk is on
+    the packer's inclusion list. Rank and the context string are not inputs.
+    """
+    if not packed_flags:
+        return 0.0
+    return sum(1.0 for flag in packed_flags if flag) / len(packed_flags)
 
 
 def chunk_match_key(
