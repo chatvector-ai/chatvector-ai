@@ -10,9 +10,12 @@ from core.config import config
 from db.base import ChunkMatch
 from services import eval_metrics
 from cli import cmd_eval
-from services.eval_config import EffectiveRetrievalConfig
+from services.chat_service import RetrievalResult
+from services.eval_config import EffectiveRetrievalConfig, ResolvedEnvironmentSnapshot
 from services.eval_fixtures import EvalDataset, load_dataset
-from services.eval_service import EvalRunResult, diff_arms, run_eval
+from services.eval_service import ArmResult, EvalRunResult, diff_arms, run_eval
+from services.query_service import QueryTransformResult
+from services.retrieval_config import RetrievalProcessDefaults, resolve_retrieval_config
 from services.metadata_filter import InvalidMetadataFilterError
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "eval"
@@ -169,6 +172,399 @@ async def test_export_writes_expected_schema(tmp_path):
     assert "aggregate_metrics" in arm_payload
     assert "per_query_metrics" in arm_payload
     assert len(arm_payload["per_query_metrics"]) == len(dataset.queries)
+
+
+def _retrieval_result(
+    chunks: list[ChunkMatch],
+    *,
+    original_query: str,
+    transformed_queries: list[str],
+    primary_query: str,
+    timing_ms: dict,
+    context: str = "packed context",
+) -> RetrievalResult:
+    return RetrievalResult(
+        chunks=list(chunks),
+        queries=list(transformed_queries),
+        primary_query=primary_query,
+        context=context,
+        timing_ms=dict(timing_ms),
+        transform_result=QueryTransformResult(
+            queries=list(transformed_queries),
+            original_query=original_query,
+        ),
+        effective_config=resolve_retrieval_config({}, RetrievalProcessDefaults.from_process()),
+    )
+
+
+@pytest.mark.asyncio
+async def test_export_copies_transformed_queries_and_timings_from_retrieval(tmp_path):
+    dataset = load_dataset(FIXTURES_DIR / "basic_queries.json")
+    timing_ms = {
+        "transform": 11,
+        "embed": 22,
+        "search": 33,
+        "rerank": 44,
+        "context": 55,
+        "total": 66,
+    }
+    retrieval = _retrieval_result(
+        [_chunk("fixture-doc-01", 2, score=0.4)],
+        original_query="asked before transform",
+        transformed_queries=["embedded query", "expanded query"],
+        primary_query="embedded query",
+        timing_ms=timing_ms,
+        context="assembled context",
+    )
+
+    async def fake_retrieve(*args, **kwargs):
+        del args, kwargs
+        return retrieval
+
+    arm = EffectiveRetrievalConfig(
+        label="current-config", hybrid_retrieval_enabled=False, enable_reranking=False
+    )
+    export_path = tmp_path / "run.json"
+
+    with patch("services.eval_service.retrieve_for_documents", AsyncMock(side_effect=fake_retrieve)):
+        result = await run_eval(dataset, [arm], tenant_id="tenant-eval-test", export_path=export_path)
+
+    row = result.arms[0].query_results[0]
+    assert row.original_query == retrieval.transform_result.original_query
+    assert row.transformed_queries == retrieval.transform_result.queries
+    assert row.effective_retrieval_query == retrieval.primary_query
+    assert row.timing_ms == retrieval.timing_ms
+    assert list(row.timing_ms) == list(retrieval.timing_ms)
+
+    exported = json.loads(export_path.read_text(encoding="utf-8"))["arms"][0]["per_query_metrics"][0]
+    assert exported["original_query"] == retrieval.transform_result.original_query
+    assert exported["transformed_queries"] == list(retrieval.transform_result.queries)
+    assert exported["effective_retrieval_query"] == retrieval.primary_query
+    assert exported["timing_ms"] == retrieval.timing_ms
+    assert list(exported["timing_ms"]) == ["transform", "embed", "search", "rerank", "context", "total"]
+
+
+@pytest.mark.asyncio
+async def test_export_keeps_chunk_order_and_present_component_scores(tmp_path):
+    dataset = load_dataset(FIXTURES_DIR / "basic_queries.json")
+    low_then_high = [
+        ChunkMatch(
+            id="later-doc:0",
+            chunk_text="low",
+            document_id="later-doc",
+            chunk_index=0,
+            similarity=0.1,
+            score_type="vector",
+            vector_score=0.1,
+        ),
+        ChunkMatch(
+            id="earlier-doc:3",
+            chunk_text="high",
+            document_id="earlier-doc",
+            chunk_index=3,
+            similarity=0.9,
+            score_type="reranked",
+            vector_score=0.4,
+            full_text_score=0.2,
+            rrf_score=0.03,
+            reranker_score=0.9,
+            rerank_order=1,
+        ),
+        ChunkMatch(
+            id="plain-doc:1",
+            chunk_text="plain",
+            document_id="plain-doc",
+            chunk_index=1,
+            similarity=0.5,
+            score_type="vector",
+        ),
+    ]
+    retrieval = _retrieval_result(
+        low_then_high,
+        original_query="order query",
+        transformed_queries=["order query"],
+        primary_query="order query",
+        timing_ms={"transform": 1, "embed": 1, "search": 1, "rerank": 1, "context": 1, "total": 5},
+    )
+
+    async def fake_retrieve(*args, **kwargs):
+        del args, kwargs
+        return retrieval
+
+    arm = EffectiveRetrievalConfig(
+        label="current-config", hybrid_retrieval_enabled=False, enable_reranking=False
+    )
+    export_path = tmp_path / "order.json"
+
+    with patch("services.eval_service.retrieve_for_documents", AsyncMock(side_effect=fake_retrieve)):
+        await run_eval(dataset, [arm], tenant_id="tenant-eval-test", export_path=export_path)
+
+    candidates = json.loads(export_path.read_text(encoding="utf-8"))["arms"][0]["per_query_metrics"][0]["candidates"]
+    assert [row["id"] for row in candidates] == [chunk.id for chunk in retrieval.chunks]
+    assert [row["similarity"] for row in candidates] == [0.1, 0.9, 0.5]
+
+    sparse, scored, plain = candidates
+    assert sparse["score_type"] == "vector"
+    assert sparse["vector_score"] == 0.1
+    for absent in ("full_text_score", "rrf_score", "reranker_score", "rerank_order"):
+        assert absent not in sparse
+    assert scored["vector_score"] == 0.4
+    assert scored["full_text_score"] == 0.2
+    assert scored["rrf_score"] == 0.03
+    assert scored["reranker_score"] == 0.9
+    assert scored["rerank_order"] == 1
+    assert scored["document_id"] == "earlier-doc"
+    assert scored["chunk_index"] == 3
+    assert scored["similarity"] == 0.9
+    for absent in ("vector_score", "full_text_score", "rrf_score", "reranker_score", "rerank_order"):
+        assert absent not in plain
+    assert plain["score_type"] == "vector"
+    assert plain["similarity"] == 0.5
+
+
+def _manifest_dataset(tmp_path: Path) -> EvalDataset:
+    questions = {
+        "name": "resolved",
+        "chunk_settings": {
+            "chunking_strategy": "fixed",
+            "chunk_size": 1000,
+            "chunk_overlap": 200,
+        },
+        "queries": [
+            {
+                "query": "How long is the retention period?",
+                "doc_ids": ["retention-policy", "handbook"],
+                "relevant_chunks": [["retention-policy", 0]],
+            }
+        ],
+    }
+    manifest = {
+        "tenant_id": "eval-tenant",
+        "chunk_settings": {
+            "CHUNK_SIZE": 1000,
+            "CHUNK_OVERLAP": 200,
+            "CHUNKING_STRATEGY": "fixed",
+        },
+        "documents": [
+            {
+                "logical_key": "retention-policy",
+                "file_name": "retention.txt",
+                "document_id": "run-doc-retention",
+                "status": "completed",
+            },
+            {
+                "logical_key": "handbook",
+                "file_name": "handbook.txt",
+                "document_id": "run-doc-handbook",
+                "status": "completed",
+            },
+        ],
+    }
+    question_path = tmp_path / "queries.json"
+    manifest_path = tmp_path / "manifest.json"
+    question_path.write_text(json.dumps(questions), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    return load_dataset(question_path, manifest_path)
+
+
+@pytest.mark.asyncio
+async def test_export_keeps_logical_key_and_runtime_document_id(tmp_path):
+    dataset = _manifest_dataset(tmp_path)
+    resolved = dataset.queries[0]
+    assert resolved.doc_ids == ["run-doc-retention", "run-doc-handbook"]
+    assert resolved.logical_doc_ids == ["retention-policy", "handbook"]
+
+    retrieval = _retrieval_result(
+        [
+            _chunk("run-doc-handbook", 1, score=0.2),
+            _chunk("run-doc-retention", 0, score=0.8),
+            _chunk("not-in-manifest", 4, score=0.3),
+        ],
+        original_query="How long is the retention period?",
+        transformed_queries=["How long is the retention period?"],
+        primary_query="How long is the retention period?",
+        timing_ms={"transform": 1, "embed": 1, "search": 1, "rerank": 0, "context": 1, "total": 4},
+    )
+
+    async def fake_retrieve(*args, **kwargs):
+        del args, kwargs
+        return retrieval
+
+    arm = EffectiveRetrievalConfig(
+        label="current-config", hybrid_retrieval_enabled=False, enable_reranking=False
+    )
+    export_path = tmp_path / "resolved.json"
+
+    with patch("services.eval_service.retrieve_for_documents", AsyncMock(side_effect=fake_retrieve)):
+        await run_eval(dataset, [arm], tenant_id="tenant-eval-test", export_path=export_path)
+
+    candidates = json.loads(export_path.read_text(encoding="utf-8"))["arms"][0]["per_query_metrics"][0]["candidates"]
+    assert [(row["document_id"], row.get("logical_key")) for row in candidates] == [
+        ("run-doc-handbook", "handbook"),
+        ("run-doc-retention", "retention-policy"),
+        ("not-in-manifest", None),
+    ]
+    assert "logical_key" not in candidates[2]
+
+    plain = load_dataset(FIXTURES_DIR / "basic_queries.json")
+    plain_retrieval = _retrieval_result(
+        [_chunk("fixture-doc-01", 0)],
+        original_query="plain",
+        transformed_queries=["plain"],
+        primary_query="plain",
+        timing_ms={"total": 1},
+    )
+
+    async def fake_plain(*args, **kwargs):
+        del args, kwargs
+        return plain_retrieval
+
+    with patch("services.eval_service.retrieve_for_documents", AsyncMock(side_effect=fake_plain)):
+        plain_result = await run_eval(plain, [arm], tenant_id="tenant-eval-test")
+
+    assert "logical_key" not in plain_result.arms[0].query_results[0].candidates[0]
+
+
+@pytest.mark.asyncio
+async def test_export_snapshot_records_config_persona_chunks_and_transform(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "CHUNK_SIZE", 777)
+    monkeypatch.setattr(config, "CHUNK_OVERLAP", 42)
+    monkeypatch.setattr(config, "CHUNKING_STRATEGY", "semantic")
+    monkeypatch.setattr(config, "PROMPT_PERSONA", "concise")
+    monkeypatch.setattr(config, "EMBEDDING_PROVIDER", "openai")
+    monkeypatch.setattr(config, "EMBEDDING_MODEL", "text-embedding-test")
+    monkeypatch.setattr(config, "QUERY_TRANSFORMATION_ENABLED", False)
+    monkeypatch.setattr(config, "QUERY_TRANSFORMATION_STRATEGY", "stepback")
+
+    dataset = load_dataset(FIXTURES_DIR / "basic_queries.json")
+    retrieval = _retrieval_result(
+        [_chunk("fixture-doc-01", 0)],
+        original_query="plain",
+        transformed_queries=["plain"],
+        primary_query="plain",
+        timing_ms={"total": 1},
+    )
+
+    async def fake_retrieve(*args, **kwargs):
+        del args, kwargs
+        return retrieval
+
+    arm = EffectiveRetrievalConfig(
+        label="rewrite-arm",
+        hybrid_retrieval_enabled=True,
+        enable_reranking=False,
+        match_count=4,
+        query_transformation_enabled=True,
+        query_transformation_strategy="rewrite",
+    )
+    export_path = tmp_path / "snapshot.json"
+
+    with patch("services.eval_service.retrieve_for_documents", AsyncMock(side_effect=fake_retrieve)):
+        await run_eval(dataset, [arm], tenant_id="tenant-eval-test", export_path=export_path)
+
+    snapshot = json.loads(export_path.read_text(encoding="utf-8"))["arms"][0]["config_snapshot"]
+    effective = snapshot["effective_config"]
+    environment = snapshot["resolved_environment"]
+
+    assert effective["label"] == "rewrite-arm"
+    assert effective["hybrid_retrieval_enabled"] is True
+    assert effective["match_count"] == 4
+    assert effective["query_transformation_enabled"] is True
+    assert effective["query_transformation_strategy"] == "rewrite"
+    assert effective["resolved"]["query_transformation_enabled"] == {
+        "value": True,
+        "source": "request",
+    }
+    assert effective["resolved"]["query_transformation_strategy"] == {
+        "value": "rewrite",
+        "source": "request",
+    }
+
+    assert environment["chunk_size"] == 777
+    assert environment["chunk_overlap"] == 42
+    assert environment["chunking_strategy"] == "semantic"
+    assert environment["prompt_persona"] == "concise"
+    assert environment["embedding_provider"] == "openai"
+    assert environment["embedding_model"] == "text-embedding-test"
+    assert environment["query_transformation_enabled"] is False
+    assert environment["query_transformation_strategy"] == "stepback"
+
+
+@pytest.mark.asyncio
+async def test_retrieval_only_export_does_not_invent_an_llm_model(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "LLM_PROVIDER", "guessed-provider")
+    monkeypatch.setattr(config, "LLM_MODEL", "guessed-model")
+    dataset = load_dataset(FIXTURES_DIR / "basic_queries.json")
+    retrieval = _retrieval_result(
+        [_chunk("fixture-doc-01", 0)],
+        original_query="plain",
+        transformed_queries=["plain"],
+        primary_query="plain",
+        timing_ms={"total": 1},
+    )
+
+    async def fake_retrieve(*args, **kwargs):
+        del args, kwargs
+        return retrieval
+
+    arm = EffectiveRetrievalConfig(
+        label="current-config", hybrid_retrieval_enabled=False, enable_reranking=False
+    )
+    export_path = tmp_path / "retrieval-only.json"
+
+    with patch("services.eval_service.retrieve_for_documents", AsyncMock(side_effect=fake_retrieve)):
+        await run_eval(dataset, [arm], tenant_id="tenant-eval-test", export_path=export_path)
+
+    environment = json.loads(export_path.read_text(encoding="utf-8"))["arms"][0]["config_snapshot"][
+        "resolved_environment"
+    ]
+    assert environment["llm_provider"] is None
+    assert environment["llm_model"] is None
+    assert environment["embedding_model"] != "guessed-model"
+
+
+def test_export_includes_llm_identity_only_when_answer_generation_is_enabled(monkeypatch):
+    monkeypatch.setattr(config, "LLM_PROVIDER", "guessed-provider")
+    monkeypatch.setattr(config, "LLM_MODEL", "guessed-model")
+
+    ignored = ResolvedEnvironmentSnapshot.capture(
+        answer_generation_enabled=False,
+        llm_provider="anthropic",
+        llm_model="claude-from-generate-answer",
+    )
+    assert ignored.llm_provider is None
+    assert ignored.llm_model is None
+
+    supplied = ResolvedEnvironmentSnapshot.capture(
+        answer_generation_enabled=True,
+        llm_provider="anthropic",
+        llm_model="claude-from-generate-answer",
+    )
+    omitted = ResolvedEnvironmentSnapshot.capture(answer_generation_enabled=True)
+    assert omitted.llm_provider is None
+    assert omitted.llm_model is None
+
+    result = EvalRunResult(
+        run_id="run",
+        timestamp="t",
+        tool_version="v",
+        dataset_name="d",
+        dataset_hash="h",
+        arms=[
+            ArmResult(
+                config=EffectiveRetrievalConfig(
+                    label="generated",
+                    hybrid_retrieval_enabled=False,
+                    enable_reranking=False,
+                ),
+                resolved_env=supplied,
+            )
+        ],
+    )
+    environment = result.to_export_dict()["arms"][0]["config_snapshot"]["resolved_environment"]
+    assert environment["llm_provider"] == "anthropic"
+    assert environment["llm_model"] == "claude-from-generate-answer"
+    assert environment["llm_model"] != config.LLM_MODEL
 
 
 # ---------------------------------------------------------------------------
@@ -479,6 +875,10 @@ async def test_metadata_filter_excluding_everything_searches_nothing(tmp_path):
     assert per_query["metadata_filter"] == {"department": "finance"}
     assert per_query["filter_excluded_all_documents"] is True
     assert per_query["candidates"] == []
+    assert per_query["original_query"] is None
+    assert per_query["transformed_queries"] is None
+    assert per_query["effective_retrieval_query"] is None
+    assert per_query["timing_ms"] is None
 
 
 @pytest.mark.asyncio

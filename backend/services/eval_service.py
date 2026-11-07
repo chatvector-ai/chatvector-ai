@@ -27,15 +27,66 @@ EVAL_TOOL_VERSION = "0.1.0"
 DEFAULT_K_VALUES: tuple[int, ...] = (5, 10)
 
 
-def _candidate_summary(chunk: ChunkMatch) -> dict:
-    return {
+_COMPONENT_SCORE_FIELDS = (
+    "vector_score",
+    "full_text_score",
+    "rrf_score",
+    "reranker_score",
+    "rerank_order",
+)
+
+
+def _candidate_summary(chunk: ChunkMatch, *, logical_key: str | None = None) -> dict:
+    summary = {
         "id": chunk.id,
         "document_id": chunk.document_id,
-        "chunk_index": chunk.chunk_index,
-        "similarity": chunk.similarity,
-        "score_type": chunk.score_type,
-        "rerank_order": chunk.rerank_order,
     }
+    if logical_key is not None:
+        summary["logical_key"] = logical_key
+    summary["chunk_index"] = chunk.chunk_index
+    summary["similarity"] = chunk.similarity
+    summary["score_type"] = chunk.score_type
+    for field_name in _COMPONENT_SCORE_FIELDS:
+        value = getattr(chunk, field_name, None)
+        if value is not None:
+            summary[field_name] = value
+    return summary
+
+
+def _logical_keys_by_document(query: EvalQuery) -> dict[str, str]:
+    """Map runtime document ids back to manifest logical keys.
+
+    Empty when the dataset was not resolved through a manifest.
+    """
+    if not query.logical_doc_ids:
+        return {}
+    return {
+        document_id: logical_key
+        for logical_key, document_id in zip(query.logical_doc_ids, query.doc_ids)
+        if document_id
+    }
+
+
+def _copied_retrieval_trace(retrieval) -> dict:
+    """Copy query text and stage timings already stored on the retrieval result.
+
+    Does not transform the query again or start a new clock.
+    """
+    transform = retrieval.transform_result
+    return {
+        "original_query": transform.original_query,
+        "transformed_queries": list(transform.queries),
+        "effective_retrieval_query": retrieval.primary_query,
+        "timing_ms": dict(retrieval.timing_ms),
+    }
+
+
+_NO_RETRIEVAL_TRACE = {
+    "original_query": None,
+    "transformed_queries": None,
+    "effective_retrieval_query": None,
+    "timing_ms": None,
+}
 
 
 @dataclass
@@ -48,6 +99,11 @@ class QueryResult:
     metadata_filter: dict | None = None
     # True when ``metadata_filter`` removed every document: nothing was searched.
     filter_excluded_all_documents: bool = False
+    # Copied from RetrievalResult. Null when retrieval did not run.
+    original_query: str | None = None
+    transformed_queries: list[str] | None = None
+    effective_retrieval_query: str | None = None
+    timing_ms: dict | None = None
 
 
 @dataclass
@@ -87,6 +143,10 @@ class EvalRunResult:
                     "per_query_metrics": [
                         {
                             "query": qr.query,
+                            "original_query": qr.original_query,
+                            "transformed_queries": qr.transformed_queries,
+                            "effective_retrieval_query": qr.effective_retrieval_query,
+                            "timing_ms": qr.timing_ms,
                             "metrics": qr.metrics,
                             "candidates": qr.candidates,
                             "context_preview": qr.context_preview,
@@ -183,6 +243,7 @@ async def _run_arm(
             # documents: nothing is searched and metrics score no candidates.
             candidates: list[ChunkMatch] = []
             context_preview = ""
+            trace = dict(_NO_RETRIEVAL_TRACE)
         else:
             retrieval = await retrieve_for_documents(
                 q.query,
@@ -195,12 +256,14 @@ async def _run_arm(
             )
             candidates = retrieval.chunks
             context_preview = retrieval.context
+            trace = _copied_retrieval_trace(retrieval)
 
         ranked_keys = [
             eval_metrics.chunk_match_key(c.document_id, c.chunk_index)
             for c in candidates
         ]
         relevant = q.relevant_keys()
+        logical_keys = _logical_keys_by_document(q)
 
         metrics: dict[str, float] = {"mrr": eval_metrics.mrr(ranked_keys, relevant)}
         for k in k_values:
@@ -210,11 +273,21 @@ async def _run_arm(
         query_results.append(
             QueryResult(
                 query=q.query,
-                candidates=[_candidate_summary(c) for c in candidates],
+                candidates=[
+                    _candidate_summary(
+                        c,
+                        logical_key=logical_keys.get(c.document_id) if c.document_id else None,
+                    )
+                    for c in candidates
+                ],
                 metrics=metrics,
                 context_preview=context_preview,
                 metadata_filter=metadata_filter,
                 filter_excluded_all_documents=filter_excluded_all,
+                original_query=trace["original_query"],
+                transformed_queries=trace["transformed_queries"],
+                effective_retrieval_query=trace["effective_retrieval_query"],
+                timing_ms=trace["timing_ms"],
             )
         )
 

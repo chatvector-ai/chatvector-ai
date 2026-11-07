@@ -658,7 +658,29 @@ python -m backend.cli eval \
   --export /tmp/eval.json
 ```
 
-Repeat `--config path/to/arm.json` to compare retrieval settings. Omit `--config` to score the current process defaults. Metrics are recall@k, MRR, and nDCG@k, plus retrieval latency. `--export` writes the config snapshot and per-query results.
+Repeat `--config path/to/arm.json` to compare retrieval settings. Omit `--config` to score the current process defaults. The command stays local: there is no HTTP eval route, and this path does not call answer generation.
+
+`--export` writes one JSON object:
+
+- `run_id`, `timestamp`, `tool_version`, `dataset_name`, `dataset_hash`, and `arms`
+- each arm: `aggregate_metrics`, `per_query_metrics`, and `config_snapshot`
+- `aggregate_metrics` and each query's `metrics`: `mrr`, plus `recall@k` and `ndcg@k` for every `--k` value (default 5 and 10)
+
+`config_snapshot.effective_config` is that arm's retrieval config (`label`, `hybrid_retrieval_enabled`, `enable_reranking`, `reranker_provider`, `match_count`, `max_context_chars`, `allow_embedding_cache`, `query_transformation_enabled`, `query_transformation_strategy`, `skip_history_transform`) and `resolved`, the request config retrieval actually used. Each `resolved` entry is `{"value", "source"}`. The effective query transform is `resolved.query_transformation_enabled` and `resolved.query_transformation_strategy`.
+
+`config_snapshot.resolved_environment` records the process values captured for the run: `hybrid_retrieval_enabled`, `enable_reranking`, `reranker_provider`, `enable_embedding_cache`, `max_context_chars`, `embedding_provider`, `embedding_model`, `query_transformation_enabled`, `query_transformation_strategy`, `chunk_size`, `chunk_overlap`, `chunking_strategy`, and `prompt_persona`. `llm_provider` and `llm_model` are null on a retrieval-only run. They are set only when answer generation is enabled, to the provider and model string supplied for that generation. The export does not fill them from `LLM_PROVIDER` or `LLM_MODEL` when generation did not run.
+
+Each object in `per_query_metrics` has:
+
+- `query` — the fixture query
+- `original_query`, `transformed_queries`, `effective_retrieval_query`, and `timing_ms` — copied from the retrieval result. `timing_ms` is the stage latency that retrieval already computed (`transform`, `embed`, `search`, `rerank`, `context`, `total`). The exporter does not time the stages again. All four are null when a metadata filter matches no documents and retrieval does not run.
+- `metrics` — the rank metrics above
+- `candidates` — the same order as `RetrievalResult.chunks`. Each candidate has `id`, `document_id`, `chunk_index`, `similarity`, and `score_type`. `vector_score`, `full_text_score`, `rrf_score`, `reranker_score`, and `rerank_order` are present only when that chunk has them. When a manifest resolved the row, the candidate also has `logical_key` beside the runtime `document_id`.
+- `context_preview` — the assembled context string
+- `metadata_filter` — the validated fixture filter, or null
+- `filter_excluded_all_documents` — true when that filter removed every document
+
+Compare mode still prints how many queries produced different candidates across arms.
 
 Each query needs `relevant_chunks` (`[document_id, chunk_index]`) and/or `relevant_doc_ids`, or `expected_result` set to `no_supporting_evidence` or `refusal` when the correct result has no supporting chunk. A row with neither fails to load. `doc_ids` are the documents to search. Those ids may be logical keys from the corpus declaration. `--manifest` is the file written by `load-eval-corpus`; it resolves each logical key to that run's document id and keeps the logical key on the resolved query. Omit `--manifest` for unit fixtures that already use synthetic ids such as `fixture-doc-01`.
 
