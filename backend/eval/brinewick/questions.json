@@ -54,7 +54,7 @@
         ]
       ],
       "expected_facts": [
-        "15 paid days off"
+        "Captain paid time off (2022)"
       ],
       "expected_citation": {
         "document": "hr-pto-policy-2022",
@@ -458,7 +458,7 @@
         ]
       ],
       "expected_facts": [
-        "gangway sensors"
+        "Saltmere yard cutover"
       ],
       "expected_citation": {
         "document": "engineering-release",
@@ -517,7 +517,7 @@
       ],
       "expected_citation": {
         "document": "ops-watch-log",
-        "chunk_index": 3
+        "chunk_index": 4
       }
     },
     {

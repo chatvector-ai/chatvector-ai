@@ -142,3 +142,21 @@ embeddings (`models/gemini-embedding-001`), persona `default`, and default
 retrieval — is the quality reference from the audits. No table certifies other
 providers. This report does not include a certification matrix and does not
 record a local or Ollama quality run.
+
+## Erratum
+
+The configuration block records the question file that this run scored.
+Its SHA-256 is `bd79fa95e097c2df5acef9da38380b8adc36955bebe49ec0833bc8ae43f02a64`.
+The tables above were not recomputed. Completeness 0.9138, including the
+narratives for `q-release` and `q-stale-pto-document`, was computed from those
+previous labels.
+
+Three ground-truth labels were corrected after the run:
+
+- `q-release` expected "gangway sensors". The corpus says REL-ENG-77 marks the Saltmere yard cutover, so the expected fact is now "Saltmere yard cutover".
+- `q-stale-pto-document` expected "15 paid days off". The question asks which document is the 2022 copy, so the expected fact is now the document title "Captain paid time off (2022)".
+- `q-chunk-boundary` cited chunk 3. Under the declared fixed/1000/200 chunker the phrase "north lantern steady" is in chunk 4, so the citation target is now chunk 4. Relevant chunks 3 and 4 are unchanged.
+
+The corrected question file SHA-256 is `55e532fcff665d4f641ab18ff3d527a36e2619958b145ceb164be759c8d73bcd`.
+
+The recorded `contradictory_sources` failure matches a harness check that treated an applied resolution echo, which omits `history_resolved_query`, as a miss. That scenario was not re-run and stays in the failed table above. The `multi_document_continuation` fact miss is unchanged.

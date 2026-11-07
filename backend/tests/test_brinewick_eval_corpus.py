@@ -10,7 +10,8 @@ import pytest
 
 from cli import cmd_eval
 from services.eval_corpus import _content_type_for, _load_declaration
-from services.eval_fixtures import EvalDatasetError, load_dataset
+from services.eval_fixtures import EvalDatasetError, ExpectedFact, load_dataset
+from services.eval_service import _completeness
 from services.eval_metrics import recall_at_k
 from services.extraction_service import (
     build_document_extractor,
@@ -389,6 +390,35 @@ def test_long_document_and_chunk_boundary_use_the_declared_chunker(brinewick):
     assert min(phrase) == max(code) + 1
     labeled = _row(brinewick, "q-chunk-boundary")["relevant_chunks"]
     assert labeled == [["ops-watch-log", index] for index in sorted(set(code) | set(phrase))]
+    citation = _row(brinewick, "q-chunk-boundary")["expected_citation"]
+    assert citation["chunk_index"] == phrase[0]
+    assert "north lantern steady" in watch[phrase[0]]
+    assert "north lantern steady" not in watch[code[0]]
+
+
+def test_release_and_stale_document_facts_answer_the_question(brinewick):
+    release = _row(brinewick, "q-release")
+    release_fact = release["expected_facts"][0]
+    release_text = _text(brinewick, "engineering-release")
+    assert release_fact == "Saltmere yard cutover"
+    assert release_fact in release_text
+    assert "gangway sensors" in release_text
+    assert _completeness([ExpectedFact(release_fact)], "It marks the Saltmere yard cutover.") == 1
+    assert _completeness([ExpectedFact(release_fact)], "It marks the gangway sensors.") == 0
+
+    stale = _row(brinewick, "q-stale-pto-document")
+    stale_fact = stale["expected_facts"][0]
+    assert stale["query"].startswith("Which document")
+    assert stale_fact == "Captain paid time off (2022)"
+    assert stale_fact in _text(brinewick, "hr-pto-policy-2022")
+    assert stale_fact not in _text(brinewick, "hr-pto-policy")
+    assert "15 paid days off" not in stale_fact
+    assert _completeness([ExpectedFact(stale_fact)], "Captain paid time off (2022).") == 1
+    assert _completeness([ExpectedFact(stale_fact)], "15 paid days off.") == 0
+    assert stale["must_not_claim"] == ["18 paid days off"]
+
+    synthesis = _row(brinewick, "q-leave-synthesis")
+    assert "18 paid days off" in synthesis["expected_facts"]
 
 
 def test_manifest_resolves_logical_keys_and_searches_the_tenant(brinewick, tmp_path):
