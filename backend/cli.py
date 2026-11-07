@@ -37,9 +37,10 @@ eval
     Run retrieval evaluation/benchmarking against a query fixture dataset.
     Computes recall@k, MRR, and nDCG@k; supports comparing multiple
     retrieval config "arms" in one run and exporting a reproducible JSON
-    artifact. Never calls answer-generation. Optional --manifest resolves
-    logical keys to document ids and refuses a chunk-setting mismatch
-    before scoring. See DEVELOPMENT.md
+    artifact. Does not call answer generation unless --answers is set.
+    That flag scores answer labels with generate_answer and is off by
+    default. Optional --manifest resolves logical keys to document ids
+    and refuses a chunk-setting mismatch before scoring. See DEVELOPMENT.md
     ("Retrieval evaluation") for the dataset and config-arm schema.
 """
 
@@ -220,6 +221,7 @@ async def cmd_eval(
     export_path: str | None,
     allow_cache: bool,
     manifest_path: str | None = None,
+    answer_generation: bool = False,
 ) -> None:
     from core.config import config as core_config
     from services import context_service
@@ -228,6 +230,9 @@ async def cmd_eval(
     from services.eval_service import diff_arms, run_eval
 
     dataset = load_dataset(dataset_path, manifest_path=manifest_path)
+    answer_fn = None
+    if answer_generation:
+        from services.answer_service import generate_answer as answer_fn
 
     if config_paths:
         arms = []
@@ -276,6 +281,8 @@ async def cmd_eval(
         tenant_id=tenant_id,
         k_values=tuple(k_values),
         export_path=export_path,
+        answer_generation=answer_generation,
+        generate_answer=answer_fn,
     )
 
     print()
@@ -460,6 +467,14 @@ def main() -> None:
             "Chunk settings must match the question file or the run stops before scoring."
         ),
     )
+    eval_parser.add_argument(
+        "--answers",
+        action="store_true",
+        help=(
+            "Call generate_answer for rows with answer labels and score those labels. "
+            "Off by default."
+        ),
+    )
 
     load_parser = subparsers.add_parser(
         "load-eval-corpus",
@@ -541,6 +556,7 @@ def main() -> None:
                     args.export_path,
                     args.allow_cache,
                     args.manifest,
+                    answer_generation=args.answers,
                 )
             )
         except EvalDatasetError as exc:

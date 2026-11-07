@@ -5,18 +5,24 @@ Ground truth for each query is either relevance labels
 ``[document_id, chunk_index]`` pairs) or a declaration that the correct
 result is no supporting evidence or a refusal. A row needs one of those.
 
+Answer labels are optional on that same row. ``expected_facts``,
+``expected_refusal``, ``expected_citation``, and ``must_not_claim`` are
+the only paraphrase and citation targets the answer arm scores. They do
+not replace the relevance or no-evidence declaration.
+
 Document ids in a question file may be logical keys. Pass the corpus
 manifest to resolve those keys to the document ids for one run. The
-resolved row keeps the logical key. Manifest chunk settings must match
-the settings declared on the question file; a mismatch fails before
-scoring.
+resolved row keeps the logical key. A citation document is resolved the
+same way when it is a logical key, and the label keeps both identities.
+Manifest chunk settings must match the settings declared on the question
+file; a mismatch fails before scoring.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 _NO_EVIDENCE_RESULTS = frozenset({"no_supporting_evidence", "refusal"})
@@ -32,6 +38,32 @@ class EvalDatasetError(ValueError):
     """The eval dataset cannot be loaded or scored."""
 
 
+@dataclass(frozen=True)
+class ExpectedFact:
+    """One labeled fact. Alternates are the only allowed phrasings."""
+
+    text: str
+    alternates: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ExpectedRefusal:
+    """Refusal phrases and strings the answer must not contain."""
+
+    phrases: tuple[str, ...]
+    forbidden: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ExpectedCitation:
+    """A packed-context target. ``document`` may be a logical key or a runtime id."""
+
+    document: str
+    chunk_index: int | None = None
+    page: int | None = None
+    resolved_document_id: str | None = None
+
+
 @dataclass
 class EvalQuery:
     query: str
@@ -43,6 +75,10 @@ class EvalQuery:
     session_history: list[dict] = field(default_factory=list)
     expected_result: str | None = None
     scope: str | None = None
+    expected_facts: list[ExpectedFact] = field(default_factory=list)
+    expected_refusal: ExpectedRefusal | None = None
+    expected_citation: ExpectedCitation | None = None
+    must_not_claim: list[str] = field(default_factory=list)
     # Populated only when a manifest resolves logical keys to document ids.
     logical_doc_ids: list[str] = field(default_factory=list)
     logical_relevant_doc_ids: list[str] = field(default_factory=list)
@@ -52,6 +88,14 @@ class EvalQuery:
         keys: set[str | tuple[str, int]] = set(self.relevant_doc_ids)
         keys.update(self.relevant_chunks)
         return keys
+
+    def has_answer_labels(self) -> bool:
+        return bool(
+            self.expected_facts
+            or self.expected_refusal is not None
+            or self.expected_citation is not None
+            or self.must_not_claim
+        )
 
 
 @dataclass
@@ -110,6 +154,107 @@ def _expected_result(row: dict, query: str, path: Path) -> str | None:
             'use "no_supporting_evidence" or "refusal"'
         )
     return value
+
+
+def _label_text(value: object, field_name: str, query: str, path: Path) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise EvalDatasetError(f"Query {query!r} in {path} has invalid {field_name}")
+    return value
+
+
+def _label_text_list(value: object, field_name: str, query: str, path: Path) -> list[str]:
+    if not isinstance(value, list) or not value:
+        raise EvalDatasetError(f"Query {query!r} in {path} has invalid {field_name}")
+    return [_label_text(item, field_name, query, path) for item in value]
+
+
+def _optional_label_index(value: object, field_name: str, query: str, path: Path) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise EvalDatasetError(f"Query {query!r} in {path} has invalid {field_name}")
+    return value
+
+
+def _expected_facts(row: dict, query: str, path: Path) -> list[ExpectedFact]:
+    if "expected_facts" not in row or row["expected_facts"] is None:
+        return []
+    value = row["expected_facts"]
+    if not isinstance(value, list) or not value:
+        raise EvalDatasetError(f"Query {query!r} in {path} has invalid expected_facts")
+    facts: list[ExpectedFact] = []
+    for item in value:
+        if isinstance(item, str):
+            facts.append(ExpectedFact(text=_label_text(item, "expected_facts", query, path)))
+            continue
+        if not isinstance(item, dict):
+            raise EvalDatasetError(f"Query {query!r} in {path} has invalid expected_facts")
+        unknown = set(item) - {"text", "alternates"}
+        if unknown or "text" not in item:
+            names = ", ".join(sorted(unknown)) or "text"
+            raise EvalDatasetError(
+                f"Query {query!r} in {path} has invalid expected_facts fields: {names}"
+            )
+        alternates = item.get("alternates", [])
+        if not isinstance(alternates, list) or any(
+            not isinstance(alternate, str) or not alternate.strip() for alternate in alternates
+        ):
+            raise EvalDatasetError(f"Query {query!r} in {path} has invalid expected_facts")
+        facts.append(
+            ExpectedFact(
+                text=_label_text(item["text"], "expected_facts", query, path),
+                alternates=tuple(alternates),
+            )
+        )
+    return facts
+
+
+def _expected_refusal(row: dict, query: str, path: Path) -> ExpectedRefusal | None:
+    if "expected_refusal" not in row or row["expected_refusal"] is None:
+        return None
+    value = row["expected_refusal"]
+    if not isinstance(value, dict):
+        raise EvalDatasetError(f"Query {query!r} in {path} has invalid expected_refusal")
+    unknown = set(value) - {"phrases", "forbidden"}
+    if unknown or "phrases" not in value:
+        names = ", ".join(sorted(unknown)) or "phrases"
+        raise EvalDatasetError(
+            f"Query {query!r} in {path} has invalid expected_refusal fields: {names}"
+        )
+    forbidden = value.get("forbidden", [])
+    if not isinstance(forbidden, list) or any(
+        not isinstance(item, str) or not item.strip() for item in forbidden
+    ):
+        raise EvalDatasetError(f"Query {query!r} in {path} has invalid expected_refusal")
+    return ExpectedRefusal(
+        phrases=tuple(_label_text_list(value["phrases"], "expected_refusal", query, path)),
+        forbidden=tuple(forbidden),
+    )
+
+
+def _expected_citation(row: dict, query: str, path: Path) -> ExpectedCitation | None:
+    if "expected_citation" not in row or row["expected_citation"] is None:
+        return None
+    value = row["expected_citation"]
+    if not isinstance(value, dict):
+        raise EvalDatasetError(f"Query {query!r} in {path} has invalid expected_citation")
+    unknown = set(value) - {"document", "chunk_index", "page"}
+    if unknown or "document" not in value:
+        names = ", ".join(sorted(unknown)) or "document"
+        raise EvalDatasetError(
+            f"Query {query!r} in {path} has invalid expected_citation fields: {names}"
+        )
+    return ExpectedCitation(
+        document=_label_text(value["document"], "expected_citation", query, path),
+        chunk_index=_optional_label_index(value.get("chunk_index"), "expected_citation", query, path),
+        page=_optional_label_index(value.get("page"), "expected_citation", query, path),
+    )
+
+
+def _must_not_claim(row: dict, query: str, path: Path) -> list[str]:
+    if "must_not_claim" not in row or row["must_not_claim"] is None:
+        return []
+    return _label_text_list(row["must_not_claim"], "must_not_claim", query, path)
 
 
 def _scope(row: dict, query: str, path: Path) -> str | None:
@@ -245,6 +390,12 @@ def _apply_manifest(dataset: EvalDataset, documents: list[dict], path: Path) -> 
             (_resolve_key(key, mapping, query.query, path), index)
             for key, index in query.relevant_chunks
         ]
+        citation = query.expected_citation
+        if citation is not None and citation.document in mapping:
+            query.expected_citation = replace(
+                citation,
+                resolved_document_id=mapping[citation.document],
+            )
 
 
 def load_dataset(path: str | Path, manifest_path: str | Path | None = None) -> EvalDataset:
@@ -273,6 +424,10 @@ def load_dataset(path: str | Path, manifest_path: str | Path | None = None) -> E
         relevant_chunks = _chunk_list(row.get("relevant_chunks"), query, path)
         expected_result = _expected_result(row, query, path)
         scope = _scope(row, query, path)
+        expected_facts = _expected_facts(row, query, path)
+        expected_refusal = _expected_refusal(row, query, path)
+        expected_citation = _expected_citation(row, query, path)
+        must_not_claim = _must_not_claim(row, query, path)
         has_relevance = bool(relevant_doc_ids or relevant_chunks)
         if expected_result and has_relevance:
             raise EvalDatasetError(
@@ -303,6 +458,10 @@ def load_dataset(path: str | Path, manifest_path: str | Path | None = None) -> E
                 session_history=list(row.get("session_history") or []),
                 expected_result=expected_result,
                 scope=scope,
+                expected_facts=expected_facts,
+                expected_refusal=expected_refusal,
+                expected_citation=expected_citation,
+                must_not_claim=must_not_claim,
             )
         )
 
