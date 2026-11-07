@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   sendMessage,
   sendMessageStream,
+  parseRetrievalDebug,
   sendBatchMessage,
   sendSynthesizedBatchMessage,
   ChatError,
@@ -66,6 +67,43 @@ describe("sendMessage", () => {
           match_count: 5,
           scope: "session",
           session_id: "test-session-id",
+        }),
+      })
+    );
+  });
+
+  it("omits debug_retrieval when debugRetrieval is not enabled", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify(MOCK_RESPONSE), { status: 200 })
+    );
+
+    await sendMessage("q", "doc-123");
+
+    const call = vi.mocked(globalThis.fetch).mock.calls[0];
+    const body = JSON.parse((call[1] as RequestInit).body as string) as Record<
+      string,
+      unknown
+    >;
+    expect(body).not.toHaveProperty("debug_retrieval");
+  });
+
+  it("sends debug_retrieval when debugRetrieval is true", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify(MOCK_RESPONSE), { status: 200 })
+    );
+
+    await sendMessage("q", "doc-123", { debugRetrieval: true, matchCount: 7, scope: "tenant" });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/chat"),
+      expect.objectContaining({
+        body: JSON.stringify({
+          question: "q",
+          doc_id: "doc-123",
+          match_count: 7,
+          scope: "tenant",
+          session_id: "test-session-id",
+          debug_retrieval: true,
         }),
       })
     );
@@ -963,6 +1001,32 @@ function createSSEStream(events: string): ReadableStream<Uint8Array> {
   });
 }
 
+describe("parseRetrievalDebug", () => {
+  it("retains unknown backend keys", () => {
+    const parsed = parseRetrievalDebug({
+      original_query: "q",
+      history_resolution_skipped_reason: "standalone",
+      effective_retrieval_query: "resolved q",
+      timing_ms: { retrieval: 12 },
+      reranker: { fallback_reason: "quota" },
+      future_backend_key: { nested: true },
+    });
+    expect(parsed).toEqual({
+      original_query: "q",
+      history_resolution_skipped_reason: "standalone",
+      effective_retrieval_query: "resolved q",
+      timing_ms: { retrieval: 12 },
+      reranker: { fallback_reason: "quota" },
+      future_backend_key: { nested: true },
+    });
+  });
+
+  it("returns undefined for non-objects", () => {
+    expect(parseRetrievalDebug(null)).toBeUndefined();
+    expect(parseRetrievalDebug([])).toBeUndefined();
+  });
+});
+
 describe("sendMessageStream", () => {
   const originalFetch = globalThis.fetch;
 
@@ -1034,6 +1098,33 @@ describe("sendMessageStream", () => {
           match_count: 5,
           scope: "session",
           session_id: "test-session-id",
+        }),
+      })
+    );
+  });
+
+  it("sends debug_retrieval when debugRetrieval is true", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(createSSEStream("event: done\ndata: [DONE]\n\n"), {
+        status: 200,
+      })
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    for await (const _ of sendMessageStream("q", "doc-123", { debugRetrieval: true })) {
+      // consume
+    }
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/chat/stream"),
+      expect.objectContaining({
+        body: JSON.stringify({
+          question: "q",
+          doc_id: "doc-123",
+          match_count: 5,
+          scope: "session",
+          session_id: "test-session-id",
+          debug_retrieval: true,
         }),
       })
     );

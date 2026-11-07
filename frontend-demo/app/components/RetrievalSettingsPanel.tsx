@@ -13,6 +13,8 @@ type Props = {
   onMatchCountChange: (matchCount: number) => void;
   showScope?: boolean;
   onScopeChange?: (scope: RetrievalScope) => void;
+  inspectMode?: boolean;
+  onInspectModeChange?: (enabled: boolean) => void;
 };
 
 export default function RetrievalSettingsPanel({
@@ -20,6 +22,8 @@ export default function RetrievalSettingsPanel({
   onScopeChange,
   onMatchCountChange,
   showScope = true,
+  inspectMode = false,
+  onInspectModeChange,
 }: Props) {
   return (
     <details className="rounded-lg border border-border bg-background/40 text-xs">
@@ -137,6 +141,27 @@ export default function RetrievalSettingsPanel({
             Number of chunks to retrieve per query ({MIN_MATCH_COUNT}–
             {MAX_MATCH_COUNT}, default {MIN_MATCH_COUNT + 4}).
           </span>
+        </div>
+
+        <div>
+          <div className="mb-2 flex items-center gap-1.5">
+            <p className="font-medium text-foreground">Inspect mode</p>
+            <InfoPopover label="Inspect mode help">
+              When enabled, chat and stream requests include{" "}
+              <code className="text-foreground/90">debug_retrieval</code> so the
+              API returns retrieval diagnostics. This does not change retrieval
+              settings or behavior.
+            </InfoPopover>
+          </div>
+          <label className="inline-flex cursor-pointer items-center gap-2 text-foreground">
+            <input
+              type="checkbox"
+              checked={inspectMode}
+              onChange={(e) => onInspectModeChange?.(e.target.checked)}
+              className="h-3.5 w-3.5 accent-[color:var(--accent)]"
+            />
+            <span>Request retrieval debug payload</span>
+          </label>
         </div>
       </div>
     </details>

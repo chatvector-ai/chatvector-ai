@@ -44,6 +44,25 @@ describe("RetrievalSettingsPanel", () => {
     expect(screen.getByRole("slider")).toBeInTheDocument();
   });
 
+  it("calls onInspectModeChange when the inspect toggle changes", async () => {
+    const onInspectModeChange = vi.fn();
+
+    render(
+      <RetrievalSettingsPanel
+        settings={DEFAULT_RETRIEVAL_SETTINGS}
+        onMatchCountChange={vi.fn()}
+        inspectMode={false}
+        onInspectModeChange={onInspectModeChange}
+      />
+    );
+
+    await userEvent.click(screen.getByText("Retrieval settings"));
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: /request retrieval debug payload/i })
+    );
+    expect(onInspectModeChange).toHaveBeenCalledWith(true);
+  });
+
   it("explains selected-document session scope and ready-document tenant scope in the help popover", async () => {
     render(
       <RetrievalSettingsPanel

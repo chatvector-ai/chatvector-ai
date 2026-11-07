@@ -24,21 +24,25 @@ const mockPoll = vi.hoisted(() => ({
   statusDetail: undefined as string | undefined,
 }));
 
-vi.mock("../api", () => ({
-  deleteDocument: vi.fn(),
-  sendMessage: (...args: unknown[]) => mockSendMessage(...args),
-  sendMessageStream: (...args: unknown[]) => mockSendMessageStream(...args),
-  getSessionHistory: (...args: unknown[]) => mockGetSessionHistory(...args),
-  getSession: (...args: unknown[]) => mockGetSession(...args),
-  getDocumentStatus: (...args: unknown[]) => mockGetDocumentStatus(...args),
-  DocumentNotFoundError: class DocumentNotFoundError extends Error {},
-  ChatError: class ChatError extends Error {
-    code = "unexpected";
-  },
-  StreamingDisabledError: class StreamingDisabledError extends Error {
-    name = "StreamingDisabledError";
-  },
-}));
+vi.mock("../api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../api")>();
+  return {
+    ...actual,
+    deleteDocument: vi.fn(),
+    sendMessage: (...args: unknown[]) => mockSendMessage(...args),
+    sendMessageStream: (...args: unknown[]) => mockSendMessageStream(...args),
+    getSessionHistory: (...args: unknown[]) => mockGetSessionHistory(...args),
+    getSession: (...args: unknown[]) => mockGetSession(...args),
+    getDocumentStatus: (...args: unknown[]) => mockGetDocumentStatus(...args),
+    DocumentNotFoundError: class DocumentNotFoundError extends Error {},
+    ChatError: class ChatError extends Error {
+      code = "unexpected";
+    },
+    StreamingDisabledError: class StreamingDisabledError extends Error {
+      name = "StreamingDisabledError";
+    },
+  };
+});
 
 vi.mock("./useDocumentPolling", () => ({
   useDocumentPolling: () => mockPoll,
@@ -244,6 +248,147 @@ describe("useChat", () => {
         ),
       ).toBe(true),
     );
+  });
+
+  it("does not send debugRetrieval when inspect mode is off", async () => {
+    mockSendMessageStream.mockImplementation(async function* () {
+      yield { type: "token", text: "ok" };
+      yield {
+        type: "complete",
+        sources: [],
+        latency_ms: 1,
+        model: "m",
+        _raw: {},
+      };
+    });
+
+    const { result } = renderHook(() =>
+      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS, undefined, false),
+    );
+
+    await waitFor(() => expect(result.current.historyLoading).toBe(false));
+
+    act(() => {
+      result.current.handleUploadAccepted({
+        fileName: "guide.pdf",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+      });
+      result.current.setInput("Question");
+    });
+
+    await waitFor(() =>
+      expect(result.current.attachment?.status).toBe("ready"),
+    );
+
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    const options = mockSendMessageStream.mock.calls[0]?.[2] as
+      | Record<string, unknown>
+      | undefined;
+    expect(options?.debugRetrieval).toBeUndefined();
+    expect(options?.matchCount).toBe(DEFAULT_RETRIEVAL_SETTINGS.matchCount);
+    expect(options?.scope).toBe(DEFAULT_RETRIEVAL_SETTINGS.scope);
+  });
+
+  it("sends debugRetrieval when inspect mode is on without changing retrieval fields", async () => {
+    const customSettings = { scope: "tenant" as const, matchCount: 9 };
+    mockSendMessageStream.mockImplementation(async function* () {
+      yield { type: "token", text: "ok" };
+      yield {
+        type: "complete",
+        sources: [],
+        latency_ms: 1,
+        model: "m",
+        _raw: {},
+      };
+    });
+
+    const { result } = renderHook(() =>
+      useChat("session-a", customSettings, undefined, true),
+    );
+
+    await waitFor(() => expect(result.current.historyLoading).toBe(false));
+
+    act(() => {
+      result.current.handleUploadAccepted({
+        fileName: "guide.pdf",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+      });
+      result.current.setInput("Question");
+    });
+
+    await waitFor(() =>
+      expect(result.current.attachment?.status).toBe("ready"),
+    );
+
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    const options = mockSendMessageStream.mock.calls[0]?.[2] as Record<
+      string,
+      unknown
+    >;
+    expect(options.debugRetrieval).toBe(true);
+    expect(options.matchCount).toBe(9);
+    expect(options.scope).toBe("tenant");
+  });
+
+  it("keeps the full retrieval_debug payload on the message when inspect is on", async () => {
+    mockSendMessageStream.mockImplementation(async function* () {
+      yield { type: "token", text: "Answer text." };
+      yield {
+        type: "complete",
+        sources: [],
+        latency_ms: 1,
+        model: "m",
+        _raw: {
+          retrieval_debug: {
+            original_query: "Question",
+            history_resolution_skipped_reason: "standalone",
+            effective_retrieval_query: "resolved Question",
+            timing_ms: { retrieval: 4, rerank: 2 },
+            reranker: { fallback_reason: "quota" },
+          },
+        },
+      };
+    });
+
+    const { result } = renderHook(() =>
+      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS, undefined, true),
+    );
+
+    await waitFor(() => expect(result.current.historyLoading).toBe(false));
+
+    act(() => {
+      result.current.handleUploadAccepted({
+        fileName: "guide.pdf",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+      });
+      result.current.setInput("Question");
+    });
+
+    await waitFor(() =>
+      expect(result.current.attachment?.status).toBe("ready"),
+    );
+
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    const answer = result.current.messages.find((m) => m.text === "Answer text.");
+    expect(answer?.retrieval_debug).toEqual({
+      original_query: "Question",
+      history_resolution_skipped_reason: "standalone",
+      effective_retrieval_query: "resolved Question",
+      timing_ms: { retrieval: 4, rerank: 2 },
+      reranker: { fallback_reason: "quota" },
+    });
   });
 
   it("stores a stream complete message_id without changing the answer", async () => {
