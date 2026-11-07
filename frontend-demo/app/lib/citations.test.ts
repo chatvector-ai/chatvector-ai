@@ -77,6 +77,20 @@ describe("citations helpers", () => {
         },
       })
     ).toBe(true);
+    expect(
+      hasInspectableRetrievalData({
+        retrieval_debug: {
+          history_resolution_skipped_reason: "standalone_question",
+        },
+      })
+    ).toBe(true);
+    expect(
+      hasInspectableRetrievalData({
+        retrieval_debug: {
+          effective_retrieval_query: "resolved follow-up",
+        },
+      })
+    ).toBe(true);
   });
 
   it("formats inspector source fields with score type when present", () => {
