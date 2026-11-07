@@ -5,17 +5,22 @@ The runner tests mock the turn player. They do not call a live provider.
 
 import inspect
 import json
+import sys
+from types import SimpleNamespace
 
 import pytest
 
+from cli import cmd_eval_conversations, main
 from core.config import config
 from services.conversation_scenarios import (
     SCENARIO_CLASSES,
     CHECKED_IN_SCENARIOS,
     ConversationScenarioError,
+    CorpusChatPlayer,
     load_scenario,
     load_scenario_directory,
     run_conversation_scenarios,
+    run_checked_in_conversations,
 )
 import services.conversation_scenarios as conversation_scenarios
 
@@ -81,7 +86,14 @@ def _manifest(*pairs: tuple[str, str]) -> dict:
     }
 
 
-def _write_script(tmp_path, turns: list[dict], *, max_turns: int, scenario_id: str = "two-turn"):
+def _write_script(
+    tmp_path,
+    turns: list[dict],
+    *,
+    max_turns: int,
+    scenario_id: str = "two-turn",
+    logical_keys: list[str] | None = None,
+):
     path = tmp_path / f"{scenario_id}.json"
     path.write_text(
         json.dumps(
@@ -89,7 +101,7 @@ def _write_script(tmp_path, turns: list[dict], *, max_turns: int, scenario_id: s
                 "id": scenario_id,
                 "class": "pronoun",
                 "max_turns": max_turns,
-                "logical_keys": ["hr-pto-policy", "product-harbor-pass"],
+                "logical_keys": logical_keys or ["hr-pto-policy", "product-harbor-pass"],
                 "turns": turns,
             }
         ),
@@ -388,6 +400,33 @@ async def test_runner_does_not_add_a_user_turn_when_the_assistant_asks(tmp_path)
     assert play.calls == [scenario.turns[0].user]
 
 
+async def test_chunk_setting_mismatch_fails_before_a_model_call(tmp_path):
+    scenario = _two_turn_script(tmp_path)
+    called = False
+
+    async def play(user: str, *, scenario_id: str, turn_index: int) -> dict:
+        nonlocal called
+        called = True
+        raise AssertionError("a chunk mismatch must not call the model")
+
+    manifest = _manifest(("hr-pto-policy", "doc-pto"), ("product-harbor-pass", "doc-harbor"))
+    manifest["chunk_settings"] = {**manifest["chunk_settings"], "CHUNK_SIZE": config.CHUNK_SIZE + 1}
+    with pytest.raises(ConversationScenarioError, match="CHUNK_SIZE"):
+        await run_conversation_scenarios(
+            [scenario],
+            manifest=manifest,
+            tenant_id="eval-tenant",
+            listed_document_ids=["doc-pto", "doc-harbor"],
+            play_turn=play,
+            artifact_dir=tmp_path / "artifacts",
+            provider="mock-provider",
+            configured_model="configured-model",
+            persona="default",
+            retrieval_config={},
+        )
+    assert called is False
+
+
 async def test_unrelated_tenant_documents_fail_before_a_model_call(tmp_path):
     scenario = _two_turn_script(tmp_path)
     called = False
@@ -417,5 +456,182 @@ async def test_unrelated_tenant_documents_fail_before_a_model_call(tmp_path):
 def test_runner_does_not_call_the_single_query_session_helper():
     source = inspect.getsource(conversation_scenarios.run_conversation_scenarios)
     source += inspect.getsource(conversation_scenarios._run_scenario)
+    source += inspect.getsource(CorpusChatPlayer.__call__)
     assert "simulate_session" not in source
     assert "retrieve_for_documents" not in source
+    assert "routes" not in source
+    assert "upload" not in source
+
+
+def _manifest_file(tmp_path, doc_id: str = "doc-pto") -> tuple[dict, object]:
+    payload = _manifest(("hr-pto-policy", doc_id))
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return payload, path
+
+
+def _script_dir(tmp_path, turns: list[dict], *, max_turns: int):
+    directory = tmp_path / "scenarios"
+    directory.mkdir()
+    _write_script(
+        directory,
+        turns,
+        max_turns=max_turns,
+        scenario_id="cli-script",
+        logical_keys=["hr-pto-policy"],
+    )
+    return directory
+
+
+def _pto_turns() -> list[dict]:
+    return [
+        {
+            "user": "How many paid days off does policy POL-HR-014 grant captains?",
+            "resolution": "empty_history",
+            "expected_facts": ["18 paid days off"],
+        },
+        {
+            "user": "Do unused days convert to wages under policy POL-HR-014?",
+            "resolution": "standalone_question",
+            "expected_facts": ["do not convert to wages"],
+        },
+    ]
+
+
+async def test_in_process_player_uses_chat_debug_and_one_session(tmp_path, monkeypatch):
+    recorded = []
+
+    async def create_session(session_id=None, tenant_id=None):
+        recorded.append(("session", tenant_id))
+        return SimpleNamespace(id="session-1")
+
+    async def answer_question_for_document(question, doc_id, match_count=5, **kwargs):
+        recorded.append(("chat", question, doc_id, match_count, kwargs))
+        first_turn = sum(1 for row in recorded if row[0] == "chat") == 1
+        if first_turn:
+            return _chat(
+                "Captains receive 18 paid days off.",
+                reason="empty_history",
+                applied=False,
+            )
+        return _chat(
+            "Unused days do not convert to wages.",
+            reason="standalone_question",
+            applied=False,
+        )
+
+    monkeypatch.setattr("services.session_service.create_session", create_session)
+    monkeypatch.setattr(
+        "services.chat_service.answer_question_for_document",
+        answer_question_for_document,
+    )
+    _manifest_payload, manifest_path = _manifest_file(tmp_path)
+    directory = _script_dir(tmp_path, _pto_turns(), max_turns=2)
+    result = await run_checked_in_conversations(
+        directory,
+        tenant_id="eval-tenant",
+        manifest_path=manifest_path,
+        artifact_dir=tmp_path / "artifacts",
+        listed_document_ids=["doc-pto"],
+    )
+    assert result.passed
+    assert recorded[0] == ("session", "eval-tenant")
+    assert [row[0] for row in recorded].count("session") == 1
+    questions = [row[1] for row in recorded if row[0] == "chat"]
+    assert questions == [turn["user"] for turn in _pto_turns()]
+    for row in recorded:
+        if row[0] != "chat":
+            continue
+        assert row[2] == "doc-pto"
+        assert row[4]["debug_retrieval"] is True
+        assert row[4]["scope"] == "tenant"
+        assert row[4]["session_id"] == "session-1"
+        assert row[4]["auth"].tenant_id == "eval-tenant"
+
+
+def test_command_exits_nonzero_before_the_model_when_the_script_is_too_long(
+    tmp_path, monkeypatch, capsys
+):
+    _manifest_payload, manifest_path = _manifest_file(tmp_path)
+    directory = _script_dir(tmp_path, _pto_turns(), max_turns=1)
+    called = []
+
+    async def listed(tenant_id):
+        assert tenant_id == "eval-tenant"
+        return ["doc-pto"]
+
+    async def answer(*args, **kwargs):
+        called.append(args)
+        raise AssertionError("the model must not be called")
+
+    monkeypatch.setattr("db.list_tenant_documents", listed)
+    monkeypatch.setattr("services.chat_service.answer_question_for_document", answer)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "backend.cli",
+            "eval-conversations",
+            "--scenarios",
+            str(directory),
+            "--tenant-id",
+            "eval-tenant",
+            "--manifest",
+            str(manifest_path),
+            "--export",
+            str(tmp_path / "artifacts"),
+        ],
+    )
+    with pytest.raises(SystemExit) as excinfo:
+        main()
+    assert excinfo.value.code == 1
+    assert called == []
+    assert "max_turns" in capsys.readouterr().out
+
+
+def test_command_exits_nonzero_when_the_manifest_is_missing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "backend.cli",
+            "eval-conversations",
+            "--scenarios",
+            str(CHECKED_IN_SCENARIOS),
+            "--tenant-id",
+            "eval-tenant",
+            "--manifest",
+            str(tmp_path / "missing.json"),
+            "--export",
+            str(tmp_path / "artifacts"),
+        ],
+    )
+    with pytest.raises(SystemExit) as excinfo:
+        main()
+    assert excinfo.value.code == 1
+    assert "Could not read corpus manifest" in capsys.readouterr().err
+
+
+async def test_command_reports_a_failed_scenario(tmp_path, monkeypatch):
+    _manifest_payload, manifest_path = _manifest_file(tmp_path)
+    directory = _script_dir(tmp_path, _pto_turns()[:1], max_turns=1)
+
+    async def listed(tenant_id):
+        return ["doc-pto"]
+
+    async def create_session(session_id=None, tenant_id=None):
+        return SimpleNamespace(id="session-1")
+
+    async def answer(*args, **kwargs):
+        return _chat("No fact here.", reason="empty_history", applied=False)
+
+    monkeypatch.setattr("db.list_tenant_documents", listed)
+    monkeypatch.setattr("services.session_service.create_session", create_session)
+    monkeypatch.setattr("services.chat_service.answer_question_for_document", answer)
+    with pytest.raises(ConversationScenarioError, match="1 scenario"):
+        await cmd_eval_conversations(
+            str(directory),
+            "eval-tenant",
+            str(manifest_path),
+            str(tmp_path / "artifacts"),
+        )

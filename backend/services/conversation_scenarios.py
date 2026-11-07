@@ -51,6 +51,8 @@ _RESOLUTION_FIELDS = frozenset({"contains"})
 CHECKED_IN_SCENARIOS = (
     Path(__file__).resolve().parents[1] / "eval" / "brinewick" / "scenarios"
 )
+# Same default match_count as in-process chat. Tenant scope searches the corpus.
+CONVERSATION_MATCH_COUNT = 5
 
 
 class ConversationScenarioError(ValueError):
@@ -727,6 +729,87 @@ def _write_artifact(artifact_dir: Path, payload: dict) -> Path:
         raise ConversationScenarioError(f"Artifact path {path} escapes {artifact_dir}")
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return path
+
+
+def conversation_retrieval_config() -> dict:
+    """Retrieval config the in-process chat path uses for one harness turn."""
+    from services.chat_service import resolve_effective_retrieval
+
+    effective = resolve_effective_retrieval(
+        match_count=CONVERSATION_MATCH_COUNT,
+        scope="tenant",
+        retrieval_fields=None,
+    )
+    return effective.to_debug_dict()
+
+
+class CorpusChatPlayer:
+    """Send one fixed user line through in-process chat.
+
+    History accumulates on a session created for the scenario. The public
+    chat route is not called, so the chat rate limit does not apply.
+    """
+
+    def __init__(self, *, tenant_id: str, anchor_document_id: str) -> None:
+        self.tenant_id = tenant_id
+        self.anchor_document_id = anchor_document_id
+        self._session_ids: dict[str, str] = {}
+
+    async def __call__(self, user: str, *, scenario_id: str, turn_index: int) -> dict:
+        from core.auth import AuthContext
+        from services import chat_service, session_service
+
+        if scenario_id not in self._session_ids:
+            session = await session_service.create_session(tenant_id=self.tenant_id)
+            self._session_ids[scenario_id] = session.id
+        return await chat_service.answer_question_for_document(
+            user,
+            self.anchor_document_id,
+            match_count=CONVERSATION_MATCH_COUNT,
+            auth=AuthContext(tenant_id=self.tenant_id),
+            session_id=self._session_ids[scenario_id],
+            scope="tenant",
+            debug_retrieval=True,
+        )
+
+
+async def run_checked_in_conversations(
+    scenarios_dir: str | Path,
+    *,
+    tenant_id: str,
+    manifest_path: str | Path,
+    artifact_dir: str | Path,
+    play_turn=None,
+    listed_document_ids: list[str] | None = None,
+) -> ConversationRunResult:
+    """Load scripts and the corpus manifest, then play the scripts.
+
+    When ``play_turn`` is omitted, each line goes through in-process chat.
+    ``listed_document_ids`` defaults to the documents stored for ``tenant_id``.
+    """
+    manifest = load_corpus_manifest(manifest_path)
+    scenarios = load_scenario_directory(scenarios_dir)
+    if listed_document_ids is None:
+        import db
+
+        listed_document_ids = await db.list_tenant_documents(tenant_id)
+    if play_turn is None:
+        play_turn = CorpusChatPlayer(
+            tenant_id=tenant_id,
+            anchor_document_id=manifest["documents"][0]["document_id"],
+        )
+    return await run_conversation_scenarios(
+        scenarios,
+        manifest=manifest,
+        tenant_id=tenant_id,
+        listed_document_ids=list(listed_document_ids),
+        play_turn=play_turn,
+        artifact_dir=artifact_dir,
+        provider=config.LLM_PROVIDER,
+        configured_model=config.LLM_MODEL,
+        persona=config.PROMPT_PERSONA,
+        retrieval_config=conversation_retrieval_config(),
+    )
 
 
 def _document_index(manifest: dict) -> dict[str, str]:

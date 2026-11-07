@@ -42,6 +42,12 @@ eval
     default. Optional --manifest resolves logical keys to document ids
     and refuses a chunk-setting mismatch before scoring. See DEVELOPMENT.md
     ("Retrieval evaluation") for the dataset and config-arm schema.
+
+eval-conversations
+    Play fixed multi-turn scripts against the eval tenant through in-process
+    chat. Does not call the public chat route and does not upload documents.
+    A script longer than its max_turns fails before the model is called.
+    See DEVELOPMENT.md ("Conversational regression harness").
 """
 
 from __future__ import annotations
@@ -330,6 +336,34 @@ async def cmd_load_eval_corpus(
     print(f"Manifest: {manifest_path}")
 
 
+async def cmd_eval_conversations(
+    scenarios_dir: str,
+    tenant_id: str,
+    manifest_path: str,
+    export_dir: str,
+) -> None:
+    from services.conversation_scenarios import (
+        ConversationScenarioError,
+        run_checked_in_conversations,
+    )
+
+    result = await run_checked_in_conversations(
+        scenarios_dir,
+        tenant_id=tenant_id,
+        manifest_path=manifest_path,
+        artifact_dir=export_dir,
+    )
+    failed = 0
+    for record in result.scenarios:
+        state = "passed" if record.passed else "failed"
+        print(f"{state} {record.scenario_id} -> {record.artifact_path}")
+        if record.error:
+            failed += 1
+            print(f"  {record.error}")
+    if failed:
+        raise ConversationScenarioError(f"{failed} scenario(s) failed")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="backend.cli",
@@ -500,6 +534,31 @@ def main() -> None:
         help="Where to write the logical-key to document-id manifest",
     )
 
+    conversations_parser = subparsers.add_parser(
+        "eval-conversations",
+        help="Play fixed multi-turn scripts against the eval corpus",
+    )
+    conversations_parser.add_argument(
+        "--scenarios",
+        required=True,
+        metavar="PATH",
+        help="Directory of fixed conversation scripts",
+    )
+    conversations_parser.add_argument("--tenant-id", required=True, metavar="ID")
+    conversations_parser.add_argument(
+        "--manifest",
+        required=True,
+        metavar="PATH",
+        help="Corpus manifest mapping logical keys to this run's document ids",
+    )
+    conversations_parser.add_argument(
+        "--export",
+        required=True,
+        metavar="PATH",
+        dest="export_dir",
+        help="Directory where each scenario's trace and config is written",
+    )
+
     args = parser.parse_args()
 
     if args.command == "create-tenant-key":
@@ -575,6 +634,21 @@ def main() -> None:
                 )
             )
         except EvalCorpusError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
+    elif args.command == "eval-conversations":
+        from services.conversation_scenarios import ConversationScenarioError
+
+        try:
+            asyncio.run(
+                cmd_eval_conversations(
+                    args.scenarios,
+                    args.tenant_id,
+                    args.manifest,
+                    args.export_dir,
+                )
+            )
+        except ConversationScenarioError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)
     else:
