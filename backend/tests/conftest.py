@@ -87,3 +87,11 @@ def _reset_db_service_singleton():
     yield
     db_module.db_service = None
     reset_session_factory()
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_sessionfinish(session, exitstatus):
+    """Join RQ workers before pytest closes the captured stderr stream."""
+    from services.queue_redis import shutdown_lingering_redis_workers
+
+    shutdown_lingering_redis_workers()
