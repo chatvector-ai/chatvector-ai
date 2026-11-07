@@ -1,15 +1,22 @@
 """Fixed multi-turn scripts for the evaluation corpus.
 
-Each scenario file is the whole conversation. The loader reads those user
-lines and does not add any. This module does not call ``simulate_session``
-and does not score recall or nDCG.
+Each scenario file is the whole conversation. The loader copies those user
+lines. The runner sends each line in order, checks the turn's resolution
+label and expected fact or refusal, and writes a trace. It stops at the
+last scripted line. A script longer than ``max_turns`` fails before the
+turn player is called.
+
+This runner is separate from single-query evaluation. It does not score
+recall or nDCG.
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+from core.config import config
 
 SCENARIO_CLASSES = frozenset(
     {
@@ -294,3 +301,455 @@ def _label_text(value: object, where: str, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ConversationScenarioError(f"{where} has invalid {field_name}")
     return value.strip()
+
+
+@dataclass(frozen=True)
+class ScenarioRunRecord:
+    """One scenario's pass/fail and the artifact that records it."""
+
+    scenario_id: str
+    passed: bool
+    artifact_path: Path
+    error: str | None = None
+
+
+@dataclass
+class ConversationRunResult:
+    """The scripts played in one harness run."""
+
+    scenarios: list[ScenarioRunRecord] = field(default_factory=list)
+
+    @property
+    def passed(self) -> bool:
+        return all(record.passed for record in self.scenarios)
+
+
+def load_corpus_manifest(path: str | Path) -> dict:
+    """Read a corpus manifest. Logical keys stay the stable document identity."""
+    source = Path(path)
+    try:
+        raw_text = source.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise ConversationScenarioError(f"Could not read corpus manifest {source}: {exc}") from exc
+    try:
+        raw = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise ConversationScenarioError(f"Could not read corpus manifest {source}: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise ConversationScenarioError(f"Corpus manifest {source} must be a JSON object")
+    _document_index(raw)
+    settings = raw.get("chunk_settings")
+    if not isinstance(settings, dict):
+        raise ConversationScenarioError(f"Corpus manifest {source} is missing chunk_settings")
+    for name in ("CHUNK_SIZE", "CHUNK_OVERLAP", "CHUNKING_STRATEGY"):
+        if name not in settings:
+            raise ConversationScenarioError(f"Corpus manifest {source} is missing {name}")
+    if "tenant_id" not in raw or not isinstance(raw["tenant_id"], str) or not raw["tenant_id"]:
+        raise ConversationScenarioError(f"Corpus manifest {source} is missing tenant_id")
+    return raw
+
+
+def assert_corpus_ready(manifest: dict, tenant_id: str, listed_document_ids: list[str]) -> None:
+    """Refuse a run whose tenant is not exactly the loaded corpus.
+
+    Chunk settings are compared to the process before any turn is sent.
+    Extra tenant documents are unrelated to the corpus and are not searched.
+    """
+    manifest_tenant = manifest.get("tenant_id")
+    if manifest_tenant != tenant_id:
+        raise ConversationScenarioError(
+            f"Manifest tenant {manifest_tenant!r} does not match {tenant_id!r}"
+        )
+    settings = manifest["chunk_settings"]
+    mismatches: list[str] = []
+    if settings["CHUNK_SIZE"] != config.CHUNK_SIZE:
+        mismatches.append(
+            f"CHUNK_SIZE corpus {settings['CHUNK_SIZE']}, process {config.CHUNK_SIZE}"
+        )
+    if settings["CHUNK_OVERLAP"] != config.CHUNK_OVERLAP:
+        mismatches.append(
+            "CHUNK_OVERLAP corpus "
+            f"{settings['CHUNK_OVERLAP']}, process {config.CHUNK_OVERLAP}"
+        )
+    declared = str(settings["CHUNKING_STRATEGY"]).strip().lower()
+    process = config.CHUNKING_STRATEGY.strip().lower()
+    if declared != process:
+        mismatches.append(
+            f"CHUNKING_STRATEGY corpus {settings['CHUNKING_STRATEGY']!r}, "
+            f"process {config.CHUNKING_STRATEGY!r}"
+        )
+    if mismatches:
+        raise ConversationScenarioError("; ".join(mismatches))
+
+    manifest_ids = {row["document_id"] for row in manifest["documents"]}
+    listed = set(listed_document_ids)
+    if listed == manifest_ids:
+        return
+    extra = sorted(listed - manifest_ids)
+    missing = sorted(manifest_ids - listed)
+    parts = ["Tenant document list does not match the corpus manifest"]
+    if extra:
+        parts.append(f"unrelated documents: {extra}")
+    if missing:
+        parts.append(f"missing documents: {missing}")
+    raise ConversationScenarioError("; ".join(parts))
+
+
+async def run_conversation_scenarios(
+    scenarios: list[ConversationScenario],
+    *,
+    manifest: dict,
+    tenant_id: str,
+    listed_document_ids: list[str],
+    play_turn,
+    artifact_dir: str | Path,
+    provider: str,
+    configured_model: str | None,
+    persona: str,
+    retrieval_config: dict,
+) -> ConversationRunResult:
+    """Play each script in order and write one artifact per scenario.
+
+    ``play_turn`` receives only the user text stored on the turn. The runner
+    does not append a line when the assistant asks a question, and it does
+    not call ``play_turn`` when the script is longer than ``max_turns``.
+    """
+    assert_corpus_ready(manifest, tenant_id, listed_document_ids)
+    documents = _document_index(manifest)
+    directory = Path(artifact_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    result = ConversationRunResult()
+    for scenario in scenarios:
+        record = await _run_scenario(
+            scenario,
+            documents=documents,
+            play_turn=play_turn,
+            artifact_dir=directory,
+            provider=provider,
+            configured_model=configured_model,
+            persona=persona,
+            retrieval_config=retrieval_config,
+            chunk_settings=dict(manifest["chunk_settings"]),
+        )
+        result.scenarios.append(record)
+    return result
+
+
+async def _run_scenario(
+    scenario: ConversationScenario,
+    *,
+    documents: dict[str, str],
+    play_turn,
+    artifact_dir: Path,
+    provider: str,
+    configured_model: str | None,
+    persona: str,
+    retrieval_config: dict,
+    chunk_settings: dict,
+) -> ScenarioRunRecord:
+    missing = [key for key in scenario.logical_keys if key not in documents]
+    if missing:
+        error = f"Scenario {scenario.id!r} names unknown logical keys: {missing}"
+        path = _write_artifact(
+            artifact_dir,
+            _artifact_payload(
+                scenario,
+                status="failed",
+                failing_turn_index=0,
+                user=scenario.turns[0].user,
+                assistant=None,
+                resolution_debug=_empty_resolution_debug(),
+                turns=[],
+                error=error,
+                provider=provider,
+                model=configured_model,
+                persona=persona,
+                retrieval_config=retrieval_config,
+                chunk_settings=chunk_settings,
+                documents=documents,
+            ),
+        )
+        return ScenarioRunRecord(scenario.id, False, path, error)
+
+    if len(scenario.turns) > scenario.max_turns:
+        index = scenario.max_turns
+        error = (
+            f"Scenario {scenario.id!r} has {len(scenario.turns)} user turns "
+            f"and max_turns is {scenario.max_turns}"
+        )
+        path = _write_artifact(
+            artifact_dir,
+            _artifact_payload(
+                scenario,
+                status="failed",
+                failing_turn_index=index,
+                user=scenario.turns[index].user,
+                assistant=None,
+                resolution_debug=_empty_resolution_debug(),
+                turns=[],
+                error=error,
+                provider=provider,
+                model=configured_model,
+                persona=persona,
+                retrieval_config=retrieval_config,
+                chunk_settings=chunk_settings,
+                documents=documents,
+            ),
+        )
+        return ScenarioRunRecord(scenario.id, False, path, error)
+
+    played: list[dict] = []
+    for index, turn in enumerate(scenario.turns):
+        response = await play_turn(turn.user, scenario_id=scenario.id, turn_index=index)
+        observation = _observe_turn(turn, index, response)
+        played.append(observation)
+        if observation["failures"]:
+            error = "; ".join(observation["failures"])
+            path = _write_artifact(
+                artifact_dir,
+                _artifact_payload(
+                    scenario,
+                    status="failed",
+                    failing_turn_index=index,
+                    user=turn.user,
+                    assistant=observation["assistant"],
+                    resolution_debug=observation["resolution_debug"],
+                    turns=played,
+                    error=error,
+                    provider=provider,
+                    model=observation["model"] or configured_model,
+                    persona=persona,
+                    retrieval_config=observation["retrieval_config"] or retrieval_config,
+                    chunk_settings=chunk_settings,
+                    documents=documents,
+                ),
+            )
+            return ScenarioRunRecord(scenario.id, False, path, error)
+
+    last = played[-1]
+    path = _write_artifact(
+        artifact_dir,
+        _artifact_payload(
+            scenario,
+            status="passed",
+            failing_turn_index=None,
+            user=None,
+            assistant=None,
+            resolution_debug=None,
+            turns=played,
+            error=None,
+            provider=provider,
+            model=last["model"] or configured_model,
+            persona=persona,
+            retrieval_config=last["retrieval_config"] or retrieval_config,
+            chunk_settings=chunk_settings,
+            documents=documents,
+        ),
+    )
+    return ScenarioRunRecord(scenario.id, True, path, None)
+
+
+def _observe_turn(turn: ConversationTurn, index: int, response: object) -> dict:
+    if not isinstance(response, dict):
+        return {
+            "index": index,
+            "user": turn.user,
+            "assistant": None,
+            "model": None,
+            "resolution_debug": _empty_resolution_debug(),
+            "retrieval_config": None,
+            "retrieval_debug": None,
+            "failures": ["chat response must be an object"],
+        }
+    assistant = response.get("answer")
+    if assistant is not None and not isinstance(assistant, str):
+        assistant = str(assistant)
+    model = response.get("model")
+    if model is not None and not isinstance(model, str):
+        model = str(model)
+    retrieval_debug = response.get("retrieval_debug")
+    if not isinstance(retrieval_debug, dict):
+        retrieval_debug = {}
+    resolution_debug = _resolution_debug(retrieval_debug)
+    effective = retrieval_debug.get("effective_config")
+    retrieval_config = effective if isinstance(effective, dict) else None
+    failures: list[str] = []
+    if response.get("status") != "ok":
+        failures.append(f"chat status {response.get('status')!r}")
+    failures.extend(_resolution_failures(turn, retrieval_debug))
+    answer_text = assistant or ""
+    failures.extend(_fact_failures(turn, answer_text))
+    failures.extend(_refusal_failures(turn, answer_text))
+    return {
+        "index": index,
+        "user": turn.user,
+        "assistant": assistant,
+        "model": model,
+        "resolution_debug": resolution_debug,
+        "retrieval_config": retrieval_config,
+        "retrieval_debug": retrieval_debug,
+        "failures": failures,
+    }
+
+
+def _resolution_failures(turn: ConversationTurn, debug: dict) -> list[str]:
+    label = turn.resolution
+    if label is None:
+        return []
+    applied = debug.get("history_resolution_applied")
+    if isinstance(label, str):
+        reason = debug.get("history_resolution_skipped_reason")
+        if applied is not False or reason != label:
+            return [
+                f"resolution label {label!r} does not match "
+                f"applied={applied!r} skipped_reason={reason!r}"
+            ]
+        return []
+    resolved = debug.get("history_resolved_query")
+    if (
+        applied is not True
+        or not isinstance(resolved, str)
+        or not _contains_label(resolved, label.text)
+    ):
+        shown = resolved if isinstance(resolved, str) else None
+        return [
+            f"resolution label containing {label.text!r} does not match "
+            f"applied={applied!r} history_resolved_query={shown!r}"
+        ]
+    return []
+
+
+def _fact_failures(turn: ConversationTurn, answer: str) -> list[str]:
+    missing = [fact.text for fact in turn.expected_facts if not _fact_in_text(fact, answer)]
+    if not missing:
+        return []
+    return [f"answer is missing expected facts: {missing}"]
+
+
+def _refusal_failures(turn: ConversationTurn, answer: str) -> list[str]:
+    refusal = turn.expected_refusal
+    if refusal is None:
+        return []
+    has_phrase = any(_contains_label(answer, phrase) for phrase in refusal.phrases)
+    forbidden = [item for item in refusal.forbidden if _contains_label(answer, item)]
+    if has_phrase and not forbidden:
+        return []
+    return [
+        "answer does not match the labeled refusal "
+        f"(phrase={has_phrase}, forbidden={forbidden})"
+    ]
+
+
+def _fact_in_text(fact: ExpectedFact, text: str) -> bool:
+    """Same case-insensitive substring rule as the answer labels."""
+    if _contains_label(text, fact.text):
+        return True
+    return any(_contains_label(text, alternate) for alternate in fact.alternates)
+
+
+def _contains_label(text: str, label: str) -> bool:
+    return label.casefold() in text.casefold()
+
+
+def _resolution_debug(retrieval_debug: dict) -> dict:
+    return {
+        "history_resolution_applied": retrieval_debug.get("history_resolution_applied"),
+        "history_resolution_skipped_reason": retrieval_debug.get(
+            "history_resolution_skipped_reason"
+        ),
+        "history_resolved_query": retrieval_debug.get("history_resolved_query"),
+    }
+
+
+def _empty_resolution_debug() -> dict:
+    return {
+        "history_resolution_applied": None,
+        "history_resolution_skipped_reason": None,
+        "history_resolved_query": None,
+    }
+
+
+def _artifact_payload(
+    scenario: ConversationScenario,
+    *,
+    status: str,
+    failing_turn_index: int | None,
+    user: str | None,
+    assistant: str | None,
+    resolution_debug: dict | None,
+    turns: list[dict],
+    error: str | None,
+    provider: str,
+    model: str | None,
+    persona: str,
+    retrieval_config: dict,
+    chunk_settings: dict,
+    documents: dict[str, str],
+) -> dict:
+    return {
+        "scenario_id": scenario.id,
+        "scenario_class": scenario.scenario_class,
+        "status": status,
+        "failing_turn_index": failing_turn_index,
+        "user": user,
+        "assistant": assistant,
+        "resolution_debug": resolution_debug,
+        "logical_keys": list(scenario.logical_keys),
+        "documents": [
+            {"logical_key": key, "document_id": documents[key]}
+            for key in scenario.logical_keys
+            if key in documents
+        ],
+        "provider": provider,
+        "model": model,
+        "persona": persona,
+        "retrieval_config": retrieval_config,
+        "chunk_settings": chunk_settings,
+        "turns": [
+            {
+                "index": turn["index"],
+                "user": turn["user"],
+                "assistant": turn["assistant"],
+                "model": turn["model"],
+                "resolution_debug": turn["resolution_debug"],
+                "retrieval_debug": turn["retrieval_debug"],
+                "failures": list(turn["failures"]),
+            }
+            for turn in turns
+        ],
+        "error": error,
+    }
+
+
+def _write_artifact(artifact_dir: Path, payload: dict) -> Path:
+    path = artifact_dir / f"{payload['scenario_id']}.json"
+    if path.parent.resolve() != artifact_dir.resolve():
+        raise ConversationScenarioError(f"Artifact path {path} escapes {artifact_dir}")
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _document_index(manifest: dict) -> dict[str, str]:
+    documents = manifest.get("documents")
+    if not isinstance(documents, list) or not documents:
+        raise ConversationScenarioError("Corpus manifest needs at least one document")
+    index: dict[str, str] = {}
+    seen_ids: set[str] = set()
+    for row in documents:
+        if not isinstance(row, dict):
+            raise ConversationScenarioError("Corpus manifest document must be an object")
+        key = row.get("logical_key")
+        doc_id = row.get("document_id")
+        if not isinstance(key, str) or not key or not isinstance(doc_id, str) or not doc_id:
+            raise ConversationScenarioError(
+                "Corpus manifest document needs logical_key and document_id"
+            )
+        if key in index:
+            raise ConversationScenarioError(f"Duplicate logical_key {key!r} in corpus manifest")
+        if doc_id in seen_ids:
+            raise ConversationScenarioError(
+                f"Duplicate document_id {doc_id!r} in corpus manifest"
+            )
+        index[key] = doc_id
+        seen_ids.add(doc_id)
+    return index

@@ -1,16 +1,23 @@
-"""Fixed conversation scripts stay a list of user lines."""
+"""Fixed conversation scripts stay a list of user lines.
 
+The runner tests mock the turn player. They do not call a live provider.
+"""
+
+import inspect
 import json
 
 import pytest
 
+from core.config import config
 from services.conversation_scenarios import (
     SCENARIO_CLASSES,
     CHECKED_IN_SCENARIOS,
     ConversationScenarioError,
     load_scenario,
     load_scenario_directory,
+    run_conversation_scenarios,
 )
+import services.conversation_scenarios as conversation_scenarios
 
 
 def test_checked_in_directory_has_each_scenario_class():
@@ -58,3 +65,357 @@ def test_loader_rejects_a_field_that_would_supply_another_user_line(tmp_path):
     )
     with pytest.raises(ConversationScenarioError, match="unknown fields"):
         load_scenario(path)
+
+
+def _manifest(*pairs: tuple[str, str]) -> dict:
+    return {
+        "tenant_id": "eval-tenant",
+        "chunk_settings": {
+            "CHUNK_SIZE": config.CHUNK_SIZE,
+            "CHUNK_OVERLAP": config.CHUNK_OVERLAP,
+            "CHUNKING_STRATEGY": config.CHUNKING_STRATEGY,
+        },
+        "documents": [
+            {"logical_key": key, "document_id": doc_id} for key, doc_id in pairs
+        ],
+    }
+
+
+def _write_script(tmp_path, turns: list[dict], *, max_turns: int, scenario_id: str = "two-turn"):
+    path = tmp_path / f"{scenario_id}.json"
+    path.write_text(
+        json.dumps(
+            {
+                "id": scenario_id,
+                "class": "pronoun",
+                "max_turns": max_turns,
+                "logical_keys": ["hr-pto-policy", "product-harbor-pass"],
+                "turns": turns,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return load_scenario(path)
+
+
+def _two_turn_script(tmp_path, *, max_turns: int = 2):
+    return _write_script(
+        tmp_path,
+        [
+            {
+                "user": "How many paid days off does policy POL-HR-014 grant captains?",
+                "resolution": "empty_history",
+                "expected_facts": ["18 paid days off"],
+            },
+            {
+                "user": "What is the fare code for the standard Harbor Pass ticket?",
+                "resolution": "standalone_question",
+                "expected_facts": ["HP-100"],
+            },
+        ],
+        max_turns=max_turns,
+    )
+
+
+def _chat(answer: str, *, reason: str | None, applied: bool, resolved: str | None = None):
+    debug = {
+        "original_query": "stored-on-the-turn",
+        "history_resolution_applied": applied,
+        "effective_config": {"match_count": {"value": 5, "source": "env"}},
+    }
+    if reason is not None:
+        debug["history_resolution_skipped_reason"] = reason
+    if resolved is not None:
+        debug["history_resolved_query"] = resolved
+    return {
+        "status": "ok",
+        "answer": answer,
+        "model": "mock-model",
+        "retrieval_debug": debug,
+    }
+
+
+def _player(responses: list[dict]):
+    calls: list[str] = []
+
+    async def play(user: str, *, scenario_id: str, turn_index: int) -> dict:
+        calls.append(user)
+        return responses[turn_index]
+
+    play.calls = calls
+    return play
+
+
+def _passing_responses():
+    return [
+        _chat("Captains receive 18 Paid Days Off each year.", reason="empty_history", applied=False),
+        _chat("The fare code is HP-100.", reason="standalone_question", applied=False),
+    ]
+
+
+async def _run(tmp_path, scenario, play):
+    manifest = _manifest(("hr-pto-policy", "doc-pto"), ("product-harbor-pass", "doc-harbor"))
+    return await run_conversation_scenarios(
+        [scenario],
+        manifest=manifest,
+        tenant_id="eval-tenant",
+        listed_document_ids=["doc-pto", "doc-harbor"],
+        play_turn=play,
+        artifact_dir=tmp_path / "artifacts",
+        provider="mock-provider",
+        configured_model="configured-model",
+        persona="default",
+        retrieval_config={"match_count": {"value": 5, "source": "env"}},
+    )
+
+
+async def test_two_turn_fixture_passes_when_fact_and_skip_reason_match(tmp_path):
+    scenario = _two_turn_script(tmp_path)
+    play = _player(_passing_responses())
+    result = await _run(tmp_path, scenario, play)
+    assert result.passed
+    assert play.calls == [turn.user for turn in scenario.turns]
+    artifact = json.loads(result.scenarios[0].artifact_path.read_text(encoding="utf-8"))
+    assert artifact["status"] == "passed"
+    assert artifact["provider"] == "mock-provider"
+    assert artifact["model"] == "mock-model"
+    assert artifact["persona"] == "default"
+    assert artifact["retrieval_config"] == {"match_count": {"value": 5, "source": "env"}}
+    assert artifact["chunk_settings"]["CHUNK_SIZE"] == config.CHUNK_SIZE
+    assert artifact["logical_keys"] == ["hr-pto-policy", "product-harbor-pass"]
+    assert [turn["user"] for turn in artifact["turns"]] == play.calls
+    assert artifact["turns"][0]["resolution_debug"]["history_resolution_skipped_reason"] == (
+        "empty_history"
+    )
+    assert artifact["turns"][1]["resolution_debug"]["history_resolution_skipped_reason"] == (
+        "standalone_question"
+    )
+
+
+async def test_two_turn_fixture_fails_when_the_fact_is_missing(tmp_path):
+    scenario = _two_turn_script(tmp_path)
+    play = _player(
+        [
+            _passing_responses()[0],
+            _chat("The fare code is not stated.", reason="standalone_question", applied=False),
+        ]
+    )
+    result = await _run(tmp_path, scenario, play)
+    assert not result.passed
+    assert play.calls == [turn.user for turn in scenario.turns]
+    artifact = json.loads(result.scenarios[0].artifact_path.read_text(encoding="utf-8"))
+    assert artifact["failing_turn_index"] == 1
+    assert artifact["error"]
+    assert "HP-100" in artifact["error"]
+
+
+async def test_two_turn_fixture_fails_when_the_skip_reason_differs(tmp_path):
+    scenario = _two_turn_script(tmp_path)
+    play = _player(
+        [
+            _passing_responses()[0],
+            _chat("The fare code is HP-100.", reason="topic_switch", applied=False),
+        ]
+    )
+    result = await _run(tmp_path, scenario, play)
+    assert not result.passed
+    artifact = json.loads(result.scenarios[0].artifact_path.read_text(encoding="utf-8"))
+    assert artifact["failing_turn_index"] == 1
+    assert artifact["resolution_debug"]["history_resolution_skipped_reason"] == "topic_switch"
+    assert "standalone_question" in artifact["error"]
+
+
+async def test_script_longer_than_max_turns_fails_before_a_model_call(tmp_path):
+    scenario = _two_turn_script(tmp_path, max_turns=1)
+
+    async def play(user: str, *, scenario_id: str, turn_index: int) -> dict:
+        raise AssertionError("max_turns must fail before the turn player is called")
+
+    result = await _run(tmp_path, scenario, play)
+    assert not result.passed
+    artifact = json.loads(result.scenarios[0].artifact_path.read_text(encoding="utf-8"))
+    assert artifact["failing_turn_index"] == 1
+    assert artifact["user"] == scenario.turns[1].user
+    assert artifact["assistant"] is None
+    assert artifact["turns"] == []
+    assert "max_turns" in artifact["error"]
+
+
+async def test_failure_artifact_records_trace_and_config(tmp_path):
+    scenario = _two_turn_script(tmp_path)
+    play = _player(
+        [
+            _chat(
+                "Captains receive 18 paid days off.",
+                reason=None,
+                applied=True,
+                resolved="How many paid days off does policy POL-HR-014 grant captains?",
+            ),
+            _passing_responses()[1],
+        ]
+    )
+    result = await _run(tmp_path, scenario, play)
+    assert not result.passed
+    assert play.calls == [scenario.turns[0].user]
+    artifact = json.loads(result.scenarios[0].artifact_path.read_text(encoding="utf-8"))
+    assert artifact["scenario_id"] == scenario.id
+    assert artifact["failing_turn_index"] == 0
+    assert artifact["user"] == scenario.turns[0].user
+    assert artifact["assistant"] == "Captains receive 18 paid days off."
+    assert artifact["resolution_debug"] == {
+        "history_resolution_applied": True,
+        "history_resolution_skipped_reason": None,
+        "history_resolved_query": (
+            "How many paid days off does policy POL-HR-014 grant captains?"
+        ),
+    }
+    assert artifact["logical_keys"] == ["hr-pto-policy", "product-harbor-pass"]
+    assert artifact["documents"] == [
+        {"logical_key": "hr-pto-policy", "document_id": "doc-pto"},
+        {"logical_key": "product-harbor-pass", "document_id": "doc-harbor"},
+    ]
+    assert artifact["provider"] == "mock-provider"
+    assert artifact["model"] == "mock-model"
+    assert artifact["persona"] == "default"
+    assert artifact["retrieval_config"] == {"match_count": {"value": 5, "source": "env"}}
+    assert artifact["chunk_settings"]["CHUNKING_STRATEGY"] == config.CHUNKING_STRATEGY
+    assert artifact["turns"][0]["retrieval_debug"]["history_resolution_applied"] is True
+
+
+async def test_contains_label_matches_the_resolved_query_case_insensitively(tmp_path):
+    scenario = _write_script(
+        tmp_path,
+        [
+            {
+                "user": "Does it convert unused days to wages?",
+                "resolution": {"contains": "pol-hr-014"},
+                "expected_facts": ["do not convert to wages"],
+            }
+        ],
+        max_turns=1,
+        scenario_id="contains-label",
+    )
+    play = _player(
+        [
+            _chat(
+                "Unused days do not convert to wages.",
+                reason=None,
+                applied=True,
+                resolved="Does POL-HR-014 convert unused days to wages?",
+            )
+        ]
+    )
+    result = await _run(tmp_path, scenario, play)
+    assert result.passed
+
+    mismatch = _player(
+        [
+            _chat(
+                "Unused days do not convert to wages.",
+                reason=None,
+                applied=True,
+                resolved="Does the policy convert unused days to wages?",
+            )
+        ]
+    )
+    failed = await _run(tmp_path, scenario, mismatch)
+    assert not failed.passed
+    assert "pol-hr-014" in failed.scenarios[0].error
+
+
+async def test_refusal_label_uses_the_answer_phrase_rule(tmp_path):
+    scenario = _write_script(
+        tmp_path,
+        [
+            {
+                "user": "What sabbatical stipend does policy POL-HR-014 pay?",
+                "resolution": "empty_history",
+                "expected_refusal": {
+                    "phrases": ["Not enough information"],
+                    "forbidden": ["sabbatical stipend is"],
+                },
+            }
+        ],
+        max_turns=1,
+        scenario_id="refusal-label",
+    )
+    passed = await _run(
+        tmp_path,
+        scenario,
+        _player([_chat("Not enough information.", reason="empty_history", applied=False)]),
+    )
+    assert passed.passed
+    missing = await _run(
+        tmp_path,
+        scenario,
+        _player(
+            [
+                _chat(
+                    "The sabbatical stipend is 5000 USD.",
+                    reason="empty_history",
+                    applied=False,
+                )
+            ]
+        ),
+    )
+    assert not missing.passed
+
+
+async def test_runner_does_not_add_a_user_turn_when_the_assistant_asks(tmp_path):
+    scenario = _write_script(
+        tmp_path,
+        [
+            {
+                "user": "How many paid days off does policy POL-HR-014 grant captains?",
+                "resolution": "empty_history",
+                "expected_facts": ["18 paid days off"],
+            }
+        ],
+        max_turns=1,
+        scenario_id="stops-at-script",
+    )
+    play = _player(
+        [
+            _chat(
+                "Captains receive 18 paid days off. Which policy should I open next?",
+                reason="empty_history",
+                applied=False,
+            )
+        ]
+    )
+    result = await _run(tmp_path, scenario, play)
+    assert result.passed
+    assert play.calls == [scenario.turns[0].user]
+
+
+async def test_unrelated_tenant_documents_fail_before_a_model_call(tmp_path):
+    scenario = _two_turn_script(tmp_path)
+    called = False
+
+    async def play(user: str, *, scenario_id: str, turn_index: int) -> dict:
+        nonlocal called
+        called = True
+        raise AssertionError("a dirty tenant must not be searched")
+
+    manifest = _manifest(("hr-pto-policy", "doc-pto"), ("product-harbor-pass", "doc-harbor"))
+    with pytest.raises(ConversationScenarioError, match="unrelated documents"):
+        await run_conversation_scenarios(
+            [scenario],
+            manifest=manifest,
+            tenant_id="eval-tenant",
+            listed_document_ids=["doc-pto", "doc-harbor", "doc-other"],
+            play_turn=play,
+            artifact_dir=tmp_path / "artifacts",
+            provider="mock-provider",
+            configured_model="configured-model",
+            persona="default",
+            retrieval_config={},
+        )
+    assert called is False
+
+
+def test_runner_does_not_call_the_single_query_session_helper():
+    source = inspect.getsource(conversation_scenarios.run_conversation_scenarios)
+    source += inspect.getsource(conversation_scenarios._run_scenario)
+    assert "simulate_session" not in source
+    assert "retrieve_for_documents" not in source
