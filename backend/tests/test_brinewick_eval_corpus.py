@@ -207,8 +207,13 @@ def test_question_file_loads_with_relevance_and_no_evidence_rows(brinewick):
             assert query.relevant_chunks == []
             assert query.relevant_doc_ids == []
             assert query.relevant_keys() == set()
+            assert query.expected_refusal is not None
+            assert query.has_answer_labels() is True
         else:
             assert query.expected_result is None
+            assert query.expected_facts
+            assert query.expected_citation is not None
+            assert query.has_answer_labels() is True
 
 
 def test_every_listed_case_has_a_document_or_question(brinewick):

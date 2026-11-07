@@ -117,6 +117,7 @@ class QueryResult:
     evidence: list[dict] = field(default_factory=list)
     # Set only when the answer arm generated this row.
     answer: str | None = None
+    answer_latency_ms: int | None = None
 
 
 @dataclass
@@ -180,6 +181,7 @@ def _query_export(qr: QueryResult, *, include_answer: bool) -> dict:
     }
     if include_answer:
         row["answer"] = qr.answer
+        row["answer_latency_ms"] = qr.answer_latency_ms
     return row
 
 
@@ -478,8 +480,9 @@ async def _run_arm(
             )
 
         answer: str | None = None
+        answer_latency_ms: int | None = None
         if answer_generation and q.has_answer_labels():
-            answer, _latency_ms, model_name = await generate_answer(q.query, context_preview)
+            answer, answer_latency_ms, model_name = await generate_answer(q.query, context_preview)
             if not saw_generation:
                 recorded_model = model_name
             saw_generation = True
@@ -507,6 +510,7 @@ async def _run_arm(
                 timing_ms=trace["timing_ms"],
                 evidence=evidence,
                 answer=answer,
+                answer_latency_ms=answer_latency_ms,
             )
         )
 

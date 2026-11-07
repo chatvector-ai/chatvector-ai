@@ -678,6 +678,7 @@ Each object in `per_query_metrics` has:
 - `candidates` — the same order as `RetrievalResult.chunks`. Each candidate has `id`, `document_id`, `chunk_index`, `similarity`, and `score_type`. `vector_score`, `full_text_score`, `rrf_score`, `reranker_score`, and `rerank_order` are present only when that chunk has them. When a manifest resolved the row, the candidate also has `logical_key` beside the runtime `document_id`.
 - `context_preview` — the assembled context string. With `--answers`, this is the packed context passed to `generate_answer`.
 - `answer` — present only when `--answers` is on. The generated text, or null when the row has no answer label.
+- `answer_latency_ms` — present only when `--answers` is on. The `latency_ms` `generate_answer` returned, or null when the row has no answer label.
 - `metadata_filter` — the validated fixture filter, or null
 - `filter_excluded_all_documents` — true when that filter removed every document
 

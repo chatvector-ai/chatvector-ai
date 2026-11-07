@@ -24,6 +24,16 @@
           "hr-pto-policy",
           0
         ]
+      ],
+      "expected_facts": [
+        "18 paid days off"
+      ],
+      "expected_citation": {
+        "document": "hr-pto-policy",
+        "chunk_index": 0
+      },
+      "must_not_claim": [
+        "15 paid days off"
       ]
     },
     {
@@ -42,6 +52,16 @@
           "hr-pto-policy-2022",
           0
         ]
+      ],
+      "expected_facts": [
+        "15 paid days off"
+      ],
+      "expected_citation": {
+        "document": "hr-pto-policy-2022",
+        "chunk_index": 0
+      },
+      "must_not_claim": [
+        "18 paid days off"
       ]
     },
     {
@@ -61,7 +81,19 @@
           "hr-parental-leave",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        {
+          "text": "twelve weeks of paid parental leave",
+          "alternates": [
+            "twelve weeks"
+          ]
+        }
+      ],
+      "expected_citation": {
+        "document": "hr-parental-leave",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-leave-synthesis",
@@ -84,7 +116,20 @@
           "hr-pto-policy",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        {
+          "text": "twelve weeks of paid parental leave",
+          "alternates": [
+            "twelve weeks"
+          ]
+        },
+        "18 paid days off"
+      ],
+      "expected_citation": {
+        "document": "hr-parental-leave",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-acronym-qbr",
@@ -102,7 +147,14 @@
           "hr-conduct-code",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "Brinewick Transit Cooperative Quarterly Berth Review"
+      ],
+      "expected_citation": {
+        "document": "hr-conduct-code",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-exact-phrase-lockout",
@@ -120,7 +172,14 @@
           "hr-conduct-code",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "amber tide lockout"
+      ],
+      "expected_citation": {
+        "document": "hr-conduct-code",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-dinner-conflict",
@@ -143,7 +202,25 @@
           "finance-travel-policy",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        {
+          "text": "The dinner reimbursement limit is 75 USD per person",
+          "alternates": [
+            "75 USD"
+          ]
+        },
+        {
+          "text": "The dinner reimbursement limit is 40 USD per person",
+          "alternates": [
+            "40 USD"
+          ]
+        }
+      ],
+      "expected_citation": {
+        "document": "finance-expense-policy",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-vendor-code",
@@ -164,7 +241,19 @@
           "finance-vendor-payments",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        {
+          "text": "euros",
+          "alternates": [
+            "EUR"
+          ]
+        }
+      ],
+      "expected_citation": {
+        "document": "finance-vendor-payments",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-payroll-code",
@@ -182,7 +271,14 @@
           "finance-payroll-calendar",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "first and third Friday"
+      ],
+      "expected_citation": {
+        "document": "finance-payroll-calendar",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-escort-near-dup",
@@ -201,7 +297,19 @@
           "security-access-control",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        {
+          "text": "remain unescorted for ten minutes",
+          "alternates": [
+            "ten minutes"
+          ]
+        }
+      ],
+      "expected_citation": {
+        "document": "security-access-control",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-security-scope",
@@ -220,7 +328,14 @@
           "security-access-control",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "SEC-AC-221"
+      ],
+      "expected_citation": {
+        "document": "security-access-control",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-security-playbook",
@@ -238,7 +353,14 @@
           "security-incident-response",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "locks the staff gate"
+      ],
+      "expected_citation": {
+        "document": "security-incident-response",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-harbor-pass",
@@ -256,6 +378,16 @@
           "product-harbor-pass",
           0
         ]
+      ],
+      "expected_facts": [
+        "HP-100"
+      ],
+      "expected_citation": {
+        "document": "product-harbor-pass",
+        "chunk_index": 0
+      },
+      "must_not_claim": [
+        "HPP-200"
       ]
     },
     {
@@ -274,7 +406,14 @@
           "product-roadmap",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "spring ticket"
+      ],
+      "expected_citation": {
+        "document": "product-roadmap",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-oncall",
@@ -292,7 +431,14 @@
           "engineering-oncall",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "Monday through Friday"
+      ],
+      "expected_citation": {
+        "document": "engineering-oncall",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-release",
@@ -310,7 +456,14 @@
           "engineering-release",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "gangway sensors"
+      ],
+      "expected_citation": {
+        "document": "engineering-release",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-runbook-phrase",
@@ -328,7 +481,14 @@
           "engineering-runbook",
           5
         ]
-      ]
+      ],
+      "expected_facts": [
+        "saltmere cutover window"
+      ],
+      "expected_citation": {
+        "document": "engineering-runbook",
+        "chunk_index": 5
+      }
     },
     {
       "id": "q-chunk-boundary",
@@ -351,7 +511,14 @@
           "ops-watch-log",
           4
         ]
-      ]
+      ],
+      "expected_facts": [
+        "north lantern steady"
+      ],
+      "expected_citation": {
+        "document": "ops-watch-log",
+        "chunk_index": 3
+      }
     },
     {
       "id": "q-support-sla",
@@ -369,7 +536,14 @@
           "support-sla",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "30 minutes"
+      ],
+      "expected_citation": {
+        "document": "support-sla",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-support-escalation",
@@ -387,7 +561,14 @@
           "support-escalation",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "after the first-response target"
+      ],
+      "expected_citation": {
+        "document": "support-escalation",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-support-refund",
@@ -405,7 +586,14 @@
           "support-refunds",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "canceled by Brinewick"
+      ],
+      "expected_citation": {
+        "document": "support-refunds",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-msa",
@@ -423,7 +611,19 @@
           "contracts-msa",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        {
+          "text": "written renewal notice 60 days",
+          "alternates": [
+            "60 days"
+          ]
+        }
+      ],
+      "expected_citation": {
+        "document": "contracts-msa",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-nda",
@@ -441,7 +641,14 @@
           "contracts-nda",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "four years"
+      ],
+      "expected_citation": {
+        "document": "contracts-nda",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-incident-code",
@@ -460,7 +667,19 @@
           "incidents-outage-2024-11",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        {
+          "text": "lost channel 4 for eleven minutes",
+          "alternates": [
+            "eleven minutes"
+          ]
+        }
+      ],
+      "expected_citation": {
+        "document": "incidents-outage-2024-11",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-near-miss",
@@ -478,7 +697,14 @@
           "incidents-near-miss-log",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "loose gangway pin"
+      ],
+      "expected_citation": {
+        "document": "incidents-near-miss-log",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-pricing-usd",
@@ -498,7 +724,14 @@
           "pricing-standard",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "42 USD"
+      ],
+      "expected_citation": {
+        "document": "pricing-standard",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-pricing-eur",
@@ -518,7 +751,14 @@
           "pricing-partner",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "36 EUR"
+      ],
+      "expected_citation": {
+        "document": "pricing-partner",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-keel-berth",
@@ -539,7 +779,14 @@
           "customer-keel-and-co",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "04:00 to 06:00"
+      ],
+      "expected_citation": {
+        "document": "customer-keel-and-co",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-marrow-cap",
@@ -559,7 +806,14 @@
           "customer-marrow-shipping",
           0
         ]
-      ]
+      ],
+      "expected_facts": [
+        "250000 USD"
+      ],
+      "expected_citation": {
+        "document": "customer-marrow-shipping",
+        "chunk_index": 0
+      }
     },
     {
       "id": "q-absent-sabbatical",
@@ -571,7 +825,18 @@
       "metadata_filter": {
         "org": "brinewick"
       },
-      "expected_result": "no_supporting_evidence"
+      "expected_result": "no_supporting_evidence",
+      "expected_refusal": {
+        "phrases": [
+          "Not enough information"
+        ],
+        "forbidden": [
+          "sabbatical stipend is"
+        ]
+      },
+      "must_not_claim": [
+        "sabbatical stipend"
+      ]
     },
     {
       "id": "q-refusal-address",
@@ -583,7 +848,18 @@
       "metadata_filter": {
         "org": "brinewick"
       },
-      "expected_result": "refusal"
+      "expected_result": "refusal",
+      "expected_refusal": {
+        "phrases": [
+          "Not enough information"
+        ],
+        "forbidden": [
+          "home street address"
+        ]
+      },
+      "must_not_claim": [
+        "home street address"
+      ]
     }
   ]
 }

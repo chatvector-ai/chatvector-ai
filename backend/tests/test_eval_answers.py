@@ -127,6 +127,7 @@ async def test_default_run_does_not_call_generate_answer_when_labels_exist(tmp_p
     assert row.answer is None
     exported, environment = _rows(export_path)
     assert "answer" not in exported["How long is retention?"]
+    assert "answer_latency_ms" not in exported["How long is retention?"]
     assert environment["llm_provider"] is None
     assert environment["llm_model"] is None
 
@@ -203,12 +204,16 @@ async def test_completeness_counts_fact_text_and_alternates_only(tmp_path, monke
     assert calls[0] == ("contains fact", "packed context for contains fact")
     assert by_query["contains fact"].context_preview == "packed context for contains fact"
     assert by_query["contains fact"].answer == "SEVEN YEARS is the period."
+    assert by_query["contains fact"].answer_latency_ms == 4
     assert by_query["retrieval only"].answer is None
+    assert by_query["retrieval only"].answer_latency_ms is None
 
     exported, environment = _rows(export_path)
     assert exported["contains fact"]["answer"] == "SEVEN YEARS is the period."
+    assert exported["contains fact"]["answer_latency_ms"] == 4
     assert exported["contains fact"]["context_preview"] == "packed context for contains fact"
     assert exported["retrieval only"]["answer"] is None
+    assert exported["retrieval only"]["answer_latency_ms"] is None
     assert environment["llm_model"] == "mock-eval-model"
     assert environment["llm_model"] != config.LLM_MODEL
     assert environment["llm_provider"] == "mock-provider"
