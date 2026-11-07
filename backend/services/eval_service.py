@@ -27,15 +27,28 @@ EVAL_TOOL_VERSION = "0.1.0"
 DEFAULT_K_VALUES: tuple[int, ...] = (5, 10)
 
 
+_COMPONENT_SCORE_FIELDS = (
+    "vector_score",
+    "full_text_score",
+    "rrf_score",
+    "reranker_score",
+    "rerank_order",
+)
+
+
 def _candidate_summary(chunk: ChunkMatch) -> dict:
-    return {
+    summary = {
         "id": chunk.id,
         "document_id": chunk.document_id,
         "chunk_index": chunk.chunk_index,
         "similarity": chunk.similarity,
         "score_type": chunk.score_type,
-        "rerank_order": chunk.rerank_order,
     }
+    for field_name in _COMPONENT_SCORE_FIELDS:
+        value = getattr(chunk, field_name, None)
+        if value is not None:
+            summary[field_name] = value
+    return summary
 
 
 def _copied_retrieval_trace(retrieval) -> dict:

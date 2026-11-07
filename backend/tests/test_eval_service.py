@@ -244,6 +244,84 @@ async def test_export_copies_transformed_queries_and_timings_from_retrieval(tmp_
     assert list(exported["timing_ms"]) == ["transform", "embed", "search", "rerank", "context", "total"]
 
 
+@pytest.mark.asyncio
+async def test_export_keeps_chunk_order_and_present_component_scores(tmp_path):
+    dataset = load_dataset(FIXTURES_DIR / "basic_queries.json")
+    low_then_high = [
+        ChunkMatch(
+            id="later-doc:0",
+            chunk_text="low",
+            document_id="later-doc",
+            chunk_index=0,
+            similarity=0.1,
+            score_type="vector",
+            vector_score=0.1,
+        ),
+        ChunkMatch(
+            id="earlier-doc:3",
+            chunk_text="high",
+            document_id="earlier-doc",
+            chunk_index=3,
+            similarity=0.9,
+            score_type="reranked",
+            vector_score=0.4,
+            full_text_score=0.2,
+            rrf_score=0.03,
+            reranker_score=0.9,
+            rerank_order=1,
+        ),
+        ChunkMatch(
+            id="plain-doc:1",
+            chunk_text="plain",
+            document_id="plain-doc",
+            chunk_index=1,
+            similarity=0.5,
+            score_type="vector",
+        ),
+    ]
+    retrieval = _retrieval_result(
+        low_then_high,
+        original_query="order query",
+        transformed_queries=["order query"],
+        primary_query="order query",
+        timing_ms={"transform": 1, "embed": 1, "search": 1, "rerank": 1, "context": 1, "total": 5},
+    )
+
+    async def fake_retrieve(*args, **kwargs):
+        del args, kwargs
+        return retrieval
+
+    arm = EffectiveRetrievalConfig(
+        label="current-config", hybrid_retrieval_enabled=False, enable_reranking=False
+    )
+    export_path = tmp_path / "order.json"
+
+    with patch("services.eval_service.retrieve_for_documents", AsyncMock(side_effect=fake_retrieve)):
+        await run_eval(dataset, [arm], tenant_id="tenant-eval-test", export_path=export_path)
+
+    candidates = json.loads(export_path.read_text(encoding="utf-8"))["arms"][0]["per_query_metrics"][0]["candidates"]
+    assert [row["id"] for row in candidates] == [chunk.id for chunk in retrieval.chunks]
+    assert [row["similarity"] for row in candidates] == [0.1, 0.9, 0.5]
+
+    sparse, scored, plain = candidates
+    assert sparse["score_type"] == "vector"
+    assert sparse["vector_score"] == 0.1
+    for absent in ("full_text_score", "rrf_score", "reranker_score", "rerank_order"):
+        assert absent not in sparse
+    assert scored["vector_score"] == 0.4
+    assert scored["full_text_score"] == 0.2
+    assert scored["rrf_score"] == 0.03
+    assert scored["reranker_score"] == 0.9
+    assert scored["rerank_order"] == 1
+    assert scored["document_id"] == "earlier-doc"
+    assert scored["chunk_index"] == 3
+    assert scored["similarity"] == 0.9
+    for absent in ("vector_score", "full_text_score", "rrf_score", "reranker_score", "rerank_order"):
+        assert absent not in plain
+    assert plain["score_type"] == "vector"
+    assert plain["similarity"] == 0.5
+
+
 # ---------------------------------------------------------------------------
 # No answer-generation call anywhere in the eval path
 # ---------------------------------------------------------------------------
