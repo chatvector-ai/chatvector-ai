@@ -2,7 +2,7 @@ import logging
 import asyncio
 import json
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Mapping, Optional, AsyncGenerator, cast
 
 from core.auth import AuthContext, require_current_tenant
@@ -327,6 +327,12 @@ class RetrievalResult:
     transform_result: QueryTransformResult
     effective_config: EffectiveRetrievalConfig
     reranker_debug: dict | None = None
+    # Deduped candidates from this call, after optional graph expansion and
+    # before global score order and the match_count cut. ``chunks`` is the
+    # ordered, bounded list passed to the packer.
+    retrieved_chunks: list = field(default_factory=list)
+    # Chunks written into ``context``, in packer order.
+    packed_chunks: list = field(default_factory=list)
 
     def to_debug_dict(self) -> dict:
         payload = self.transform_result.to_retrieval_debug()
@@ -479,6 +485,7 @@ async def retrieve_for_documents(
             allowed_document_ids=document_ids,
         )
 
+    retrieved_chunks = list(all_chunks)
     all_chunks = _order_chunks_by_effective_score(all_chunks)
 
     rerank_started = time.perf_counter()
@@ -496,11 +503,20 @@ async def retrieve_for_documents(
     context_kwargs = {}
     if max_context_chars is not None:
         context_kwargs["max_chars"] = max_context_chars
-    context = build_context_from_chunks(
+    packed = build_context_from_chunks(
         matching_chunks,
         session_context=session_context,
         **context_kwargs,
     )
+    # Tests stub the packer with a plain string. The real packer returns both.
+    if isinstance(getattr(packed, "text", None), str):
+        context = packed.text
+        packed_chunks = list(packed.included_chunks)
+    elif isinstance(packed, str):
+        context = packed
+        packed_chunks = []
+    else:
+        raise TypeError("build_context_from_chunks must return a string or PackedContext")
     context_ms = int((time.perf_counter() - context_started) * 1000)
 
     return RetrievalResult(
@@ -519,6 +535,8 @@ async def retrieve_for_documents(
         transform_result=transform_result,
         effective_config=effective_retrieval_config,
         reranker_debug=reranker_debug,
+        retrieved_chunks=retrieved_chunks,
+        packed_chunks=packed_chunks,
     )
 
 

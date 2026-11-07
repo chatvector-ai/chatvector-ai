@@ -104,6 +104,8 @@ class QueryResult:
     transformed_queries: list[str] | None = None
     effective_retrieval_query: str | None = None
     timing_ms: dict | None = None
+    # Per relevant chunk: retrieved, globally selected, and packed.
+    evidence: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -148,6 +150,7 @@ class EvalRunResult:
                             "effective_retrieval_query": qr.effective_retrieval_query,
                             "timing_ms": qr.timing_ms,
                             "metrics": qr.metrics,
+                            "evidence": qr.evidence,
                             "candidates": qr.candidates,
                             "context_preview": qr.context_preview,
                             "metadata_filter": qr.metadata_filter,
@@ -169,6 +172,79 @@ def _aggregate(query_results: list[QueryResult]) -> dict[str, float]:
         key: sum(qr.metrics[key] for qr in query_results) / len(query_results)
         for key in keys
     }
+
+
+def _chunk_key(chunk):
+    return eval_metrics.chunk_match_key(
+        getattr(chunk, "document_id", None),
+        getattr(chunk, "chunk_index", None),
+    )
+
+
+def _membership_keys(chunks: list) -> set:
+    return {key for chunk in chunks if (key := _chunk_key(chunk)) is not None}
+
+
+def _pages_by_key(*chunk_lists: list) -> dict:
+    """Page number for a chunk identity. Later lists win, so the packed copy is kept."""
+    pages: dict = {}
+    for chunks in chunk_lists:
+        for chunk in chunks:
+            key = _chunk_key(chunk)
+            page_number = getattr(chunk, "page_number", None)
+            if key is not None and page_number is not None:
+                pages[key] = page_number
+    return pages
+
+
+def _relevant_labels(query: EvalQuery) -> list[tuple[str, int | None, str | None]]:
+    """Relevant labels in fixture order, with the logical key when a manifest resolved it."""
+    mapped = _logical_keys_by_document(query)
+    labels: list[tuple[str, int | None, str | None]] = []
+    for index, (document_id, chunk_index) in enumerate(query.relevant_chunks):
+        logical_key = None
+        if index < len(query.logical_relevant_chunks):
+            logical_key = query.logical_relevant_chunks[index][0]
+        labels.append((document_id, chunk_index, logical_key or mapped.get(document_id)))
+    for index, document_id in enumerate(query.relevant_doc_ids):
+        logical_key = None
+        if index < len(query.logical_relevant_doc_ids):
+            logical_key = query.logical_relevant_doc_ids[index]
+        labels.append((document_id, None, logical_key or mapped.get(document_id)))
+    return labels
+
+
+def _evidence_for_query(
+    query: EvalQuery,
+    retrieved_chunks: list,
+    selected_chunks: list,
+    packed_chunks: list,
+) -> list[dict]:
+    """Classify each relevant chunk from the three structured lists.
+
+    Does not read the context string, sort the lists, or apply another top-k.
+    """
+    retrieved_keys = _membership_keys(retrieved_chunks)
+    selected_keys = _membership_keys(selected_chunks)
+    packed_keys = _membership_keys(packed_chunks)
+    pages = _pages_by_key(retrieved_chunks, selected_chunks, packed_chunks)
+    rows: list[dict] = []
+    for document_id, chunk_index, logical_key in _relevant_labels(query):
+        key = eval_metrics.chunk_match_key(document_id, chunk_index)
+        row: dict = {"document_id": document_id}
+        if chunk_index is not None:
+            row["chunk_index"] = chunk_index
+        if logical_key:
+            row["logical_key"] = logical_key
+        page_number = pages.get(key)
+        if page_number is not None:
+            row["page_number"] = page_number
+        present = key is not None
+        row["retrieved"] = present and key in retrieved_keys
+        row["globally_selected"] = present and key in selected_keys
+        row["packed"] = present and key in packed_keys
+        rows.append(row)
+    return rows
 
 
 def _validated_filters(dataset: EvalDataset) -> list[dict | None]:
@@ -244,6 +320,8 @@ async def _run_arm(
             candidates: list[ChunkMatch] = []
             context_preview = ""
             trace = dict(_NO_RETRIEVAL_TRACE)
+            retrieved_chunks: list = []
+            packed_chunks: list = []
         else:
             retrieval = await retrieve_for_documents(
                 q.query,
@@ -257,6 +335,8 @@ async def _run_arm(
             candidates = retrieval.chunks
             context_preview = retrieval.context
             trace = _copied_retrieval_trace(retrieval)
+            retrieved_chunks = retrieval.retrieved_chunks
+            packed_chunks = retrieval.packed_chunks
 
         ranked_keys = [
             eval_metrics.chunk_match_key(c.document_id, c.chunk_index)
@@ -264,11 +344,15 @@ async def _run_arm(
         ]
         relevant = q.relevant_keys()
         logical_keys = _logical_keys_by_document(q)
+        evidence = _evidence_for_query(q, retrieved_chunks, candidates, packed_chunks)
 
         metrics: dict[str, float] = {"mrr": eval_metrics.mrr(ranked_keys, relevant)}
         for k in k_values:
             metrics[f"recall@{k}"] = eval_metrics.recall_at_k(ranked_keys, relevant, k)
             metrics[f"ndcg@{k}"] = eval_metrics.ndcg_at_k(ranked_keys, relevant, k)
+        metrics["packed_presence"] = eval_metrics.packed_presence(
+            [row["packed"] for row in evidence]
+        )
 
         query_results.append(
             QueryResult(
@@ -288,6 +372,7 @@ async def _run_arm(
                 transformed_queries=trace["transformed_queries"],
                 effective_retrieval_query=trace["effective_retrieval_query"],
                 timing_ms=trace["timing_ms"],
+                evidence=evidence,
             )
         )
 

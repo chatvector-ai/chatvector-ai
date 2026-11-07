@@ -1,5 +1,6 @@
 import logging
 import os
+from dataclasses import dataclass
 from typing import Optional
 from core.session import SessionContext
 
@@ -8,12 +9,25 @@ logger = logging.getLogger(__name__)
 MAX_CONTEXT_CHARS: int = int(os.getenv("MAX_CONTEXT_CHARS", "32000"))
 
 
+@dataclass(frozen=True)
+class PackedContext:
+    """Context string and the chunks that were written into it.
+
+    ``text`` is the string the model sees. ``included_chunks`` is the
+    structured inclusion list, in packer order. Callers match those chunk
+    objects by document id and chunk index. They do not scan ``text``.
+    """
+
+    text: str
+    included_chunks: tuple[object, ...]
+
+
 def build_context_from_chunks(
     chunks: list,
     session_context: Optional[SessionContext] = None,
     *,
     max_chars: int | None = None,
-) -> str:
+) -> PackedContext:
     """
     Combine chunk texts into a single context string for the LLM.
 
@@ -23,9 +37,13 @@ def build_context_from_chunks(
     Chunks are dropped (whole, from the end) if the total would exceed
     MAX_CONTEXT_CHARS, preserving formatting of all included chunks.
     ``max_chars`` overrides that process cap for one assembly call.
+
+    The returned string matches the previous assembly. The inclusion list
+    records which input chunks were written; session history is not a chunk.
     """
     limit = MAX_CONTEXT_CHARS if max_chars is None else max_chars
     parts: list[str] = []
+    included: list = []
     total_chars = 0
     separator = "\n\n"
     sep_len = len(separator)
@@ -62,6 +80,7 @@ def build_context_from_chunks(
             if not parts:
                 # Single chunk exceeds cap; include it rather than returning empty context.
                 parts.append(part)
+                included.append(chunk)
                 dropped = len(chunks) - i - 1
                 used = len(part)
             else:
@@ -78,8 +97,9 @@ def build_context_from_chunks(
             break
 
         parts.append(part)
+        included.append(chunk)
         total_chars += addition
 
     context = separator.join(parts)
     logger.info("Constructed context of length %d", len(context))
-    return context
+    return PackedContext(text=context, included_chunks=tuple(included))

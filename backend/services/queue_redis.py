@@ -32,6 +32,7 @@ import socket
 import threading
 import time
 import uuid
+import weakref
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -66,6 +67,9 @@ logger = logging.getLogger(__name__)
 
 DLQ_REDIS_KEY = "chatvector:dlq"
 RQ_QUEUE_NAME = "chatvector-ingestion"
+# Queues still constructed at process exit. Daemon workers that log after
+# pytest closes stderr abort the interpreter.
+_live_queues: weakref.WeakSet = weakref.WeakSet()
 
 JOB_PAYLOAD_MISSING_USER_MESSAGE = (
     "Upload payload was lost before processing could start. "
@@ -455,6 +459,7 @@ class RedisIngestionQueue(BaseIngestionQueue):
         self._rq_workers: list[Optional[ThreadSafeWorker]] = []
         self._stop_event = threading.Event()
         spill_dir()
+        _live_queues.add(self)
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -487,14 +492,37 @@ class RedisIngestionQueue(BaseIngestionQueue):
 
     async def stop(self) -> None:
         """Signal workers to stop and join threads off the event loop."""
+        self._signal_stop()
+        await asyncio.to_thread(self._join_worker_threads, 5.0)
+        if any(t.is_alive() for t in self._worker_threads):
+            # Keep the thread and worker objects. Dropping them lets a later
+            # start() clear the stop event and revive a thread still inside
+            # worker.work(), which never sees that event.
+            logger.warning(
+                "Redis ingestion queue stop timed out with %d worker thread(s) still running",
+                sum(1 for t in self._worker_threads if t.is_alive()),
+            )
+        else:
+            self._worker_threads.clear()
+            self._rq_workers.clear()
+        logger.info("Redis ingestion queue stopped")
+
+    def _signal_stop(self) -> None:
         self._stop_event.set()
         for worker in self._rq_workers:
             if worker is not None:
                 worker._stop_requested = True
-        await asyncio.to_thread(self._join_worker_threads, 5.0)
-        self._worker_threads.clear()
-        self._rq_workers.clear()
-        logger.info("Redis ingestion queue stopped")
+
+    def _attach_worker(self, worker_id: int, worker: ThreadSafeWorker) -> None:
+        """Publish a worker, then honor a stop that arrived before it was visible.
+
+        ``stop()`` can run after the thread passes the loop check and before
+        this assignment. Without the re-check, ``work()`` blocks forever and
+        the thread is still logging when pytest closes stderr.
+        """
+        self._rq_workers[worker_id] = worker
+        if self._stop_event.is_set():
+            worker._stop_requested = True
 
     def _join_worker_threads(self, timeout: float) -> None:
         deadline = time.monotonic() + timeout
@@ -629,6 +657,10 @@ class RedisIngestionQueue(BaseIngestionQueue):
 
     def _run_worker(self, worker_id: int) -> None:
         """Run a ThreadSafeWorker in a loop; restarts on unexpected exit."""
+        # rq.queue only logs idle BLPOP at DEBUG. Test runs set the root
+        # logger to DEBUG, so those lines reach stderr. worker.work() sets
+        # the rq.worker level only, which does not cover rq.queue.
+        logging.getLogger("rq.queue").setLevel(logging.WARNING)
         logger.info("RQ worker thread-%d starting", worker_id)
         while not self._stop_event.is_set():
             worker: ThreadSafeWorker | None = None
@@ -641,7 +673,9 @@ class RedisIngestionQueue(BaseIngestionQueue):
                     connection=worker_conn,
                     name=_rq_worker_name(worker_id),
                 )
-                self._rq_workers[worker_id] = worker
+                self._attach_worker(worker_id, worker)
+                if worker._stop_requested:
+                    continue
                 worker.work(
                     burst=False,
                     logging_level=logging.WARNING,
@@ -677,3 +711,15 @@ class RedisIngestionQueue(BaseIngestionQueue):
                 )
                 time.sleep(1.0)
         logger.info("RQ worker thread-%d exiting", worker_id)
+
+
+def shutdown_lingering_redis_workers(timeout: float = 5.0) -> None:
+    """Stop RQ worker threads still running after the app or a test session.
+
+    Daemon threads that write a log record after pytest has closed stderr
+    raise ``ValueError: I/O operation on closed file`` and can abort the
+    interpreter while it finalizes.
+    """
+    for queue in list(_live_queues):
+        queue._signal_stop()
+        queue._join_worker_threads(timeout)

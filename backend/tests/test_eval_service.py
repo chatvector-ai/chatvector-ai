@@ -12,7 +12,7 @@ from services import eval_metrics
 from cli import cmd_eval
 from services.chat_service import RetrievalResult
 from services.eval_config import EffectiveRetrievalConfig, ResolvedEnvironmentSnapshot
-from services.eval_fixtures import EvalDataset, load_dataset
+from services.eval_fixtures import EvalDataset, EvalQuery, load_dataset
 from services.eval_service import ArmResult, EvalRunResult, diff_arms, run_eval
 from services.query_service import QueryTransformResult
 from services.retrieval_config import RetrievalProcessDefaults, resolve_retrieval_config
@@ -70,6 +70,12 @@ def test_chunk_match_key_falls_back_to_document_id():
     assert eval_metrics.chunk_match_key("doc-1", 3) == ("doc-1", 3)
     assert eval_metrics.chunk_match_key("doc-1", None) == "doc-1"
     assert eval_metrics.chunk_match_key(None, 3) is None
+
+
+def test_packed_presence_is_the_fraction_of_packed_flags():
+    assert eval_metrics.packed_presence([]) == 0.0
+    assert eval_metrics.packed_presence([True, False, True]) == pytest.approx(2 / 3)
+    assert eval_metrics.recall_at_k(["a", "b", "c"], {"a", "b", "c"}, k=3) == pytest.approx(1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -921,3 +927,126 @@ async def test_rows_without_metadata_filter_are_unchanged(tmp_path):
         assert qr.filter_excluded_all_documents is False
     per_query = json.loads(export_path.read_text(encoding="utf-8"))["arms"][0]["per_query_metrics"]
     assert all(row["metadata_filter"] is None for row in per_query)
+
+
+def _text_chunk(doc_id: str, chunk_index: int, *, score: float, text: str, page_number: int) -> ChunkMatch:
+    chunk = _chunk(doc_id, chunk_index, score=score)
+    chunk.chunk_text = text
+    chunk.page_number = page_number
+    return chunk
+
+
+@pytest.mark.asyncio
+async def test_export_reports_packed_presence_separately_from_recall(tmp_path, monkeypatch):
+    """Cap-dropped and globally cut chunks stay distinguishable, and the string is not the source."""
+    monkeypatch.setattr(config, "ENABLE_GRAPH_RETRIEVAL", False)
+    from services.context_service import build_context_from_chunks
+
+    shared = "SHARED-EVIDENCE-TOKEN"
+    kept_first = _text_chunk("run-doc-a", 0, score=0.90, text=shared + "-kept", page_number=1)
+    kept_second = _text_chunk("run-doc-a", 1, score=0.80, text="second-kept", page_number=2)
+    capped = _text_chunk("run-doc-a", 2, score=0.70, text=shared, page_number=8)
+    cut = _text_chunk("run-doc-b", 0, score=0.10, text="only-retrieved", page_number=3)
+    short = [
+        _text_chunk("doc-short", index, score=0.5, text="s", page_number=1)
+        for index in range(3)
+    ]
+    cap = len(build_context_from_chunks([kept_first, kept_second]).text)
+    pools = {
+        "run-doc-a": [kept_first, kept_second, capped],
+        "run-doc-b": [cut],
+        "doc-short": short,
+    }
+
+    async def fake_find_similar_chunks(*, doc_id, query_embedding, match_count, tenant_id, query_text=None, session_id=None, hybrid_enabled=None):
+        del query_embedding, match_count, tenant_id, query_text, session_id, hybrid_enabled
+        return list(pools[doc_id])
+
+    dataset = EvalDataset(
+        name="packed-presence",
+        queries=[
+            EvalQuery(
+                query="where is the evidence",
+                doc_ids=["run-doc-a", "run-doc-b"],
+                logical_doc_ids=["policy", "handbook"],
+                relevant_chunks=[
+                    ("run-doc-a", 2),
+                    ("run-doc-b", 0),
+                    ("run-doc-a", 0),
+                    ("run-doc-a", 1),
+                    ("missing-doc", 4),
+                ],
+                logical_relevant_chunks=[
+                    ("policy", 2),
+                    ("handbook", 0),
+                    ("policy", 0),
+                    ("policy", 1),
+                ],
+            ),
+            EvalQuery(
+                query="short context still packs",
+                doc_ids=["doc-short"],
+                relevant_chunks=[("doc-short", 0), ("doc-short", 1), ("doc-short", 2)],
+            ),
+        ],
+    )
+    arm = EffectiveRetrievalConfig(
+        label="packed",
+        hybrid_retrieval_enabled=False,
+        enable_reranking=False,
+        match_count=3,
+        max_context_chars=cap,
+    )
+    export_path = tmp_path / "packed.json"
+
+    with (
+        patch("services.chat_service.find_similar_chunks", AsyncMock(side_effect=fake_find_similar_chunks)),
+        patch(
+            "services.chat_service.get_embeddings",
+            AsyncMock(side_effect=lambda texts, **kwargs: [[0.1, 0.2, 0.3] for _ in texts]),
+        ),
+    ):
+        result = await run_eval(dataset, [arm], tenant_id="tenant-eval-test", export_path=export_path)
+
+    capped_row = result.arms[0].query_results[0]
+    fitted_row = result.arms[0].query_results[1]
+    states = [
+        (row["document_id"], row["chunk_index"], row["retrieved"], row["globally_selected"], row["packed"])
+        for row in capped_row.evidence
+    ]
+    assert states == [
+        ("run-doc-a", 2, True, True, False),
+        ("run-doc-b", 0, True, False, False),
+        ("run-doc-a", 0, True, True, True),
+        ("run-doc-a", 1, True, True, True),
+        ("missing-doc", 4, False, False, False),
+    ]
+    assert capped_row.evidence[0]["logical_key"] == "policy"
+    assert capped_row.evidence[0]["page_number"] == 8
+    assert capped_row.evidence[1]["logical_key"] == "handbook"
+    assert capped_row.evidence[1]["page_number"] == 3
+    assert "logical_key" not in capped_row.evidence[4]
+    assert "page_number" not in capped_row.evidence[4]
+    assert [row["id"] for row in capped_row.candidates] == ["run-doc-a:0", "run-doc-a:1", "run-doc-a:2"]
+    assert capped_row.metrics["packed_presence"] == pytest.approx(2 / 5)
+    assert capped_row.metrics["recall@5"] == pytest.approx(3 / 5)
+    assert capped_row.metrics["recall@10"] == pytest.approx(3 / 5)
+    assert capped_row.metrics["mrr"] == pytest.approx(1.0)
+    assert 0.0 < capped_row.metrics["ndcg@5"] <= 1.0
+    assert capped_row.context_preview == build_context_from_chunks([kept_first, kept_second]).text
+    assert shared in capped_row.context_preview
+    assert all(row["retrieved"] and row["globally_selected"] and row["packed"] for row in fitted_row.evidence)
+    assert fitted_row.metrics["packed_presence"] == pytest.approx(1.0)
+    assert fitted_row.metrics["recall@5"] == pytest.approx(1.0)
+    assert result.arms[0].aggregate_metrics["packed_presence"] == pytest.approx((2 / 5 + 1.0) / 2)
+    assert result.arms[0].aggregate_metrics["mrr"] == pytest.approx(1.0)
+
+    exported = json.loads(export_path.read_text(encoding="utf-8"))
+    per_query = exported["arms"][0]["per_query_metrics"]
+    assert per_query[0]["evidence"][0]["globally_selected"] is True
+    assert per_query[0]["evidence"][0]["packed"] is False
+    assert per_query[0]["evidence"][1]["retrieved"] is True
+    assert per_query[0]["evidence"][1]["globally_selected"] is False
+    assert per_query[0]["metrics"]["packed_presence"] == pytest.approx(2 / 5)
+    assert "recall@5" in per_query[0]["metrics"]
+    assert exported["arms"][0]["aggregate_metrics"]["packed_presence"] == pytest.approx((2 / 5 + 1.0) / 2)
