@@ -11,6 +11,7 @@ import pytest
 from cli import cmd_eval
 from services.eval_corpus import _content_type_for, _load_declaration
 from services.eval_fixtures import EvalDatasetError, load_dataset
+from services.eval_metrics import recall_at_k
 from services.extraction_service import (
     build_document_extractor,
     prepare_extracted_document_for_chunking,
@@ -185,12 +186,12 @@ def test_question_file_loads_with_relevance_and_no_evidence_rows(brinewick):
     assert brinewick.dataset.chunk_settings == DECLARED_CHUNKING
 
     keys = {item.logical_key for item in brinewick.declaration.documents}
-    chunk_rows = [row for row in rows if "relevant_chunks" in row]
-    document_rows = [row for row in rows if "relevant_doc_ids" in row]
-    both = [row for row in rows if "relevant_chunks" in row and "relevant_doc_ids" in row]
+    relevance_rows = [
+        row for row in rows if row.get("relevant_chunks") or row.get("relevant_doc_ids")
+    ]
     no_evidence = [row for row in rows if row.get("expected_result") == "no_supporting_evidence"]
     refusals = [row for row in rows if row.get("expected_result") == "refusal"]
-    assert chunk_rows and document_rows and both and no_evidence and refusals
+    assert relevance_rows and no_evidence and refusals
 
     for row, query in zip(rows, loaded):
         assert "doc_ids" not in row
@@ -247,12 +248,12 @@ def test_labels_match_the_chunks_that_contain_each_fact(brinewick):
             assert evidence == []
             continue
         doc_ids, chunks = _evidence_locations(brinewick, evidence)
-        if "relevant_chunks" in row:
-            assert row["relevant_chunks"] == chunks
-        else:
-            assert "relevant_doc_ids" in row
-        if "relevant_doc_ids" in row:
-            assert row["relevant_doc_ids"] == doc_ids
+        assert row["relevant_chunks"] == chunks
+        assert {pair[0] for pair in chunks} == set(doc_ids)
+        assert "relevant_doc_ids" not in row
+        loaded = next(query for query in brinewick.dataset.queries if query.query == row["query"])
+        ranked = list(loaded.relevant_chunks)
+        assert recall_at_k(ranked, loaded.relevant_keys(), len(ranked)) == 1.0
         for item in evidence:
             assert item["contains"] in _text(brinewick, item["document"])
             owners = [
@@ -420,8 +421,20 @@ def test_manifest_resolves_logical_keys_and_searches_the_tenant(brinewick, tmp_p
     assert current.logical_doc_ids[0] == "hr-pto-policy"
 
     synthesis = by_query[_row(brinewick, "q-leave-synthesis")["query"]]
-    assert synthesis.relevant_doc_ids == ["run-hr-parental-leave", "run-hr-pto-policy"]
-    assert synthesis.logical_relevant_doc_ids == ["hr-parental-leave", "hr-pto-policy"]
+    assert synthesis.relevant_chunks == [
+        ("run-hr-parental-leave", 0),
+        ("run-hr-pto-policy", 0),
+    ]
+    assert synthesis.logical_relevant_chunks == [
+        ("hr-parental-leave", 0),
+        ("hr-pto-policy", 0),
+    ]
+    assert synthesis.relevant_doc_ids == []
+
+    stale = by_query[_row(brinewick, "q-stale-pto-document")["query"]]
+    assert stale.relevant_chunks == [("run-hr-pto-policy-2022", 0)]
+    assert stale.logical_relevant_chunks == [("hr-pto-policy-2022", 0)]
+    assert stale.relevant_doc_ids == []
 
     absent = by_query[_row(brinewick, "q-absent-sabbatical")["query"]]
     assert absent.expected_result == "no_supporting_evidence"

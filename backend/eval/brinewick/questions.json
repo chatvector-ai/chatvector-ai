@@ -37,8 +37,11 @@
       "metadata_filter": {
         "org": "brinewick"
       },
-      "relevant_doc_ids": [
-        "hr-pto-policy-2022"
+      "relevant_chunks": [
+        [
+          "hr-pto-policy-2022",
+          0
+        ]
       ]
     },
     {
@@ -81,10 +84,6 @@
           "hr-pto-policy",
           0
         ]
-      ],
-      "relevant_doc_ids": [
-        "hr-parental-leave",
-        "hr-pto-policy"
       ]
     },
     {
@@ -144,10 +143,6 @@
           "finance-travel-policy",
           0
         ]
-      ],
-      "relevant_doc_ids": [
-        "finance-expense-policy",
-        "finance-travel-policy"
       ]
     },
     {
