@@ -325,3 +325,34 @@ async def test_eval_caller_observes_same_order_and_bound(retrieval_env):
     candidates = result.arms[0].query_results[0].candidates
     assert [row["id"] for row in candidates] == ["doc-b:0", "doc-b:1"]
     assert len(candidates) == 2
+
+
+@pytest.mark.asyncio
+async def test_retrieved_chunks_stay_prebound_and_packer_drops_the_tail(retrieval_env):
+    """The cut chunk stays on the pre-bound list. The cap drops a selected chunk."""
+    from services.context_service import build_context_from_chunks
+
+    doc_a = [
+        _chunk("doc-a", 0, similarity=0.90, text="a" * 80),
+        _chunk("doc-a", 1, similarity=0.80, text="b" * 80),
+        _chunk("doc-a", 2, similarity=0.70, text="c" * 80),
+    ]
+    doc_b = [_chunk("doc-b", 0, similarity=0.10, text="only-retrieved")]
+    cap = len(build_context_from_chunks(doc_a[:2]).text)
+
+    result, _ = await _retrieve(
+        ["doc-b", "doc-a"],
+        {"doc-a": doc_a, "doc-b": doc_b},
+        fields={"reranking_enabled": False, "match_count": 3},
+        max_context_chars=cap,
+    )
+
+    assert [chunk.id for chunk in result.retrieved_chunks] == [
+        "doc-b:0",
+        "doc-a:0",
+        "doc-a:1",
+        "doc-a:2",
+    ]
+    assert [chunk.id for chunk in result.chunks] == ["doc-a:0", "doc-a:1", "doc-a:2"]
+    assert [chunk.id for chunk in result.packed_chunks] == ["doc-a:0", "doc-a:1"]
+    assert result.context == build_context_from_chunks(doc_a[:2]).text
