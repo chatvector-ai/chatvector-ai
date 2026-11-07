@@ -79,6 +79,11 @@ export function hasInspectableRetrievalData(data: RetrievalInspectorData): boole
     if (debug.transformed_queries && debug.transformed_queries.length > 0) {
       return true;
     }
+    if (debug.history_resolution_applied === true) return true;
+    if (debug.history_resolution_skipped_reason) return true;
+    if (debug.history_resolution_fallback_reason) return true;
+    if (debug.history_resolved_query) return true;
+    if (debug.effective_retrieval_query) return true;
   }
   if (data.sources && data.sources.length > 0) return true;
   if (data.chunks !== undefined) return true;

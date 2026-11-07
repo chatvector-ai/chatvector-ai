@@ -35,7 +35,12 @@ export default function RetrievalInspector({ data }: Props) {
     data.question ||
       debug?.original_query ||
       debug?.transformation_strategy ||
-      (debug?.transformed_queries && debug.transformed_queries.length > 0)
+      (debug?.transformed_queries && debug.transformed_queries.length > 0) ||
+      debug?.history_resolution_applied === true ||
+      debug?.history_resolution_skipped_reason ||
+      debug?.history_resolution_fallback_reason ||
+      debug?.history_resolved_query ||
+      debug?.effective_retrieval_query
   );
 
   return (
@@ -70,6 +75,33 @@ export default function RetrievalInspector({ data }: Props) {
                 <InspectorRow
                   label="Strategy"
                   value={debug.transformation_strategy}
+                />
+              )}
+              {debug?.history_resolution_applied === true && (
+                <InspectorRow label="History" value="Ran" />
+              )}
+              {debug?.history_resolution_skipped_reason && (
+                <InspectorRow
+                  label="History"
+                  value={`Skipped (${debug.history_resolution_skipped_reason})`}
+                />
+              )}
+              {debug?.history_resolution_fallback_reason && (
+                <InspectorRow
+                  label="History"
+                  value={`Fallback (${debug.history_resolution_fallback_reason})`}
+                />
+              )}
+              {debug?.history_resolved_query && (
+                <InspectorRow
+                  label="Resolved query"
+                  value={debug.history_resolved_query}
+                />
+              )}
+              {debug?.effective_retrieval_query && (
+                <InspectorRow
+                  label="Searched query"
+                  value={debug.effective_retrieval_query}
                 />
               )}
             </dl>

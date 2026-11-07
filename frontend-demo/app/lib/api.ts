@@ -71,6 +71,9 @@ export type RetrievalDebugMetadata = {
   original_query?: string;
   transformed_queries?: string[];
   transformation_strategy?: string;
+  history_resolution_applied?: boolean;
+  history_resolution_skipped_reason?: string;
+  history_resolution_fallback_reason?: string;
   history_resolved_query?: string;
   effective_retrieval_query?: string;
   effective_config?: Record<string, unknown>;
