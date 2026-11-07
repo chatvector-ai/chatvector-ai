@@ -15,6 +15,7 @@ import {
   deleteSession,
   getSessionHistory,
   getSession,
+  submitAnswerFeedback,
 } from "./api";
 import { BackendApiError } from "./apiErrors";
 
@@ -1334,5 +1335,108 @@ describe("session API", () => {
       expect.stringContaining("/sessions/session-abc"),
       expect.objectContaining({ method: "GET" })
     );
+  });
+});
+
+describe("submitAnswerFeedback", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function requestBody(): Record<string, unknown> {
+    const init = vi.mocked(globalThis.fetch).mock.calls[0]?.[1] as RequestInit;
+    return JSON.parse(String(init.body)) as Record<string, unknown>;
+  }
+
+  it("posts thumbs up for an answer and omits an empty comment", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify({ id: "fb-1" }), { status: 201 })
+    );
+
+    await submitAnswerFeedback({
+      sessionId: "session-1",
+      messageId: "asst-msg-9",
+      rating: 1,
+      comment: "   ",
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/feedback"),
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    const url = String(vi.mocked(globalThis.fetch).mock.calls[0]?.[0]);
+    expect(url.endsWith("/feedback")).toBe(true);
+    expect(requestBody()).toEqual({
+      type: "answer",
+      rating: 1,
+      session_id: "session-1",
+      message_id: "asst-msg-9",
+    });
+    expect(requestBody()).not.toHaveProperty("comment");
+  });
+
+  it("posts thumbs down with a one-line comment", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify({ id: "fb-2" }), { status: 201 })
+    );
+
+    await submitAnswerFeedback({
+      sessionId: "session-1",
+      messageId: "asst-msg-9",
+      rating: -1,
+      comment: " missed the page ",
+    });
+
+    expect(requestBody()).toEqual({
+      type: "answer",
+      rating: -1,
+      session_id: "session-1",
+      message_id: "asst-msg-9",
+      comment: "missed the page",
+    });
+  });
+
+  it("rejects a 422 without treating the rating as saved", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify({ detail: "message_id_required" }), {
+        status: 422,
+      })
+    );
+
+    await expect(
+      submitAnswerFeedback({
+        sessionId: "session-1",
+        messageId: "asst-msg-9",
+        rating: 1,
+      })
+    ).rejects.toMatchObject({
+      name: "ChatError",
+      message: "message_id_required",
+    });
+  });
+
+  it("rejects a network failure", async () => {
+    vi.mocked(globalThis.fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await expect(
+      submitAnswerFeedback({
+        sessionId: "session-1",
+        messageId: "asst-msg-9",
+        rating: -1,
+      })
+    ).rejects.toMatchObject({
+      code: "backend_unreachable",
+      message: "Cannot reach the server. Check your connection.",
+    });
   });
 });
