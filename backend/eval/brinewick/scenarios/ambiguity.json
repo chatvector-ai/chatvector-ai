@@ -1,0 +1,21 @@
+{
+  "id": "ambiguity-pass-fare",
+  "class": "ambiguity",
+  "max_turns": 2,
+  "logical_keys": ["product-harbor-pass", "product-harbor-pass-plus", "product-lantern-pass"],
+  "turns": [
+    {
+      "user": "Harbor Pass, Harbor Pass Plus, and Lantern Pass are all sold at the Saltmere window. Which fare code should the window quote?",
+      "resolution": "empty_history",
+      "expected_refusal": {
+        "phrases": ["Not enough information"],
+        "forbidden": ["HP-100", "HPP-200"]
+      }
+    },
+    {
+      "user": "Which one is the reserved-seat ticket?",
+      "resolution": {"contains": "reserved-seat"},
+      "expected_facts": ["HPP-200"]
+    }
+  ]
+}

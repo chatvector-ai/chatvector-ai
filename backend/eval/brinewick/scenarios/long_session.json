@@ -1,0 +1,80 @@
+{
+  "id": "long-session-brinewick",
+  "class": "long_session",
+  "max_turns": 12,
+  "logical_keys": [
+    "hr-pto-policy",
+    "hr-parental-leave",
+    "product-harbor-pass",
+    "product-harbor-pass-plus",
+    "support-sla",
+    "customer-marrow-shipping",
+    "finance-expense-policy",
+    "finance-travel-policy"
+  ],
+  "turns": [
+    {
+      "user": "How many paid days off does policy POL-HR-014 grant captains?",
+      "resolution": "empty_history",
+      "expected_facts": ["18 paid days off"]
+    },
+    {
+      "user": "Does it convert unused days to wages?",
+      "resolution": {"contains": "POL-HR-014"},
+      "expected_facts": ["do not convert to wages"]
+    },
+    {
+      "user": "What about the weeks of paid parental leave under policy POL-HR-031?",
+      "resolution": {"contains": "POL-HR-031"},
+      "expected_facts": ["twelve weeks"]
+    },
+    {
+      "user": "What is the fare code for the standard Harbor Pass ticket?",
+      "resolution": "standalone_question",
+      "expected_facts": ["HP-100"]
+    },
+    {
+      "user": "Does that ticket reserve a seat?",
+      "resolution": {"contains": "Harbor Pass"},
+      "expected_facts": ["does not reserve a seat"]
+    },
+    {
+      "user": "I meant the reserved-seat Harbor Pass Plus ticket.",
+      "resolution": {"contains": "Harbor Pass Plus"},
+      "expected_facts": ["HPP-200"]
+    },
+    {
+      "user": "New topic: what first-response target does support policy SUP-SLA-2 set for a same-day sailing?",
+      "resolution": "topic_switch",
+      "expected_facts": ["30 minutes"]
+    },
+    {
+      "user": "What indemnity cap does the Marrow Shipping schedule name?",
+      "resolution": "standalone_question",
+      "expected_facts": ["250000 USD"]
+    },
+    {
+      "user": "Going back to policy POL-HR-014, how many paid days off is it?",
+      "resolution": {"contains": "POL-HR-014"},
+      "expected_facts": ["18 paid days off"]
+    },
+    {
+      "user": "And how many weeks of paid parental leave does POL-HR-031 grant?",
+      "resolution": {"contains": "POL-HR-031"},
+      "expected_facts": ["twelve weeks"]
+    },
+    {
+      "user": "The expense policy and the travel policy both state a dinner limit. What is the amount of the second one?",
+      "resolution": {"contains": "travel"},
+      "expected_facts": ["40 USD"]
+    },
+    {
+      "user": "What sabbatical stipend does the paid time off policy pay?",
+      "resolution": "standalone_question",
+      "expected_refusal": {
+        "phrases": ["Not enough information"],
+        "forbidden": ["sabbatical stipend is"]
+      }
+    }
+  ]
+}

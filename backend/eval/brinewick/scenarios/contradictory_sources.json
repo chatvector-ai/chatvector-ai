@@ -1,0 +1,18 @@
+{
+  "id": "contradictory-dinner-limits",
+  "class": "contradictory_sources",
+  "max_turns": 2,
+  "logical_keys": ["finance-expense-policy", "finance-travel-policy"],
+  "turns": [
+    {
+      "user": "What is the dinner reimbursement limit when a captain hosts a port agent overnight?",
+      "resolution": "empty_history",
+      "expected_facts": ["75 USD"]
+    },
+    {
+      "user": "And what is the dinner reimbursement limit when travel orders send a captain away from Saltmere overnight?",
+      "resolution": {"contains": "travel orders"},
+      "expected_facts": ["40 USD"]
+    }
+  ]
+}

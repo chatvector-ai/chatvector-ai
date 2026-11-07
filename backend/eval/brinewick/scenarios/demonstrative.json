@@ -1,0 +1,18 @@
+{
+  "id": "demonstrative-harbor-pass",
+  "class": "demonstrative",
+  "max_turns": 2,
+  "logical_keys": ["product-harbor-pass"],
+  "turns": [
+    {
+      "user": "What is the fare code for the standard Harbor Pass ticket?",
+      "resolution": "empty_history",
+      "expected_facts": ["HP-100"]
+    },
+    {
+      "user": "Does that ticket reserve a seat?",
+      "resolution": {"contains": "Harbor Pass"},
+      "expected_facts": ["does not reserve a seat"]
+    }
+  ]
+}
