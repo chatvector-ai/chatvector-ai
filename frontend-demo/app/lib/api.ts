@@ -84,6 +84,12 @@ export type Message = {
   id: number;
   /** Server id of the history row. Present on bubbles restored from a session. */
   historyId?: string;
+  /**
+   * Persisted chat message id used for answer feedback.
+   * Set from a stream `complete` event or a history row. Absent when the
+   * turn was never stored, including the local welcome message.
+   */
+  messageId?: string;
   sender: "user" | "ai";
   text: string;
   document_id?: string;
@@ -938,4 +944,47 @@ export async function getSessionHistory(sessionId: string): Promise<SessionHisto
     : [];
 
   return { messages };
+}
+
+/**
+ * Record thumbs on a stored assistant message.
+ * An empty comment is omitted. This does not start a new retrieval.
+ */
+export async function submitAnswerFeedback(input: {
+  sessionId: string;
+  messageId: string;
+  rating: 1 | -1;
+  comment?: string;
+}): Promise<void> {
+  const comment = input.comment?.trim() ?? "";
+  const body: Record<string, string | number> = {
+    type: "answer",
+    rating: input.rating,
+    session_id: input.sessionId,
+    message_id: input.messageId,
+  };
+  if (comment) {
+    body.comment = comment;
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/feedback`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders(),
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ChatError(
+      "backend_unreachable",
+      "Cannot reach the server. Check your connection."
+    );
+  }
+
+  if (!res.ok) {
+    await throwChatHttpError(res);
+  }
 }

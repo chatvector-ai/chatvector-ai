@@ -246,6 +246,137 @@ describe("useChat", () => {
     );
   });
 
+  it("stores a stream complete message_id without changing the answer", async () => {
+    mockSendMessageStream.mockImplementation(async function* () {
+      yield { type: "token", text: "Ten days." };
+      yield {
+        type: "complete",
+        sources: [{ file_name: "a.pdf", page_number: 1, chunk_index: 0, score: 0.9 }],
+        latency_ms: 12,
+        model: "m",
+        message_id: "asst-msg-9",
+        _raw: { retrieval_debug: { original_query: "What is RAG?" } },
+      };
+    });
+
+    const { result } = renderHook(() =>
+      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+    );
+
+    await waitFor(() => expect(result.current.historyLoading).toBe(false));
+
+    act(() => {
+      result.current.handleUploadAccepted({
+        fileName: "guide.pdf",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+      });
+      result.current.setInput("What is the limit?");
+    });
+
+    await waitFor(() =>
+      expect(result.current.attachment?.status).toBe("ready"),
+    );
+
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    const answer = result.current.messages.find((message) => message.text === "Ten days.");
+    expect(answer).toMatchObject({
+      sender: "ai",
+      text: "Ten days.",
+      messageId: "asst-msg-9",
+      isStreaming: false,
+      sources: [{ file_name: "a.pdf", page_number: 1, chunk_index: 0, score: 0.9 }],
+    });
+    expect(answer?.retrieval_debug?.original_query).toBe("What is RAG?");
+    expect(
+      result.current.messages.find((message) => message.text === WELCOME_TEXT)?.messageId,
+    ).toBeUndefined();
+  });
+
+  it("does not invent a message id when the stream complete event omits one", async () => {
+    mockSendMessageStream.mockImplementation(async function* () {
+      yield { type: "token", text: "Ten days." };
+      yield {
+        type: "complete",
+        sources: [],
+        latency_ms: 12,
+        model: "m",
+        _raw: {},
+      };
+    });
+
+    const { result } = renderHook(() =>
+      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+    );
+
+    await waitFor(() => expect(result.current.historyLoading).toBe(false));
+
+    act(() => {
+      result.current.handleUploadAccepted({
+        fileName: "guide.pdf",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+      });
+      result.current.setInput("What is the limit?");
+    });
+
+    await waitFor(() =>
+      expect(result.current.attachment?.status).toBe("ready"),
+    );
+
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    const answer = result.current.messages.find((message) => message.text === "Ten days.");
+    expect(answer?.messageId).toBeUndefined();
+    expect(answer?.text).toBe("Ten days.");
+    expect(answer?.isStreaming).toBe(false);
+  });
+
+  it("does not invent a message id when streaming falls back to the sync answer", async () => {
+    mockSendMessageStream.mockImplementation(async function* () {
+      throw new StreamingDisabledError();
+    });
+    mockSendMessage.mockResolvedValue({
+      question: "What is the limit?",
+      chunks: 1,
+      answer: "Ten days.",
+      sources: [{ file_name: "a.pdf", page_number: 1, chunk_index: 0, score: 0.9 }],
+      model: "m",
+    });
+
+    const { result } = renderHook(() =>
+      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+    );
+
+    await waitFor(() => expect(result.current.historyLoading).toBe(false));
+
+    act(() => {
+      result.current.handleUploadAccepted({
+        fileName: "guide.pdf",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+      });
+      result.current.setInput("What is the limit?");
+    });
+
+    await waitFor(() =>
+      expect(result.current.attachment?.status).toBe("ready"),
+    );
+
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    const answer = result.current.messages.find((message) => message.text === "Ten days.");
+    expect(answer?.messageId).toBeUndefined();
+    expect(answer?.sources?.[0].file_name).toBe("a.pdf");
+  });
+
   it("ignores sync fallback answer after session switch and keeps B history", async () => {
     let resolveSend:
       | ((value: {
@@ -672,6 +803,7 @@ describe("useChat", () => {
     expect(user).toMatchObject({
       id: 1,
       historyId: "user-1",
+      messageId: "user-1",
       sender: "user",
       text: "What is the limit?",
     });
@@ -680,6 +812,7 @@ describe("useChat", () => {
     expect(cited).toMatchObject({
       id: 2,
       historyId: "asst-1",
+      messageId: "asst-1",
       sender: "ai",
       text: "Ten days.",
       sources: [
@@ -702,10 +835,13 @@ describe("useChat", () => {
     expect(cited.sources?.[0].page_end).toBe(5);
 
     expect(empty.historyId).toBe("asst-empty");
+    expect(empty.messageId).toBe("asst-empty");
     expect(empty.sources).toBeUndefined();
     expect(missingNull.historyId).toBe("asst-null");
+    expect(missingNull.messageId).toBe("asst-null");
     expect(missingNull.sources).toBeUndefined();
     expect(missingField.historyId).toBe("asst-missing");
+    expect(missingField.messageId).toBe("asst-missing");
     expect(missingField.sources).toBeUndefined();
 
     expect(result.current.attachment?.fileName).toBe("handbook-v2.pdf");
@@ -759,6 +895,7 @@ describe("useChat", () => {
     await waitFor(() =>
       expect(result.current.messages[0]?.historyId).toBe("asst-b"),
     );
+    expect(result.current.messages[0]?.messageId).toBe("asst-b");
     expect(result.current.messages[0]?.sources?.[0]?.file_name).toBe("notes.txt");
     expect(
       result.current.messages.some((message) =>

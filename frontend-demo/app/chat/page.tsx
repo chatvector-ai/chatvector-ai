@@ -184,6 +184,7 @@ export default function ChatPage() {
             inflight={inflight}
             streaming={streaming}
             historyLoading={historyLoading}
+            sessionId={activeSessionId}
             bottomRef={bottomRef}
           />
 

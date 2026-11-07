@@ -41,6 +41,11 @@ const SESSION_HISTORY_FAILED_NOTICE =
 const SESSION_DETAILS_FAILED_NOTICE =
   "This session could not be fully restored. You can upload a document to continue.";
 
+function storedMessageId(value: string | undefined): string | undefined {
+  if (typeof value !== "string" || value.trim() === "") return undefined;
+  return value;
+}
+
 function mapHistoryToMessages(history: SessionHistoryMessage[]): Message[] {
   return history.map((entry, index) => {
     const sender = entry.role === "user" ? "user" : "ai";
@@ -48,9 +53,11 @@ function mapHistoryToMessages(history: SessionHistoryMessage[]): Message[] {
       sender === "ai" && entry.sources && entry.sources.length > 0
         ? entry.sources
         : undefined;
+    const messageId = storedMessageId(entry.id);
     return {
       id: index + 1,
       historyId: entry.id,
+      ...(messageId ? { messageId } : {}),
       sender,
       text: entry.content,
       ...(sources ? { sources } : {}),
@@ -538,6 +545,7 @@ export function useChat(
 
           case "complete": {
             const retrievalDebug = retrievalDebugFromCompleteRaw(event._raw);
+            const messageId = storedMessageId(event.message_id);
             const completeMetadata = {
               sources: event.sources,
               latency_ms: event.latency_ms,
@@ -546,6 +554,7 @@ export function useChat(
               ...(retrievalDebug !== undefined
                 ? { retrieval_debug: retrievalDebug }
                 : {}),
+              ...(messageId ? { messageId } : {}),
             };
             if (pendingTokensRef.current) {
               if (rafIdRef.current !== null) {
