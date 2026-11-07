@@ -37,7 +37,9 @@ eval
     Run retrieval evaluation/benchmarking against a query fixture dataset.
     Computes recall@k, MRR, and nDCG@k; supports comparing multiple
     retrieval config "arms" in one run and exporting a reproducible JSON
-    artifact. Never calls answer-generation. See DEVELOPMENT.md
+    artifact. Never calls answer-generation. Optional --manifest resolves
+    logical keys to document ids and refuses a chunk-setting mismatch
+    before scoring. See DEVELOPMENT.md
     ("Retrieval evaluation") for the dataset and config-arm schema.
 """
 
@@ -217,6 +219,7 @@ async def cmd_eval(
     match_count: int,
     export_path: str | None,
     allow_cache: bool,
+    manifest_path: str | None = None,
 ) -> None:
     from core.config import config as core_config
     from services import context_service
@@ -224,7 +227,7 @@ async def cmd_eval(
     from services.eval_fixtures import load_dataset
     from services.eval_service import diff_arms, run_eval
 
-    dataset = load_dataset(dataset_path)
+    dataset = load_dataset(dataset_path, manifest_path=manifest_path)
 
     if config_paths:
         arms = []
@@ -448,6 +451,15 @@ def main() -> None:
         action="store_true",
         help="Allow the embedding cache during eval (default: forced off for reproducibility)",
     )
+    eval_parser.add_argument(
+        "--manifest",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Corpus manifest mapping logical keys to this run's document ids. "
+            "Chunk settings must match the question file or the run stops before scoring."
+        ),
+    )
 
     load_parser = subparsers.add_parser(
         "load-eval-corpus",
@@ -515,18 +527,25 @@ def main() -> None:
             )
         )
     elif args.command == "eval":
+        from services.eval_fixtures import EvalDatasetError
+
         k_values = [int(x) for x in args.k.split(",") if x.strip()]
-        asyncio.run(
-            cmd_eval(
-                args.dataset,
-                args.tenant_id,
-                k_values,
-                args.config_paths,
-                args.match_count,
-                args.export_path,
-                args.allow_cache,
+        try:
+            asyncio.run(
+                cmd_eval(
+                    args.dataset,
+                    args.tenant_id,
+                    k_values,
+                    args.config_paths,
+                    args.match_count,
+                    args.export_path,
+                    args.allow_cache,
+                    args.manifest,
+                )
             )
-        )
+        except EvalDatasetError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
     elif args.command == "load-eval-corpus":
         from services.eval_corpus import EvalCorpusError
 

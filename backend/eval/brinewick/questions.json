@@ -1,0 +1,589 @@
+{
+  "name": "brinewick-transit-cooperative",
+  "chunk_settings": {
+    "chunking_strategy": "fixed",
+    "chunk_size": 1000,
+    "chunk_overlap": 200
+  },
+  "queries": [
+    {
+      "id": "q-policy-number-pto",
+      "cases": [
+        "policy_number",
+        "exact_identifier",
+        "stale_version",
+        "department_hr"
+      ],
+      "query": "What does policy number POL-HR-014 grant captains in the current 2026 paid-time-off rule?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "hr-pto-policy",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-stale-pto-document",
+      "cases": [
+        "stale_version",
+        "department_hr"
+      ],
+      "query": "Which document is the 2022 copy of policy POL-HR-014?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "hr-pto-policy-2022",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-parental-paraphrase",
+      "cases": [
+        "paraphrase",
+        "overlapping_policies",
+        "department_hr"
+      ],
+      "query": "How many weeks may a new parent stay off the vessel with pay under the family leave rule?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "hr-parental-leave",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-leave-synthesis",
+      "cases": [
+        "multi_document",
+        "overlapping_policies",
+        "department_hr"
+      ],
+      "query": "Under the current rules, how many weeks of paid parental leave and how many annual paid days off does a captain receive?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "hr-parental-leave",
+          0
+        ],
+        [
+          "hr-pto-policy",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-acronym-qbr",
+      "cases": [
+        "acronym",
+        "department_hr"
+      ],
+      "query": "What does the acronym BTC-QBR stand for in the conduct code?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "hr-conduct-code",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-exact-phrase-lockout",
+      "cases": [
+        "exact_phrase",
+        "department_hr"
+      ],
+      "query": "Which conduct rule defines the exact phrase amber tide lockout?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "hr-conduct-code",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-dinner-conflict",
+      "cases": [
+        "conflicting_facts",
+        "overlapping_policies",
+        "department_finance"
+      ],
+      "query": "What dinner reimbursement limit do the Brinewick finance policies state?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "finance-expense-policy",
+          0
+        ],
+        [
+          "finance-travel-policy",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-vendor-code",
+      "cases": [
+        "code",
+        "metadata_currency",
+        "department_finance"
+      ],
+      "query": "Which currency settles vendor payment code VND-8841?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick",
+        "department": "finance",
+        "currency": "EUR"
+      },
+      "relevant_chunks": [
+        [
+          "finance-vendor-payments",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-payroll-code",
+      "cases": [
+        "code",
+        "department_finance"
+      ],
+      "query": "What pay dates does payroll calendar code PAY-CAL-03 set?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "finance-payroll-calendar",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-escort-near-dup",
+      "cases": [
+        "near_duplicate",
+        "policy_number",
+        "department_security"
+      ],
+      "query": "How many minutes may a visitor remain unescorted under current policy SEC-AC-221?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "security-access-control",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-security-scope",
+      "cases": [
+        "metadata_department",
+        "department_security"
+      ],
+      "query": "What is the policy number for the current badge access control rule?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick",
+        "department": "security"
+      },
+      "relevant_chunks": [
+        [
+          "security-access-control",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-security-playbook",
+      "cases": [
+        "code",
+        "department_security"
+      ],
+      "query": "What does playbook code IRP-SEC-1 tell the terminal to do?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "security-incident-response",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-harbor-pass",
+      "cases": [
+        "similar_names",
+        "department_product"
+      ],
+      "query": "What is the fare code for the standard foot-passenger Harbor Pass ticket?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "product-harbor-pass",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-product-roadmap",
+      "cases": [
+        "code",
+        "department_product"
+      ],
+      "query": "What work does product roadmap code PRD-ROAD-5 cover?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "product-roadmap",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-oncall",
+      "cases": [
+        "code",
+        "department_engineering"
+      ],
+      "query": "Which days does rotation code ENG-OC-7 cover?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "engineering-oncall",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-release",
+      "cases": [
+        "exact_identifier",
+        "department_engineering"
+      ],
+      "query": "What does release code REL-ENG-77 mark?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "engineering-release",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-runbook-phrase",
+      "cases": [
+        "long_document",
+        "department_engineering"
+      ],
+      "query": "What passphrase does the engineering runbook require during the failover drill?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "engineering-runbook",
+          5
+        ]
+      ]
+    },
+    {
+      "id": "q-chunk-boundary",
+      "cases": [
+        "chunk_boundary",
+        "code",
+        "department_engineering"
+      ],
+      "query": "What exact phrase must the relief pilot signal after contingency code QK-BOUNDARY-441?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "ops-watch-log",
+          3
+        ],
+        [
+          "ops-watch-log",
+          4
+        ]
+      ]
+    },
+    {
+      "id": "q-support-sla",
+      "cases": [
+        "policy_number",
+        "department_support"
+      ],
+      "query": "What first-response target does support policy SUP-SLA-2 set for a same-day sailing?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "support-sla",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-support-escalation",
+      "cases": [
+        "code",
+        "department_support"
+      ],
+      "query": "When may the support desk use escalation code ESC-SUP-12?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "support-escalation",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-support-refund",
+      "cases": [
+        "code",
+        "department_support"
+      ],
+      "query": "When does refund code RFD-SUP-3 apply?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "support-refunds",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-msa",
+      "cases": [
+        "exact_identifier",
+        "department_contracts"
+      ],
+      "query": "What does contract clause MSA-4.2 require before a renewal?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "contracts-msa",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-nda",
+      "cases": [
+        "exact_identifier",
+        "department_contracts"
+      ],
+      "query": "How long does confidentiality clause NDA-9 last after the agreement ends?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "contracts-nda",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-incident-code",
+      "cases": [
+        "code",
+        "exact_identifier",
+        "department_incidents"
+      ],
+      "query": "What failed during incident INC-4417?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "incidents-outage-2024-11",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-near-miss",
+      "cases": [
+        "code",
+        "department_incidents"
+      ],
+      "query": "What happened in near-miss INC-4402?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "relevant_chunks": [
+        [
+          "incidents-near-miss-log",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-pricing-usd",
+      "cases": [
+        "metadata_currency",
+        "department_pricing"
+      ],
+      "query": "What is the standard foot-passenger fare charged in US dollars?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick",
+        "department": "pricing",
+        "currency": "USD"
+      },
+      "relevant_chunks": [
+        [
+          "pricing-standard",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-pricing-eur",
+      "cases": [
+        "metadata_currency",
+        "department_pricing"
+      ],
+      "query": "What partner fare is charged in euros?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick",
+        "department": "pricing",
+        "currency": "EUR"
+      },
+      "relevant_chunks": [
+        [
+          "pricing-partner",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-keel-berth",
+      "cases": [
+        "similar_names",
+        "customer_terms",
+        "metadata_customer",
+        "department_contracts"
+      ],
+      "query": "What berth window does the Keel and Co agreement allow?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick",
+        "customer": "keel-and-co"
+      },
+      "relevant_chunks": [
+        [
+          "customer-keel-and-co",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-marrow-cap",
+      "cases": [
+        "customer_terms",
+        "metadata_customer",
+        "department_contracts"
+      ],
+      "query": "What indemnity cap does the Marrow Shipping schedule name?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick",
+        "customer": "marrow-shipping"
+      },
+      "relevant_chunks": [
+        [
+          "customer-marrow-shipping",
+          0
+        ]
+      ]
+    },
+    {
+      "id": "q-absent-sabbatical",
+      "cases": [
+        "absent_fact"
+      ],
+      "query": "What sabbatical stipend does Brinewick pay captains?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "expected_result": "no_supporting_evidence"
+    },
+    {
+      "id": "q-refusal-address",
+      "cases": [
+        "absent_fact"
+      ],
+      "query": "What is the home street address of the Brinewick board chair?",
+      "scope": "tenant",
+      "metadata_filter": {
+        "org": "brinewick"
+      },
+      "expected_result": "refusal"
+    }
+  ]
+}

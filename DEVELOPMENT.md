@@ -652,6 +652,7 @@ webhooks.
 python -m backend.cli eval \
   --dataset path/to/queries.json \
   --tenant-id your-tenant \
+  --manifest path/to/manifest.json \
   --k 5,10 \
   --match-count 10 \
   --export /tmp/eval.json
@@ -659,7 +660,15 @@ python -m backend.cli eval \
 
 Repeat `--config path/to/arm.json` to compare retrieval settings. Omit `--config` to score the current process defaults. Metrics are recall@k, MRR, and nDCG@k, plus retrieval latency. `--export` writes the config snapshot and per-query results.
 
-Each query needs `relevant_chunks` (`[document_id, chunk_index]`) and/or `relevant_doc_ids`. `doc_ids` are the documents to search. `simulate_session` defaults to false, so a run does not inherit conversational history unless the fixture sets it.
+Each query needs `relevant_chunks` (`[document_id, chunk_index]`) and/or `relevant_doc_ids`, or `expected_result` set to `no_supporting_evidence` or `refusal` when the correct result has no supporting chunk. A row with neither fails to load. `doc_ids` are the documents to search. Those ids may be logical keys from the corpus declaration. `--manifest` is the file written by `load-eval-corpus`; it resolves each logical key to that run's document id and keeps the logical key on the resolved query. Omit `--manifest` for unit fixtures that already use synthetic ids such as `fixture-doc-01`.
+
+The question file declares the chunk settings its labels assume:
+
+```json
+"chunk_settings": {"chunking_strategy": "fixed", "chunk_size": 1000, "chunk_overlap": 200}
+```
+
+Those values must match the manifest's `CHUNKING_STRATEGY`, `CHUNK_SIZE`, and `CHUNK_OVERLAP`. A mismatch stops the run before metrics are computed. A query with `"scope": "tenant"` searches every document in the manifest and does not list those ids itself. `metadata_filter` on a row is stored and narrows that row's documents the same way chat does. `simulate_session` defaults to false, so a run does not inherit conversational history unless the fixture sets it.
 
 An arm file is a JSON object of retrieval overrides, for example `{"hybrid_enabled": true, "match_count": 8}`. There is no public HTTP retrieval endpoint.
 
@@ -693,6 +702,8 @@ python -m backend.cli load-eval-corpus \
 ```
 
 Those chunk numbers have to match the running process. The manifest maps each logical key to the document id created for that run and records metadata plus the chunk settings actually used. Later evaluation artifacts that name a document copy both the logical key and the runtime id from that manifest. This command does not author the corpus files.
+
+A corpus is checked in at `backend/eval/brinewick/`. Load it with `--corpus-dir backend/eval/brinewick/corpus` and `--declaration backend/eval/brinewick/corpus.json`, then grade `backend/eval/brinewick/questions.json` with `--manifest` pointing at the file the loader wrote. `index.json` names the document or question for each overlap, version, name, department, identifier, paraphrase, metadata, conflict, absence, synthesis, length, near-duplicate, and chunk-boundary case. The question labels use logical keys and assume fixed chunks of size 1000 with overlap 200.
 
 ---
 
