@@ -84,6 +84,12 @@ export type Message = {
   id: number;
   /** Server id of the history row. Present on bubbles restored from a session. */
   historyId?: string;
+  /**
+   * Persisted chat message id used for answer feedback.
+   * Set from a stream `complete` event or a history row. Absent when the
+   * turn was never stored, including the local welcome message.
+   */
+  messageId?: string;
   sender: "user" | "ai";
   text: string;
   document_id?: string;
