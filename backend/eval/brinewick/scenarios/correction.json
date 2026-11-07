@@ -1,0 +1,18 @@
+{
+  "id": "correction-harbor-pass",
+  "class": "correction",
+  "max_turns": 2,
+  "logical_keys": ["product-harbor-pass", "product-harbor-pass-plus"],
+  "turns": [
+    {
+      "user": "What is the fare code for Harbor Pass Plus?",
+      "resolution": "empty_history",
+      "expected_facts": ["HPP-200"]
+    },
+    {
+      "user": "I meant the standard Harbor Pass ticket.",
+      "resolution": {"contains": "standard Harbor Pass"},
+      "expected_facts": ["HP-100"]
+    }
+  ]
+}

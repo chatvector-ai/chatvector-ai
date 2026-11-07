@@ -730,6 +730,28 @@ Those chunk numbers have to match the running process. The manifest maps each lo
 
 A corpus is checked in at `backend/eval/brinewick/`. Load it with `--corpus-dir backend/eval/brinewick/corpus` and `--declaration backend/eval/brinewick/corpus.json`, then grade `backend/eval/brinewick/questions.json` with `--manifest` pointing at the file the loader wrote. `index.json` names the document or question for each overlap, version, name, department, identifier, paraphrase, metadata, conflict, absence, synthesis, length, near-duplicate, and chunk-boundary case. The question labels use logical keys and assume fixed chunks of size 1000 with overlap 200.
 
+## Conversational regression harness
+
+`python -m backend.cli eval-conversations` plays fixed multi-turn scripts against the tenant the corpus loader filled. It is a separate command from `eval`. It does not call `simulate_session`, and that helper stays one retrieval with canned history. The harness does not score recall, nDCG, or the answer-arm aggregates.
+
+```bash
+python -m backend.cli eval-conversations \
+  --scenarios backend/eval/brinewick/scenarios \
+  --tenant-id eval-tenant \
+  --manifest path/to/manifest.json \
+  --export /tmp/conversation-eval
+```
+
+Each file in the scenarios directory is one script. `turns` is the whole conversation. The runner sends `user` in order and then stops, including when the assistant asks a question. It does not write the next user line. `max_turns` is the longest script the file allows. A longer `turns` list fails before any model call.
+
+A turn may set `resolution` and `expected_facts` or `expected_refusal`. A resolution string is a skip reason (`empty_history`, `standalone_question`, `topic_switch`, `disabled`, or `compare_skip`) and must match `history_resolution_skipped_reason` with resolution not applied. `{"contains": "POL-HR-014"}` requires that resolution ran and `history_resolved_query` still contains that text, compared case-insensitively. Facts and refusal phrases use the same case-insensitive substring rule as the answer labels. The file states the expected answer or the expected refusal. The runner does not choose which source won.
+
+The checked-in directory has one script for each of pronoun, demonstrative, ordinal, correction, topic switch, return to an earlier subject, multi-document continuation, ambiguity, absent answer, contradictory sources, and a long session. The long session has 12 fixed user turns and `max_turns` of 12. Scripts name corpus logical keys. They do not contain document ids.
+
+The command calls `answer_question_for_document` in process with `debug_retrieval` and tenant scope. It does not call `POST /chat`, so the chat rate limit does not apply, and it does not upload files. Before the first turn it lists the tenant's documents. That set must equal the manifest's document ids. A tenant that still holds an unrelated document fails before the model is called. Chunk settings on the manifest must match the process, the same way `eval` refuses a mismatch.
+
+`--export` receives one JSON file per scenario. A failure records the scenario id, the failing turn index, the fixed user text, the assistant text, the resolution debug (`history_resolution_applied`, `history_resolution_skipped_reason`, and `history_resolved_query` when the query changed), the logical keys and the manifest's document ids, the provider, the model, the persona, the retrieval config, and the chunk settings. A passing script records the same config and the debug for every turn. The command exits non-zero when any script fails. Unit tests mock the turn player. They do not call Gemini.
+
 ---
 
 ## Horizontal API scaling

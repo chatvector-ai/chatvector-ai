@@ -1,0 +1,18 @@
+{
+  "id": "multi-document-leave",
+  "class": "multi_document_continuation",
+  "max_turns": 2,
+  "logical_keys": ["hr-parental-leave", "hr-pto-policy"],
+  "turns": [
+    {
+      "user": "How many weeks of paid parental leave does policy POL-HR-031 grant?",
+      "resolution": "empty_history",
+      "expected_facts": ["twelve weeks"]
+    },
+    {
+      "user": "And how many annual paid days off does the current captain rule grant?",
+      "resolution": {"contains": "paid days off"},
+      "expected_facts": ["18 paid days off"]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "pronoun-pto",
+  "class": "pronoun",
+  "max_turns": 2,
+  "logical_keys": ["hr-pto-policy"],
+  "turns": [
+    {
+      "user": "How many paid days off does policy POL-HR-014 grant captains?",
+      "resolution": "empty_history",
+      "expected_facts": ["18 paid days off"]
+    },
+    {
+      "user": "Does it convert unused days to wages?",
+      "resolution": {"contains": "POL-HR-014"},
+      "expected_facts": ["do not convert to wages"]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "ordinal-dinner-limits",
+  "class": "ordinal",
+  "max_turns": 2,
+  "logical_keys": ["finance-expense-policy", "finance-travel-policy"],
+  "turns": [
+    {
+      "user": "What is the dinner reimbursement limit when a captain hosts a port agent overnight?",
+      "resolution": "empty_history",
+      "expected_facts": ["75 USD"]
+    },
+    {
+      "user": "What is the amount of the second one, the travel policy dinner limit?",
+      "resolution": {"contains": "travel"},
+      "expected_facts": ["40 USD"]
+    }
+  ]
+}

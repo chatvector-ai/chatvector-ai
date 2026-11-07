@@ -1,0 +1,23 @@
+{
+  "id": "return-to-pto",
+  "class": "return_to_earlier_subject",
+  "max_turns": 3,
+  "logical_keys": ["hr-pto-policy", "product-harbor-pass"],
+  "turns": [
+    {
+      "user": "How many paid days off does policy POL-HR-014 grant captains?",
+      "resolution": "empty_history",
+      "expected_facts": ["18 paid days off"]
+    },
+    {
+      "user": "What is the fare code for the standard Harbor Pass ticket?",
+      "resolution": "standalone_question",
+      "expected_facts": ["HP-100"]
+    },
+    {
+      "user": "Going back to policy POL-HR-014, how many paid days off is it?",
+      "resolution": {"contains": "POL-HR-014"},
+      "expected_facts": ["18 paid days off"]
+    }
+  ]
+}

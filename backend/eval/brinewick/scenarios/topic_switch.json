@@ -1,0 +1,18 @@
+{
+  "id": "topic-switch-support",
+  "class": "topic_switch",
+  "max_turns": 2,
+  "logical_keys": ["hr-pto-policy", "product-harbor-pass"],
+  "turns": [
+    {
+      "user": "How many paid days off does policy POL-HR-014 grant captains?",
+      "resolution": "empty_history",
+      "expected_facts": ["18 paid days off"]
+    },
+    {
+      "user": "New topic: what is the fare code for the standard Harbor Pass ticket?",
+      "resolution": "topic_switch",
+      "expected_facts": ["HP-100"]
+    }
+  ]
+}
