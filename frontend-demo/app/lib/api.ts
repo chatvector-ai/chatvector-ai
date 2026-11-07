@@ -82,6 +82,8 @@ export type RetrievalInspectorData = {
 
 export type Message = {
   id: number;
+  /** Server id of the history row. Present on bubbles restored from a session. */
+  historyId?: string;
   sender: "user" | "ai";
   text: string;
   document_id?: string;

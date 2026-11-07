@@ -600,6 +600,173 @@ describe("useChat", () => {
     expect(mockGetDocumentStatus).toHaveBeenCalledWith("/documents/doc-missing/status");
   });
 
+  it("restores assistant citation snapshots without model, latency, or debug data", async () => {
+    mockGetSessionHistory.mockResolvedValue({
+      messages: [
+        {
+          id: "user-1",
+          role: "user",
+          content: "What is the limit?",
+          sources: [
+            {
+              file_name: "should-not-cite-user.pdf",
+              page_number: 1,
+              chunk_index: 0,
+              score: 0.2,
+            },
+          ],
+        },
+        {
+          id: "asst-1",
+          role: "assistant",
+          content: "Ten days.",
+          sources: [
+            {
+              file_name: "handbook-v1.pdf",
+              page_number: 3,
+              page_end: 5,
+              chunk_index: 2,
+              score: 0.91,
+              score_type: "vector",
+            },
+          ],
+          model: "gpt-test",
+          latency_ms: 1200,
+          retrieval_debug: { original_query: "What is the limit?" },
+          chunks: 4,
+          question: "What is the limit?",
+        },
+        {
+          id: "asst-empty",
+          role: "assistant",
+          content: "Nothing cited.",
+          sources: [],
+        },
+        {
+          id: "asst-null",
+          role: "assistant",
+          content: "Older answer.",
+          sources: null,
+        },
+        {
+          id: "asst-missing",
+          role: "assistant",
+          content: "Pre-snapshot answer.",
+        },
+      ],
+    });
+    mockGetSession.mockResolvedValue(sessionPayload("session-a", ["doc-1"]));
+    mockGetDocumentStatus.mockResolvedValue({
+      status: "completed",
+      file_name: "handbook-v2.pdf",
+    });
+
+    const { result } = renderHook(() =>
+      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+    );
+
+    await waitFor(() => expect(result.current.historyLoading).toBe(false));
+
+    const [user, cited, empty, missingNull, missingField] = result.current.messages;
+
+    expect(user).toMatchObject({
+      id: 1,
+      historyId: "user-1",
+      sender: "user",
+      text: "What is the limit?",
+    });
+    expect(user.sources).toBeUndefined();
+
+    expect(cited).toMatchObject({
+      id: 2,
+      historyId: "asst-1",
+      sender: "ai",
+      text: "Ten days.",
+      sources: [
+        {
+          file_name: "handbook-v1.pdf",
+          page_number: 3,
+          page_end: 5,
+          chunk_index: 2,
+          score: 0.91,
+          score_type: "vector",
+        },
+      ],
+    });
+    expect(cited.model).toBeUndefined();
+    expect(cited.latency_ms).toBeUndefined();
+    expect(cited.retrieval_debug).toBeUndefined();
+    expect(cited.chunks).toBeUndefined();
+    expect(cited.question).toBeUndefined();
+    expect(cited.sources?.[0].file_name).toBe("handbook-v1.pdf");
+    expect(cited.sources?.[0].page_end).toBe(5);
+
+    expect(empty.historyId).toBe("asst-empty");
+    expect(empty.sources).toBeUndefined();
+    expect(missingNull.historyId).toBe("asst-null");
+    expect(missingNull.sources).toBeUndefined();
+    expect(missingField.historyId).toBe("asst-missing");
+    expect(missingField.sources).toBeUndefined();
+
+    expect(result.current.attachment?.fileName).toBe("handbook-v2.pdf");
+  });
+
+  it("shows the other session's snapshot after a switch", async () => {
+    mockGetSessionHistory.mockImplementation(async (sessionId: string) => ({
+      messages:
+        sessionId === "session-b"
+          ? [
+              {
+                id: "asst-b",
+                role: "assistant",
+                content: "See the notes.",
+                sources: [{ file_name: "notes.txt", chunk_index: 0, score: 0.4 }],
+              },
+            ]
+          : [
+              {
+                id: "asst-a",
+                role: "assistant",
+                content: "See the handbook.",
+                sources: [
+                  {
+                    file_name: "handbook-v1.pdf",
+                    page_number: 3,
+                    chunk_index: 2,
+                    score: 0.91,
+                  },
+                ],
+              },
+            ],
+    }));
+    mockGetSession.mockImplementation(async (sessionId: string) =>
+      sessionPayload(sessionId),
+    );
+
+    const { result, rerender } = renderHook(
+      ({ sessionId }) => useChat(sessionId, DEFAULT_RETRIEVAL_SETTINGS),
+      { initialProps: { sessionId: "session-a" } },
+    );
+
+    await waitFor(() =>
+      expect(result.current.messages[0]?.sources?.[0]?.file_name).toBe(
+        "handbook-v1.pdf",
+      ),
+    );
+
+    rerender({ sessionId: "session-b" });
+
+    await waitFor(() =>
+      expect(result.current.messages[0]?.historyId).toBe("asst-b"),
+    );
+    expect(result.current.messages[0]?.sources?.[0]?.file_name).toBe("notes.txt");
+    expect(
+      result.current.messages.some((message) =>
+        message.sources?.some((source) => source.file_name === "handbook-v1.pdf"),
+      ),
+    ).toBe(false);
+  });
+
   it.each([
     ["non-404 status error", new Error("Status check failed: 500")],
     ["network error", new TypeError("Failed to fetch")],

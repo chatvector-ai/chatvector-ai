@@ -42,11 +42,20 @@ const SESSION_DETAILS_FAILED_NOTICE =
   "This session could not be fully restored. You can upload a document to continue.";
 
 function mapHistoryToMessages(history: SessionHistoryMessage[]): Message[] {
-  return history.map((entry, index) => ({
-    id: index + 1,
-    sender: entry.role === "user" ? "user" : "ai",
-    text: entry.content,
-  }));
+  return history.map((entry, index) => {
+    const sender = entry.role === "user" ? "user" : "ai";
+    const sources =
+      sender === "ai" && entry.sources && entry.sources.length > 0
+        ? entry.sources
+        : undefined;
+    return {
+      id: index + 1,
+      historyId: entry.id,
+      sender,
+      text: entry.content,
+      ...(sources ? { sources } : {}),
+    };
+  });
 }
 
 function documentStatusEndpoint(documentId: string): string {
