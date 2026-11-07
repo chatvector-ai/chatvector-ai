@@ -71,6 +71,10 @@ class ResolvedEnvironmentSnapshot:
     embedding_model: str | None
     query_transformation_enabled: bool
     query_transformation_strategy: str
+    chunk_size: int
+    chunk_overlap: int
+    chunking_strategy: str
+    prompt_persona: str
 
     @classmethod
     def capture(cls) -> "ResolvedEnvironmentSnapshot":
@@ -84,6 +88,10 @@ class ResolvedEnvironmentSnapshot:
             embedding_model=config.EMBEDDING_MODEL,
             query_transformation_enabled=config.QUERY_TRANSFORMATION_ENABLED,
             query_transformation_strategy=config.QUERY_TRANSFORMATION_STRATEGY,
+            chunk_size=config.CHUNK_SIZE,
+            chunk_overlap=config.CHUNK_OVERLAP,
+            chunking_strategy=config.CHUNKING_STRATEGY,
+            prompt_persona=config.PROMPT_PERSONA,
         )
 
     def as_dict(self) -> dict:

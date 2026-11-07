@@ -425,6 +425,71 @@ async def test_export_keeps_logical_key_and_runtime_document_id(tmp_path):
     assert "logical_key" not in plain_result.arms[0].query_results[0].candidates[0]
 
 
+@pytest.mark.asyncio
+async def test_export_snapshot_records_config_persona_chunks_and_transform(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "CHUNK_SIZE", 777)
+    monkeypatch.setattr(config, "CHUNK_OVERLAP", 42)
+    monkeypatch.setattr(config, "CHUNKING_STRATEGY", "semantic")
+    monkeypatch.setattr(config, "PROMPT_PERSONA", "concise")
+    monkeypatch.setattr(config, "EMBEDDING_PROVIDER", "openai")
+    monkeypatch.setattr(config, "EMBEDDING_MODEL", "text-embedding-test")
+    monkeypatch.setattr(config, "QUERY_TRANSFORMATION_ENABLED", False)
+    monkeypatch.setattr(config, "QUERY_TRANSFORMATION_STRATEGY", "stepback")
+
+    dataset = load_dataset(FIXTURES_DIR / "basic_queries.json")
+    retrieval = _retrieval_result(
+        [_chunk("fixture-doc-01", 0)],
+        original_query="plain",
+        transformed_queries=["plain"],
+        primary_query="plain",
+        timing_ms={"total": 1},
+    )
+
+    async def fake_retrieve(*args, **kwargs):
+        del args, kwargs
+        return retrieval
+
+    arm = EffectiveRetrievalConfig(
+        label="rewrite-arm",
+        hybrid_retrieval_enabled=True,
+        enable_reranking=False,
+        match_count=4,
+        query_transformation_enabled=True,
+        query_transformation_strategy="rewrite",
+    )
+    export_path = tmp_path / "snapshot.json"
+
+    with patch("services.eval_service.retrieve_for_documents", AsyncMock(side_effect=fake_retrieve)):
+        await run_eval(dataset, [arm], tenant_id="tenant-eval-test", export_path=export_path)
+
+    snapshot = json.loads(export_path.read_text(encoding="utf-8"))["arms"][0]["config_snapshot"]
+    effective = snapshot["effective_config"]
+    environment = snapshot["resolved_environment"]
+
+    assert effective["label"] == "rewrite-arm"
+    assert effective["hybrid_retrieval_enabled"] is True
+    assert effective["match_count"] == 4
+    assert effective["query_transformation_enabled"] is True
+    assert effective["query_transformation_strategy"] == "rewrite"
+    assert effective["resolved"]["query_transformation_enabled"] == {
+        "value": True,
+        "source": "request",
+    }
+    assert effective["resolved"]["query_transformation_strategy"] == {
+        "value": "rewrite",
+        "source": "request",
+    }
+
+    assert environment["chunk_size"] == 777
+    assert environment["chunk_overlap"] == 42
+    assert environment["chunking_strategy"] == "semantic"
+    assert environment["prompt_persona"] == "concise"
+    assert environment["embedding_provider"] == "openai"
+    assert environment["embedding_model"] == "text-embedding-test"
+    assert environment["query_transformation_enabled"] is False
+    assert environment["query_transformation_strategy"] == "stepback"
+
+
 # ---------------------------------------------------------------------------
 # No answer-generation call anywhere in the eval path
 # ---------------------------------------------------------------------------
