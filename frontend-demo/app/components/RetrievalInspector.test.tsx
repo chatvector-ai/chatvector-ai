@@ -145,3 +145,114 @@ describe("RetrievalInspector query section", () => {
     expect(screen.queryByText("Ran")).not.toBeInTheDocument();
   });
 });
+
+describe("RetrievalInspector config and diagnostics", () => {
+  it("renders effective config, rerank fallback, and distinct latencies", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          question: "test",
+          latency_ms: 400,
+          request_latency_ms: 1200,
+          retrieval_debug: {
+            effective_config: {
+              match_count: { value: 5, source: "request" },
+              scope: { value: "tenant", source: "env" },
+            },
+            timing_ms: { search: 80, total: 300 },
+            reranker: {
+              provider: "cohere",
+              fallback_reason: "timeout",
+            },
+          },
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.getByText("Effective config")).toBeInTheDocument();
+    expect(screen.getByText("5 (request)")).toBeInTheDocument();
+    expect(screen.getByText("Rerank")).toBeInTheDocument();
+    expect(screen.getByText("timeout")).toBeInTheDocument();
+    expect(screen.getByText("Generation latency")).toBeInTheDocument();
+    expect(screen.getByText("Request latency")).toBeInTheDocument();
+    expect(screen.getByText("400ms")).toBeInTheDocument();
+    expect(screen.getByText("1.2s")).toBeInTheDocument();
+    expect(screen.getByText("Scope and filter")).toBeInTheDocument();
+    expect(screen.getByText("tenant (env)")).toBeInTheDocument();
+  });
+
+  it("labels vector and hybrid RRF sources with distinct scale labels", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          sources: [
+            {
+              file_name: "vec.pdf",
+              page_number: 1,
+              chunk_index: 0,
+              score: 0.91,
+              score_type: "vector",
+            },
+            {
+              file_name: "hybrid.pdf",
+              page_number: 2,
+              chunk_index: 1,
+              score: 0.016,
+              score_type: "hybrid_rrf",
+            },
+          ],
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.getByText("Vector similarity score")).toBeInTheDocument();
+    expect(screen.getByText("Hybrid RRF score")).toBeInTheDocument();
+    expect(screen.queryByText(/^Score$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/confidence/i)).not.toBeInTheDocument();
+  });
+
+  it("omits rerank section when reranker is absent", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          question: "no rerank",
+          retrieval_debug: {
+            timing_ms: { search: 50 },
+          },
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.queryByText("Rerank")).not.toBeInTheDocument();
+    expect(screen.getByText("Search")).toBeInTheDocument();
+  });
+
+  it("keeps history decision rows in the query section", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          question: "follow-up",
+          retrieval_debug: {
+            history_resolution_applied: true,
+            effective_retrieval_query: "resolved follow-up",
+            effective_config: {
+              hybrid_enabled: { value: true, source: "env" },
+            },
+          },
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.getByText("Ran")).toBeInTheDocument();
+    expect(screen.getByText("Searched query")).toBeInTheDocument();
+    expect(screen.getByText("Effective config")).toBeInTheDocument();
+  });
+});
