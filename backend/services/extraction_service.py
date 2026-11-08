@@ -28,6 +28,10 @@ HTML_CONTENT_TYPES = frozenset({"text/html"})
 HTML_FILENAME_SUFFIXES = (".html", ".htm")
 
 _SKIP_HTML_TAG_CONTENT = frozenset({"script", "style", "noscript"})
+_HTML_TABLE_CELL_TAGS = frozenset({"td", "th"})
+# Separators survive ``clean_text``: single spaces stay; ``\n\n`` is a paragraph break.
+_HTML_CELL_SEPARATOR = " "
+_HTML_ROW_SEPARATOR = "\n\n"
 _HTML_CHARSET_PATTERN = re.compile(
     rb"""<meta[^>]+charset\s*=\s*['"]?\s*([a-zA-Z0-9._-]+)""",
     re.IGNORECASE,
@@ -168,8 +172,14 @@ class _HTMLTextExtractor(HTMLParser):
             self._skip_depth += 1
 
     def handle_endtag(self, tag: str) -> None:
-        if tag.lower() in _SKIP_HTML_TAG_CONTENT and self._skip_depth:
+        tag_lower = tag.lower()
+        if tag_lower in _SKIP_HTML_TAG_CONTENT and self._skip_depth:
             self._skip_depth -= 1
+        elif self._skip_depth == 0:
+            if tag_lower in _HTML_TABLE_CELL_TAGS:
+                self._parts.append(_HTML_CELL_SEPARATOR)
+            elif tag_lower == "tr":
+                self._parts.append(_HTML_ROW_SEPARATOR)
 
     def handle_data(self, data: str) -> None:
         if self._skip_depth == 0:
