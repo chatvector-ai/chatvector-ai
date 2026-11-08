@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { useChat } from "./useChat";
-import { DEFAULT_RETRIEVAL_SETTINGS } from "../retrievalSettings";
+import { EMPTY_ADVANCED_RETRIEVAL } from "../advancedRetrieval";
 import MessageList from "../../components/chat/MessageList";
 
 const mockGetSessionHistory = vi.fn();
@@ -66,7 +66,7 @@ function sessionPayload(sessionId: string, documentIds: string[] = []) {
 }
 
 function Transcript({ sessionId }: { sessionId: string }) {
-  const chat = useChat(sessionId, DEFAULT_RETRIEVAL_SETTINGS);
+  const chat = useChat(sessionId, EMPTY_ADVANCED_RETRIEVAL);
   return (
     <MessageList
       messages={chat.messages}

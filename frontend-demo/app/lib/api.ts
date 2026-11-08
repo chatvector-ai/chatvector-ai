@@ -6,6 +6,12 @@ import {
   type BackendErrorField,
 } from "./apiErrors";
 import {
+  EMPTY_ADVANCED_RETRIEVAL,
+  type AdvancedRetrievalState,
+  type RerankerProvider,
+} from "./advancedRetrieval";
+import { buildChatRequestBody } from "./buildChatBody";
+import {
   clampMatchCount,
   DEFAULT_MATCH_COUNT,
   type RetrievalScope,
@@ -30,6 +36,9 @@ export type { BackendErrorField } from "./apiErrors";
 export { BackendApiError } from "./apiErrors";
 
 export type ChatCallOptions = {
+  /** Explicit retrieval overrides for single-document chat/stream. */
+  retrieval?: AdvancedRetrievalState;
+  /** Batch compare still sends match count when set. */
   matchCount?: number;
   scope?: RetrievalScope;
   sessionId?: string | null;
@@ -38,6 +47,38 @@ export type ChatCallOptions = {
   /** Optional abort signal for cancelling the in-flight request. */
   signal?: AbortSignal;
 };
+
+export type RetrievalDiscoveryResponse = {
+  presets: string[];
+  reranker_providers: RerankerProvider[];
+};
+
+export async function fetchRetrievalDiscovery(): Promise<RetrievalDiscoveryResponse> {
+  try {
+    const res = await fetch(`${API_BASE}/retrieval/presets`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      return { presets: [], reranker_providers: ["similarity"] };
+    }
+    const data = (await res.json()) as Record<string, unknown>;
+    const rawProviders = data.reranker_providers;
+    const providers: RerankerProvider[] = Array.isArray(rawProviders)
+      ? rawProviders.filter(
+          (p): p is RerankerProvider => p === "similarity" || p === "cohere"
+        )
+      : ["similarity"];
+    if (!providers.includes("similarity")) {
+      providers.unshift("similarity");
+    }
+    const presets = Array.isArray(data.presets)
+      ? data.presets.filter((p): p is string => typeof p === "string")
+      : [];
+    return { presets, reranker_providers: providers };
+  } catch {
+    return { presets: [], reranker_providers: ["similarity"] };
+  }
+}
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -263,27 +304,21 @@ export async function sendMessage(
 ): Promise<ChatResponse> {
   const sessionId =
     options.sessionId !== undefined ? options.sessionId : getSessionId();
-  const matchCount = clampMatchCount(options.matchCount ?? DEFAULT_MATCH_COUNT);
-  const scope = options.scope ?? "session";
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...authHeaders(),
   };
-  const body: Record<string, string | number | boolean> = {
+  const body = buildChatRequestBody({
     question,
-    doc_id: docId,
-    match_count: matchCount,
-    scope,
-  };
+    docId,
+    sessionId,
+    debugRetrieval: options.debugRetrieval,
+    retrieval: options.retrieval ?? EMPTY_ADVANCED_RETRIEVAL,
+  });
 
   if (sessionId !== null) {
     headers["X-Session-Id"] = sessionId;
-    body.session_id = sessionId;
-  }
-
-  if (options.debugRetrieval === true) {
-    body.debug_retrieval = true;
   }
 
   let res: Response;
@@ -334,27 +369,21 @@ export async function* sendMessageStream(
 ): AsyncGenerator<StreamEvent> {
   const sessionId =
     options.sessionId !== undefined ? options.sessionId : getSessionId();
-  const matchCount = clampMatchCount(options.matchCount ?? DEFAULT_MATCH_COUNT);
-  const scope = options.scope ?? "session";
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...authHeaders(),
   };
-  const body: Record<string, string | number | boolean> = {
+  const body = buildChatRequestBody({
     question,
-    doc_id: docId,
-    match_count: matchCount,
-    scope,
-  };
+    docId,
+    sessionId,
+    debugRetrieval: options.debugRetrieval,
+    retrieval: options.retrieval ?? EMPTY_ADVANCED_RETRIEVAL,
+  });
 
   if (sessionId !== null) {
     headers["X-Session-Id"] = sessionId;
-    body.session_id = sessionId;
-  }
-
-  if (options.debugRetrieval === true) {
-    body.debug_retrieval = true;
   }
 
   let res: Response;
