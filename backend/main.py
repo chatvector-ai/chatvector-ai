@@ -28,6 +28,7 @@ from routes.chat import router as chat_router
 from routes.documents import router as documents_router
 from routes.feedback import router as feedback_router
 from routes.queue import router as queue_router
+from routes.retrieval import router as retrieval_router
 from routes.root import router as root_router
 from routes.sessions import router as sessions_router
 from routes.status import router as status_router
@@ -356,4 +357,5 @@ app.include_router(documents_router)
 app.include_router(sessions_router)
 app.include_router(feedback_router)
 app.include_router(queue_router)
+app.include_router(retrieval_router)
 app.include_router(status_router)
