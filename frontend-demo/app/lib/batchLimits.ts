@@ -4,12 +4,13 @@ export const BATCH_MAX_COMPARE_ITEMS = 20;
 /** Matches backend `CHAT_MAX_DOC_IDS_PER_QUERY` default in `core/config.py`. */
 export const BATCH_MAX_SYNTHESIZE_DOC_IDS = 10;
 
-export type BatchSelectionMode = "compare" | "synthesize";
+export type BatchSelectionMode = "compare" | "synthesize" | "config-compare";
 
 export function batchSelectionLimit(mode: BatchSelectionMode): number {
-  return mode === "compare"
-    ? BATCH_MAX_COMPARE_ITEMS
-    : BATCH_MAX_SYNTHESIZE_DOC_IDS;
+  if (mode === "compare") {
+    return BATCH_MAX_COMPARE_ITEMS;
+  }
+  return BATCH_MAX_SYNTHESIZE_DOC_IDS;
 }
 
 export function canAddBatchSelection(
