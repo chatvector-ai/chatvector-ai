@@ -6,6 +6,7 @@ import {
   metadataCorpusFromDocumentList,
   parseStoredMetadataFilter,
   type MetadataCorpusDocument,
+  type MetadataCorpusSourceDocument,
 } from "./metadataCorpus";
 
 describe("metadataCorpus", () => {
@@ -32,14 +33,14 @@ describe("metadataCorpus", () => {
   });
 
   it("builds tenant and session corpora from document lists", () => {
-    const documents = [
+    const documents: MetadataCorpusSourceDocument[] = [
       {
         document_id: "doc-1",
-        metadata: { department: "legal" as const },
+        metadata: { department: "legal" },
       },
       {
         document_id: "doc-2",
-        metadata: { region: "us" as const },
+        metadata: { region: "us" },
       },
       { document_id: "doc-3" },
     ];
