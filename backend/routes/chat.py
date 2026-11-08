@@ -134,6 +134,13 @@ class ChatSourceResponse(BaseModel):
 
     file_name: Optional[str] = None
     page_number: Optional[int] = None
+    page_end: Optional[int] = Field(
+        default=None,
+        description=(
+            "Last page that contains chunk text when it differs from page_number. "
+            "Omitted or null for single-page and non-PDF citations."
+        ),
+    )
     chunk_index: Optional[int] = None
     score: Optional[float] = Field(
         default=None,

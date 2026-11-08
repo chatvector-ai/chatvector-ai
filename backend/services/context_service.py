@@ -9,6 +9,14 @@ logger = logging.getLogger(__name__)
 MAX_CONTEXT_CHARS: int = int(os.getenv("MAX_CONTEXT_CHARS", "32000"))
 
 
+def _source_page_label(page_number: int | None, page_end: int | None) -> str:
+    if page_number is None:
+        return ""
+    if page_end is None or page_end == page_number:
+        return f", page {page_number}"
+    return f", pages {page_number}-{page_end}"
+
+
 @dataclass(frozen=True)
 class PackedContext:
     """Context string and the chunks that were written into it.
@@ -70,8 +78,10 @@ def build_context_from_chunks(
 
     for i, chunk in enumerate(chunks):
         label = f"[Source: {chunk.file_name or 'unknown'}"
-        if chunk.page_number is not None:
-            label += f", page {chunk.page_number}"
+        label += _source_page_label(
+            chunk.page_number,
+            getattr(chunk, "page_end", None),
+        )
         label += "]"
         part = f"{label}\n{chunk.chunk_text or ''}"
 

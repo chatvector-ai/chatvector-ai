@@ -20,6 +20,7 @@ def _chunk(
     file_name: str = "doc.pdf",
     page_number: int | None = None,
     *,
+    page_end: int | None = None,
     document_id: str | None = None,
     chunk_index: int | None = None,
 ):
@@ -27,6 +28,7 @@ def _chunk(
         chunk_text=text,
         file_name=file_name,
         page_number=page_number,
+        page_end=page_end,
         document_id=document_id,
         chunk_index=chunk_index,
     )
@@ -56,6 +58,18 @@ def test_single_chunk_with_page():
     chunk = _chunk("Hello world", file_name="a.pdf", page_number=3)
     result = build_context_from_chunks([chunk]).text
     assert result == "[Source: a.pdf, page 3]\nHello world"
+
+
+def test_single_chunk_with_equal_page_end_still_one_page_label():
+    chunk = _chunk("Hello world", file_name="a.pdf", page_number=2, page_end=2)
+    result = build_context_from_chunks([chunk]).text
+    assert result == "[Source: a.pdf, page 2]\nHello world"
+
+
+def test_chunk_span_uses_inclusive_pages_label():
+    chunk = _chunk("Hello world", file_name="a.pdf", page_number=1, page_end=2)
+    result = build_context_from_chunks([chunk]).text
+    assert result == "[Source: a.pdf, pages 1-2]\nHello world"
 
 
 def test_multiple_chunks_joined_by_double_newline():

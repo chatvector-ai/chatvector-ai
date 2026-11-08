@@ -23,6 +23,8 @@ def _chunk(
     *,
     similarity: float | None = 0.5,
     score_type: str | None = SCORE_TYPE_VECTOR,
+    page_number: int | None = 1,
+    page_end: int | None = None,
     vector_score: float | None = None,
     full_text_score: float | None = None,
     rrf_score: float | None = None,
@@ -33,7 +35,8 @@ def _chunk(
         id=chunk_id,
         chunk_text=f"chunk {chunk_id}",
         file_name="doc.pdf",
-        page_number=1,
+        page_number=page_number,
+        page_end=page_end,
         chunk_index=0,
         similarity=similarity,
         score_type=score_type,
@@ -85,6 +88,7 @@ def test_build_sources_includes_score_type():
 def test_build_sources_omits_absent_component_fields():
     sources = _build_sources([_chunk("c1", similarity=0.5)])
 
+    assert "page_end" not in sources[0]
     assert "vector_score" not in sources[0]
     assert "full_text_score" not in sources[0]
     assert "rrf_score" not in sources[0]
@@ -113,6 +117,15 @@ def test_build_sources_includes_reranker_component_fields():
     assert sources[0]["rrf_score"] == 0.02
     assert sources[0]["reranker_score"] == 0.77
     assert sources[0]["rerank_order"] == 1
+
+
+def test_build_sources_includes_page_end_for_multi_page_chunk():
+    sources = _build_sources(
+        [_chunk("c1", page_number=1, page_end=2, similarity=0.5)]
+    )
+
+    assert sources[0]["page_number"] == 1
+    assert sources[0]["page_end"] == 2
 
 
 def test_reciprocal_rank_fusion_scores_returns_rrf_values():

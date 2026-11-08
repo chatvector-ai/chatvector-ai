@@ -331,6 +331,7 @@ class SQLAlchemyService(DatabaseService):
                             embedding=record.embedding,
                             chunk_index=record.chunk_index,
                             page_number=record.page_number,
+                            page_end=record.page_end,
                             character_offset_start=record.character_offset_start,
                             character_offset_end=record.character_offset_end,
                         )
@@ -392,6 +393,7 @@ class SQLAlchemyService(DatabaseService):
                                 embedding=record.embedding,
                                 chunk_index=record.chunk_index,
                                 page_number=record.page_number,
+                                page_end=record.page_end,
                                 character_offset_start=record.character_offset_start,
                                 character_offset_end=record.character_offset_end,
                             )
@@ -627,6 +629,7 @@ class SQLAlchemyService(DatabaseService):
                             embedding=record.embedding,
                             chunk_index=record.chunk_index,
                             page_number=record.page_number,
+                            page_end=record.page_end,
                             character_offset_start=record.character_offset_start,
                             character_offset_end=record.character_offset_end,
                         )
@@ -793,6 +796,7 @@ class SQLAlchemyService(DatabaseService):
             full_text_score=full_text_score,
             chunk_index=chunk.chunk_index,
             page_number=chunk.page_number,
+            page_end=chunk.page_end,
             character_offset_start=chunk.character_offset_start,
             character_offset_end=chunk.character_offset_end,
             file_name=file_name,
@@ -826,6 +830,7 @@ class SQLAlchemyService(DatabaseService):
             ),
             chunk_index=existing.chunk_index,
             page_number=existing.page_number,
+            page_end=existing.page_end,
             character_offset_start=existing.character_offset_start,
             character_offset_end=existing.character_offset_end,
             file_name=existing.file_name,

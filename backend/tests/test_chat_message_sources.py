@@ -93,6 +93,7 @@ def test_build_source_snapshot_adds_document_id_beside_live_sources():
         document_id="doc-42",
         file_name="notes.pdf",
         page_number=4,
+        page_end=6,
         chunk_index=1,
         similarity=0.77,
         score_type="vector",
@@ -107,6 +108,7 @@ def test_build_source_snapshot_adds_document_id_beside_live_sources():
         {
             "file_name": "notes.pdf",
             "page_number": 4,
+            "page_end": 6,
             "chunk_index": 1,
             "score": 0.77,
             "score_type": "vector",
@@ -128,15 +130,16 @@ def test_build_source_snapshot_reuses_live_sources_without_rebuilding():
         document_id="doc-1",
         file_name="notes.pdf",
         page_number=1,
+        page_end=3,
         chunk_index=0,
         similarity=0.5,
         score_type="vector",
     )
     live = _build_sources([chunk])
-    live[0]["page_end"] = 3
 
     snapshot = _build_source_snapshot([chunk], live)
 
+    assert live[0]["page_end"] == 3
     assert snapshot[0]["page_end"] == 3
     assert snapshot[0]["document_id"] == "doc-1"
     assert "document_id" not in live[0]
