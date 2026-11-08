@@ -25,6 +25,7 @@ vi.mock("../lib/api", async (importOriginal) => {
       presets: [],
       reranker_providers: ["similarity"],
     }),
+    listDocuments: vi.fn().mockResolvedValue({ tenant_id: "t", documents: [] }),
   };
 });
 
@@ -61,6 +62,7 @@ vi.mock("../lib/hooks/useAdvancedRetrieval", () => ({
       setHistoryAwareRetrieval: vi.fn(),
       setRetrievalHistoryWindow: vi.fn(),
       setGenerationHistoryWindow: vi.fn(),
+      setMetadataFilter: vi.fn(),
     };
   },
 }));

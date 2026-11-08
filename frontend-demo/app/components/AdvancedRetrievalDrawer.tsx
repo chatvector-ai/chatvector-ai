@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Settings2, X } from "lucide-react";
 import {
   effectiveMatchCount,
@@ -14,6 +14,13 @@ import {
   MIN_MATCH_COUNT,
   type RetrievalScope,
 } from "../lib/retrievalSettings";
+import { formatMetadataPair } from "../lib/documentMetadata";
+import {
+  collectMetadataKeys,
+  distinctMetadataValuesForKey,
+  type MetadataCorpusDocument,
+} from "../lib/metadataCorpus";
+import type { DocumentScalarMetadata } from "../lib/documentMetadata";
 import { InfoPopover } from "./ui/InfoPopover";
 
 type Props = {
@@ -30,6 +37,8 @@ type Props = {
   onHistoryAwareRetrievalChange: (enabled: boolean) => void;
   onRetrievalHistoryWindowChange: (value: number) => void;
   onGenerationHistoryWindowChange: (value: number) => void;
+  onMetadataFilterChange: (filter: DocumentScalarMetadata | undefined) => void;
+  metadataCorpus: MetadataCorpusDocument[];
   availableRerankerProviders: RerankerProvider[];
   inspectMode?: boolean;
   onInspectModeChange?: (enabled: boolean) => void;
@@ -65,6 +74,8 @@ export default function AdvancedRetrievalDrawer({
   onHistoryAwareRetrievalChange,
   onRetrievalHistoryWindowChange,
   onGenerationHistoryWindowChange,
+  onMetadataFilterChange,
+  metadataCorpus,
   availableRerankerProviders,
   inspectMode = false,
   onInspectModeChange,
@@ -83,6 +94,23 @@ export default function AdvancedRetrievalDrawer({
   const displayHistoryAware = state.explicit.historyAwareRetrieval ?? true;
   const displayRetrievalWindow = state.explicit.retrievalHistoryWindow ?? 4;
   const displayGenerationWindow = state.explicit.generationHistoryWindow ?? 8;
+  const metadataKeys = useMemo(
+    () => collectMetadataKeys(metadataCorpus),
+    [metadataCorpus]
+  );
+  const activeFilter = state.explicit.metadataFilter;
+  const selectedFilterKey =
+    activeFilter && Object.keys(activeFilter).length === 1
+      ? Object.keys(activeFilter)[0]
+      : "";
+  const selectedFilterValue =
+    selectedFilterKey && activeFilter
+      ? activeFilter[selectedFilterKey]
+      : undefined;
+  const valueOptions =
+    selectedFilterKey.length > 0
+      ? distinctMetadataValuesForKey(metadataCorpus, selectedFilterKey)
+      : [];
 
   useEffect(() => {
     if (!open) return;
@@ -151,6 +179,96 @@ export default function AdvancedRetrievalDrawer({
             </div>
 
             <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4 text-xs">
+              <section>
+                <div className="mb-2 flex items-center gap-1.5">
+                  <p className="font-medium text-foreground">Metadata filter</p>
+                  <InfoPopover label="Metadata filter help">
+                    Exact match on document metadata keys present in your
+                    current documents. Omitting a filter leaves retrieval
+                    unchanged.
+                  </InfoPopover>
+                </div>
+                {metadataKeys.length === 0 ? (
+                  <p className="text-muted">
+                    No metadata on the current documents.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="block">
+                      <span className="mb-1 block text-muted">Key</span>
+                      <select
+                        data-testid="metadata-filter-key"
+                        value={selectedFilterKey}
+                        onChange={(e) => {
+                          const key = e.target.value;
+                          if (!key) {
+                            onMetadataFilterChange(undefined);
+                            return;
+                          }
+                          const values = distinctMetadataValuesForKey(
+                            metadataCorpus,
+                            key
+                          );
+                          const first = values[0];
+                          if (first === undefined) {
+                            onMetadataFilterChange(undefined);
+                            return;
+                          }
+                          onMetadataFilterChange({ [key]: first });
+                        }}
+                        className="w-full max-w-xs rounded-md border border-border bg-background px-2 py-1.5 text-foreground outline-none focus:border-accent"
+                      >
+                        <option value="">None</option>
+                        {metadataKeys.map((key) => (
+                          <option key={key} value={key}>
+                            {key}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {selectedFilterKey && (
+                      <label className="block">
+                        <span className="mb-1 block text-muted">Value</span>
+                        <select
+                          data-testid="metadata-filter-value"
+                          value={
+                            selectedFilterValue !== undefined
+                              ? String(selectedFilterValue)
+                              : ""
+                          }
+                          onChange={(e) => {
+                            const picked = valueOptions.find(
+                              (v) => String(v) === e.target.value
+                            );
+                            if (picked === undefined) return;
+                            onMetadataFilterChange({
+                              [selectedFilterKey]: picked,
+                            });
+                          }}
+                          className="w-full max-w-xs rounded-md border border-border bg-background px-2 py-1.5 text-foreground outline-none focus:border-accent"
+                        >
+                          {valueOptions.map((value) => (
+                            <option key={String(value)} value={String(value)}>
+                              {formatMetadataPair(selectedFilterKey, value)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {activeFilter && Object.keys(activeFilter).length > 0 && (
+                      <button
+                        type="button"
+                        data-testid="metadata-filter-clear"
+                        onClick={() => onMetadataFilterChange(undefined)}
+                        className="text-accent hover:underline"
+                      >
+                        Clear metadata filter
+                      </button>
+                    )}
+                  </div>
+                )}
+              </section>
+
               <section>
                 <div className="mb-2 flex items-center gap-1.5">
                   <p className="font-medium text-foreground">Scope</p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { PanelLeft } from "lucide-react";
 import UploadModal from "../components/UploadModal";
 import MessageList from "../components/chat/MessageList";
@@ -11,9 +11,15 @@ import { InlineAlert } from "../components/ui/InlineAlert";
 import { useChat } from "../lib/hooks/useChat";
 import { useAdvancedRetrieval } from "../lib/hooks/useAdvancedRetrieval";
 import { useSessionManager } from "../lib/hooks/useSessionManager";
-import { effectiveScope } from "../lib/advancedRetrieval";
+import {
+  effectiveScope,
+  hasActiveMetadataFilter,
+} from "../lib/advancedRetrieval";
+import { formatMetadataPair } from "../lib/documentMetadata";
+import type { MetadataCorpusDocument } from "../lib/metadataCorpus";
 import {
   fetchRetrievalDiscovery,
+  listDocuments,
   type RetrievalDiscoveryResponse,
 } from "../lib/api";
 
@@ -26,6 +32,7 @@ export default function ChatPage() {
     presets: [],
     reranker_providers: ["similarity"],
   });
+  const [tenantCorpus, setTenantCorpus] = useState<MetadataCorpusDocument[]>([]);
   const uploadButtonRef = useRef<HTMLButtonElement>(null);
   const {
     sessions,
@@ -54,10 +61,30 @@ export default function ChatPage() {
     setHistoryAwareRetrieval,
     setRetrievalHistoryWindow,
     setGenerationHistoryWindow,
+    setMetadataFilter,
   } = useAdvancedRetrieval();
 
   useEffect(() => {
     void fetchRetrievalDiscovery().then(setDiscovery);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listDocuments()
+      .then((response) => {
+        if (cancelled) return;
+        setTenantCorpus(
+          response.documents.map((doc) =>
+            doc.metadata !== undefined ? { metadata: doc.metadata } : {}
+          )
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setTenantCorpus([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const {
@@ -90,6 +117,25 @@ export default function ChatPage() {
   );
 
   const indicatorScope = effectiveScope(retrievalState);
+  const metadataCorpus = useMemo((): MetadataCorpusDocument[] => {
+    if (indicatorScope === "tenant") {
+      return tenantCorpus;
+    }
+    if (attachment?.metadata) {
+      return [{ metadata: attachment.metadata }];
+    }
+    return [];
+  }, [indicatorScope, tenantCorpus, attachment?.metadata]);
+
+  const metadataFilterSummary = useMemo(() => {
+    if (!hasActiveMetadataFilter(retrievalState)) return null;
+    const filter = retrievalState.explicit.metadataFilter;
+    if (!filter) return null;
+    const entries = Object.entries(filter);
+    if (entries.length !== 1) return null;
+    const [key, value] = entries[0];
+    return formatMetadataPair(key, value);
+  }, [retrievalState]);
 
   if (!isLoaded || !retrievalLoaded) {
     return (
@@ -234,6 +280,8 @@ export default function ChatPage() {
               onHistoryAwareRetrievalChange={setHistoryAwareRetrieval}
               onRetrievalHistoryWindowChange={setRetrievalHistoryWindow}
               onGenerationHistoryWindowChange={setGenerationHistoryWindow}
+              onMetadataFilterChange={setMetadataFilter}
+              metadataCorpus={metadataCorpus}
               availableRerankerProviders={discovery.reranker_providers}
               inspectMode={inspectMode}
               onInspectModeChange={setInspectMode}
@@ -257,6 +305,7 @@ export default function ChatPage() {
             uploadButtonRef={uploadButtonRef}
             stopStreaming={stopStreaming}
             scope={indicatorScope}
+            metadataFilterSummary={metadataFilterSummary}
           />
         </div>
       </div>

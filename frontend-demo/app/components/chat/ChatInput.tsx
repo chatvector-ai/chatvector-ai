@@ -28,6 +28,7 @@ type Props = {
   uploadButtonRef?: RefObject<HTMLButtonElement | null>;
   stopStreaming: () => void;
   scope?: RetrievalScope;
+  metadataFilterSummary?: string | null;
 };
 
 export default function ChatInput({
@@ -47,6 +48,7 @@ export default function ChatInput({
   uploadButtonRef,
   stopStreaming,
   scope = "session",
+  metadataFilterSummary = null,
 }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -93,6 +95,12 @@ export default function ChatInput({
           : attachment
             ? `Session scope: searches only the selected document (${attachment.fileName}).`
             : "Session scope: no document selected — upload a document to search it."}
+        {metadataFilterSummary ? (
+          <>
+            {" "}
+            Metadata filter active: {metadataFilterSummary}.
+          </>
+        ) : null}
       </p>
       {attachment?.status === "processing" && (
         <p className="px-4 pb-1 text-xs text-amber-400 bg-background">

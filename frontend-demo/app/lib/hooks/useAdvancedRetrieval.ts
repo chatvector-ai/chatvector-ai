@@ -12,6 +12,7 @@ import type {
   QueryTransformationStrategy,
   RerankerProvider,
 } from "../advancedRetrieval";
+import type { DocumentScalarMetadata } from "../documentMetadata";
 
 export function useAdvancedRetrieval() {
   const [state, setState] = useState<AdvancedRetrievalState>({
@@ -94,6 +95,26 @@ export function useAdvancedRetrieval() {
     [patchExplicit]
   );
 
+  const setMetadataFilter = useCallback(
+    (metadataFilter: DocumentScalarMetadata | undefined) => {
+      setState((prev) => {
+        const explicit = { ...prev.explicit };
+        if (
+          metadataFilter === undefined ||
+          Object.keys(metadataFilter).length === 0
+        ) {
+          delete explicit.metadataFilter;
+        } else {
+          explicit.metadataFilter = metadataFilter;
+        }
+        const next: AdvancedRetrievalState = { explicit };
+        saveAdvancedRetrievalState(next);
+        return next;
+      });
+    },
+    []
+  );
+
   return {
     state,
     loaded,
@@ -107,5 +128,6 @@ export function useAdvancedRetrieval() {
     setHistoryAwareRetrieval,
     setRetrievalHistoryWindow,
     setGenerationHistoryWindow,
+    setMetadataFilter,
   };
 }

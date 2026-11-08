@@ -43,6 +43,21 @@ function renderChatInput(overrides: Partial<ComponentProps<typeof ChatInput>> = 
 }
 
 describe("ChatInput", () => {
+  it("mentions an active metadata filter in the scope indicator", () => {
+    renderChatInput({ metadataFilterSummary: "department=legal" });
+    expect(screen.getByTestId("chat-scope-indicator")).toHaveTextContent(
+      "Metadata filter active: department=legal."
+    );
+  });
+
+  it("does not expose metadata filter controls in the composer", () => {
+    renderChatInput({
+      metadataFilterSummary: "department=legal",
+    });
+    expect(screen.queryByTestId("metadata-filter-key")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Key$/i)).not.toBeInTheDocument();
+  });
+
   it("disables send when input is empty", () => {
     renderChatInput({ sendDisabled: true, input: "" });
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();

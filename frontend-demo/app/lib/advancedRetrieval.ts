@@ -3,6 +3,8 @@ import {
   DEFAULT_MATCH_COUNT,
   type RetrievalScope,
 } from "./retrievalSettings";
+import type { DocumentScalarMetadata } from "./documentMetadata";
+import { parseStoredMetadataFilter } from "./metadataCorpus";
 
 export type QueryTransformationStrategy = "rewrite" | "expand" | "stepback";
 export type RerankerProvider = "similarity" | "cohere";
@@ -18,6 +20,7 @@ export type AdvancedRetrievalExplicitFields = {
   historyAwareRetrieval?: boolean;
   retrievalHistoryWindow?: number;
   generationHistoryWindow?: number;
+  metadataFilter?: DocumentScalarMetadata;
 };
 
 export type AdvancedRetrievalState = {
@@ -92,7 +95,18 @@ function parseExplicitFields(
   if (typeof obj.generationHistoryWindow === "number") {
     explicit.generationHistoryWindow = Math.round(obj.generationHistoryWindow);
   }
+  const metadataFilter = parseStoredMetadataFilter(obj.metadataFilter);
+  if (metadataFilter !== undefined) {
+    explicit.metadataFilter = metadataFilter;
+  }
   return explicit;
+}
+
+export function hasActiveMetadataFilter(
+  state: AdvancedRetrievalState
+): boolean {
+  const filter = state.explicit.metadataFilter;
+  return filter !== undefined && Object.keys(filter).length > 0;
 }
 
 export function loadAdvancedRetrievalState(): AdvancedRetrievalState {
