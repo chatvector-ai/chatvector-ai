@@ -80,6 +80,7 @@ class DocumentChunk(Base):
     embedding = Column(Vector(get_embedding_dim()), nullable=False)
     chunk_index = Column(Integer, nullable=False, default=0)
     page_number = Column(Integer, nullable=True)
+    page_end = Column(Integer, nullable=True)
     character_offset_start = Column(Integer, nullable=False, default=0)
     character_offset_end = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)

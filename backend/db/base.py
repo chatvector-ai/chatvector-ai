@@ -25,6 +25,7 @@ class ChunkRecord:
     character_offset_start: int
     character_offset_end: int
     page_number: Optional[int] = None
+    page_end: Optional[int] = None
 
 
 @dataclass
@@ -50,6 +51,7 @@ class ChunkMatch:
     rerank_order: Optional[int] = None
     chunk_index: Optional[int] = None
     page_number: Optional[int] = None
+    page_end: Optional[int] = None
     character_offset_start: Optional[int] = None
     character_offset_end: Optional[int] = None
     file_name: Optional[str] = None
