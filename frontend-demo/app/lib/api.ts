@@ -100,6 +100,7 @@ export type RetrievalInspectorData = {
   chunks?: number;
   model?: string;
   latency_ms?: number;
+  request_latency_ms?: number;
 };
 
 export type Message = {
@@ -120,6 +121,7 @@ export type Message = {
   sources?: ChatSource[];
   chunks?: number;
   latency_ms?: number;
+  request_latency_ms?: number;
   model?: string;
   error?: { code: string; message: string };
   /** True while real SSE tokens are in flight for this message. */

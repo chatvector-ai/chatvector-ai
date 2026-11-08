@@ -60,6 +60,25 @@ describe("parseRawEvent", () => {
     });
   });
 
+  it("parses request_latency_ms on complete events when present", () => {
+    const data = JSON.stringify({
+      type: "complete",
+      sources: [],
+      latency_ms: 400,
+      request_latency_ms: 1200,
+      model: "gemini-2.5-flash",
+    });
+    const result = parseRawEvent(`event: complete\ndata: ${data}`);
+    expect(result).toEqual({
+      type: "complete",
+      sources: [],
+      latency_ms: 400,
+      request_latency_ms: 1200,
+      model: "gemini-2.5-flash",
+      _raw: JSON.parse(data),
+    });
+  });
+
   it("preserves retrieval_debug on complete events via _raw", () => {
     const payload = {
       type: "complete",

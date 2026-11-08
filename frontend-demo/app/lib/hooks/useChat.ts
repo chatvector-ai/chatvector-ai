@@ -549,6 +549,9 @@ export function useChat(
               latency_ms: event.latency_ms,
               model: event.model,
               isStreaming: false,
+              ...(event.request_latency_ms !== undefined
+                ? { request_latency_ms: event.request_latency_ms }
+                : {}),
               ...(retrievalDebug !== undefined
                 ? { retrieval_debug: retrievalDebug }
                 : {}),

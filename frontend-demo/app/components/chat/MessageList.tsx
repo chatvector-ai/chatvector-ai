@@ -167,6 +167,7 @@ export default function MessageList({
                     chunks={msg.chunks}
                     model={msg.model}
                     latencyMs={msg.latency_ms}
+                    requestLatencyMs={msg.request_latency_ms}
                     question={msg.question}
                     retrievalDebug={msg.retrieval_debug}
                     detailsVisible={detailsVisible}
