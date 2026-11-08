@@ -10,6 +10,8 @@ export type QueryTransformationStrategy = "rewrite" | "expand" | "stepback";
 export type RerankerProvider = "similarity" | "cohere";
 
 export type AdvancedRetrievalExplicitFields = {
+  /** Named preset when the preset picker sets one without an explicit scope override. */
+  preset?: string;
   scope?: RetrievalScope;
   matchCount?: number;
   hybridEnabled?: boolean;

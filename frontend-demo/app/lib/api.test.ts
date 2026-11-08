@@ -857,6 +857,41 @@ describe("listDocuments", () => {
       ],
     });
   });
+
+  it("keeps error on document summaries without dropping metadata", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          tenant_id: "dev",
+          documents: [
+            {
+              document_id: "doc-1",
+              file_name: "bad.txt",
+              status: "failed",
+              metadata: { dept: "legal" },
+              error: { stage: "parse", message: "invalid" },
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(listDocuments()).resolves.toEqual({
+      tenant_id: "dev",
+      documents: [
+        {
+          document_id: "doc-1",
+          file_name: "bad.txt",
+          status: "failed",
+          created_at: null,
+          updated_at: null,
+          metadata: { dept: "legal" },
+          error: { stage: "parse", message: "invalid" },
+        },
+      ],
+    });
+  });
 });
 
 describe("deleteDocument", () => {

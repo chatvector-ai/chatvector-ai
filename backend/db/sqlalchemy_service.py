@@ -1067,6 +1067,8 @@ class SQLAlchemyService(DatabaseService):
                 }
                 if document.status_detail is not None:
                     summary["status_detail"] = document.status_detail
+                if document.error is not None:
+                    summary["error"] = document.error
                 summaries.append(summary)
             return summaries
 

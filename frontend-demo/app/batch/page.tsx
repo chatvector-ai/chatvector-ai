@@ -3,11 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Layers, Loader2, FileText } from "lucide-react";
 import {
+  deleteDocument,
   sendBatchMessage,
   sendConfigurationCompareBatchMessage,
   sendSynthesizedBatchMessage,
   listDocuments,
   type BatchResultItem,
+  type DocumentSummary,
 } from "../lib/api";
 import { apiErrorMessage } from "../lib/apiErrorMessage";
 import {
@@ -23,20 +25,21 @@ import RetrievalOverrideEditor, {
 } from "../components/RetrievalOverrideEditor";
 import type { RetrievalOverrideDraft } from "../lib/retrievalRequestOverrides";
 import BatchResultSkeleton from "./BatchResultSkeleton";
-import DocumentMetadataPairs from "../components/DocumentMetadataPairs";
-import type { DocumentScalarMetadata } from "../lib/documentMetadata";
+import DocumentListRow from "../components/DocumentListRow";
+import {
+  documentFailureDetail,
+  fileTypeFromFileName,
+  isDocumentInActiveScope,
+} from "../lib/documentListDisplay";
 import { EmptyState } from "../components/ui/EmptyState";
 import { InfoPopover } from "../components/ui/InfoPopover";
 import { InlineAlert } from "../components/ui/InlineAlert";
 import { SegmentedControl } from "../components/ui/SegmentedControl";
 import { useRetrievalSettings } from "../lib/hooks/useRetrievalSettings";
+import UploadModal from "../components/UploadModal";
+import { getSessionId } from "../lib/session";
 
-type BatchDocument = {
-  documentId: string;
-  fileName: string;
-  status: string;
-  metadata?: DocumentScalarMetadata;
-};
+type BatchDocument = DocumentSummary;
 
 type BatchMode = "compare" | "synthesize" | "config-compare";
 
@@ -71,6 +74,9 @@ export default function BatchPage() {
   const [activeRequest, setActiveRequest] = useState<ActiveBatchRequest | null>(
     null,
   );
+  const [replaceDocumentId, setReplaceDocumentId] = useState<string | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [documentsRefreshKey, setDocumentsRefreshKey] = useState(0);
   const [configA, setConfigA] = useState<RetrievalOverrideDraft>(
     emptyRetrievalOverrideDraft(),
   );
@@ -88,14 +94,7 @@ export default function BatchPage() {
       try {
         const response = await listDocuments();
         if (cancelled) return;
-        setDocuments(
-          response.documents.map((doc) => ({
-            documentId: doc.document_id,
-            fileName: doc.file_name,
-            status: doc.status,
-            ...(doc.metadata !== undefined ? { metadata: doc.metadata } : {}),
-          }))
-        );
+        setDocuments(response.documents);
       } catch (err) {
         if (cancelled) return;
         setDocuments([]);
@@ -116,18 +115,45 @@ export default function BatchPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [documentsRefreshKey]);
 
   const nameById = useMemo(() => {
     const map = new Map<string, string>();
-    for (const doc of documents) map.set(doc.documentId, doc.fileName);
+    for (const doc of documents) map.set(doc.document_id, doc.file_name);
     return map;
   }, [documents]);
 
   const selectedDocIds = useMemo(
-    () => documents.map((d) => d.documentId).filter((id) => selected.has(id)),
+    () => documents.map((d) => d.document_id).filter((id) => selected.has(id)),
     [documents, selected]
   );
+
+  const reloadDocuments = () => {
+    setDocumentsRefreshKey((key) => key + 1);
+  };
+
+  const handleReplaceDocument = (documentId: string) => {
+    setReplaceDocumentId(documentId);
+    setShowUploadModal(true);
+  };
+
+  const handleDeleteDocument = async (documentId: string) => {
+    if (inflight) return;
+    try {
+      const out = await deleteDocument(documentId);
+      if (out.status === "gone") {
+        setSelected((prev) => {
+          if (!prev.has(documentId)) return prev;
+          const next = new Set(prev);
+          next.delete(documentId);
+          return next;
+        });
+        reloadDocuments();
+      }
+    } catch {
+      // Best-effort row action; batch query errors surface separately.
+    }
+  };
 
   const selectionLimit = batchSelectionLimit(mode);
   const selectionLimitReached = selected.size >= selectionLimit;
@@ -219,6 +245,22 @@ export default function BatchPage() {
       className="mx-auto w-full max-w-4xl px-4 py-10 text-foreground"
       aria-busy={!documentsLoaded || !retrievalLoaded}
     >
+      {showUploadModal && (
+        <UploadModal
+          sessionId={getSessionId()}
+          replaceDocumentId={replaceDocumentId}
+          onClose={() => {
+            setShowUploadModal(false);
+            setReplaceDocumentId(null);
+          }}
+          onUploadAccepted={() => {
+            setShowUploadModal(false);
+            setReplaceDocumentId(null);
+            reloadDocuments();
+          }}
+          attachment={null}
+        />
+      )}
       <div className="mb-8">
         <div className="flex items-center gap-2 text-accent-text">
           <Layers size={20} />
@@ -324,42 +366,51 @@ export default function BatchPage() {
               </p>
             )}
             <ul className="flex flex-col gap-2">
-              {documents.map((doc) => (
-                <li key={doc.documentId}>
-                  <label
-                    className={`flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3 transition-colors hover:border-accent ${
-                      inflight ? "cursor-not-allowed opacity-60" : "cursor-pointer"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.has(doc.documentId)}
-                      onChange={() => toggle(doc.documentId)}
-                      disabled={
-                        inflight ||
-                        (!selected.has(doc.documentId) && selectionLimitReached)
+              {documents.map((doc) => {
+                const processing =
+                  doc.status !== "completed" && doc.status !== "failed";
+                const inActiveScope = isDocumentInActiveScope({
+                  scope: "tenant",
+                  scopeIsExplicit: true,
+                  selectedDocumentId: null,
+                  documentId: doc.document_id,
+                  status: doc.status,
+                });
+                return (
+                  <li key={doc.document_id}>
+                    <DocumentListRow
+                      documentId={doc.document_id}
+                      fileName={doc.file_name}
+                      fileType={fileTypeFromFileName(doc.file_name)}
+                      status={doc.status}
+                      failureDetail={documentFailureDetail(doc.status, doc.error)}
+                      metadata={doc.metadata}
+                      inActiveScope={inActiveScope}
+                      onReplace={
+                        processing
+                          ? undefined
+                          : () => handleReplaceDocument(doc.document_id)
                       }
-                      className="h-4 w-4 accent-[color:var(--accent)]"
+                      onDelete={() => void handleDeleteDocument(doc.document_id)}
+                      disabled={inflight}
+                      leading={
+                        <input
+                          type="checkbox"
+                          checked={selected.has(doc.document_id)}
+                          onChange={() => toggle(doc.document_id)}
+                          disabled={
+                            inflight ||
+                            (!selected.has(doc.document_id) &&
+                              selectionLimitReached)
+                          }
+                          className="mt-1 h-4 w-4 accent-[color:var(--accent)]"
+                          aria-label={`Select ${doc.file_name}`}
+                        />
+                      }
                     />
-                    <FileText size={16} className="shrink-0 text-muted" />
-                    <div className="min-w-0 flex-1">
-                      <span className="block truncate text-sm">{doc.fileName}</span>
-                      <DocumentMetadataPairs
-                        metadata={doc.metadata}
-                        className="mt-0.5 flex flex-wrap gap-x-2"
-                      />
-                    </div>
-                    <span className="ml-auto truncate font-mono text-xs text-muted">
-                      {doc.documentId.slice(0, 8)}
-                    </span>
-                    {doc.status !== "completed" && (
-                      <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
-                        {doc.status}
-                      </span>
-                    )}
-                  </label>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           </div>
 
