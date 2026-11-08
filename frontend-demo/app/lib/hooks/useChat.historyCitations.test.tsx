@@ -50,7 +50,7 @@ vi.mock("../documentStore", () => ({
   getUploadedDocument: vi.fn(),
 }));
 
-const CITED_LINE = "handbook-v1.pdf · p.3 · chunk 2 · notes.txt · chunk 0";
+const CITED_LINE = "handbook-v1.pdf · p.3-5 · chunk 2 · notes.txt · chunk 0";
 // Long enough that the fake typewriter would still be running when the
 // citation assertion fires. A restored row must show the finished answer.
 const RESTORED_ANSWER = `Ten days. ${"policy ".repeat(80)}`;
@@ -149,7 +149,6 @@ describe("restored history citations", () => {
     expect(screen.getByText("What is the limit?")).toBeInTheDocument();
     expect(screen.queryByText(/0\.91/)).not.toBeInTheDocument();
     expect(screen.queryByText(/score/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/p\.5|p\.3–|–5/)).not.toBeInTheDocument();
     expect(screen.queryByText(/handbook-v2/)).not.toBeInTheDocument();
     expect(screen.queryByText(/should-not-cite-user/)).not.toBeInTheDocument();
     expect(screen.queryByText(/gpt-test/)).not.toBeInTheDocument();

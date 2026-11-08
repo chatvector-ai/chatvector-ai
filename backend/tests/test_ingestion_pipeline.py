@@ -44,6 +44,7 @@ from services.ingestion_pipeline import (
     _build_chunk_records,
     _classify_ingestion_error,
     _resolve_page_number,
+    _resolve_page_span,
 )
 from services.extraction_service import DocumentExtractionError, PageBoundary
 
@@ -353,6 +354,7 @@ def test_build_chunk_records_populates_all_fields():
     assert records[0].character_offset_start == 0
     assert records[0].character_offset_end == len("hello world")
     assert records[0].page_number == 1
+    assert records[0].page_end == 1
 
     assert records[1].chunk_text == "second chunk"
     assert records[1].embedding == [0.3, 0.4]
@@ -360,6 +362,7 @@ def test_build_chunk_records_populates_all_fields():
     assert records[1].character_offset_start == 12
     assert records[1].character_offset_end == 12 + len("second chunk")
     assert records[1].page_number == 1
+    assert records[1].page_end == 1
 
 
 def test_build_chunk_records_page_number_none_for_txt():
@@ -369,6 +372,46 @@ def test_build_chunk_records_page_number_none_for_txt():
     records = _build_chunk_records(docs, embeddings, page_boundaries=[])
 
     assert records[0].page_number is None
+    assert records[0].page_end is None
+
+
+def test_resolve_page_span_single_page():
+    boundaries = [
+        PageBoundary(page_number=1, start_offset=0, end_offset=100),
+        PageBoundary(page_number=2, start_offset=100, end_offset=200),
+    ]
+    assert _resolve_page_span(10, 50, boundaries) == (1, 1)
+
+
+def test_resolve_page_span_two_pages():
+    boundaries = [
+        PageBoundary(page_number=1, start_offset=0, end_offset=100),
+        PageBoundary(page_number=2, start_offset=100, end_offset=200),
+    ]
+    assert _resolve_page_span(80, 130, boundaries) == (1, 2)
+
+
+def test_resolve_page_span_ends_on_next_page_boundary_without_including_it():
+    boundaries = [
+        PageBoundary(page_number=1, start_offset=0, end_offset=100),
+        PageBoundary(page_number=2, start_offset=100, end_offset=200),
+    ]
+    assert _resolve_page_span(50, 100, boundaries) == (1, 1)
+
+
+def test_build_chunk_records_two_page_pdf_span():
+    page1 = "a" * 80
+    page2 = "b" * 40
+    text = page1 + page2
+    boundaries = [
+        PageBoundary(page_number=1, start_offset=0, end_offset=len(page1)),
+        PageBoundary(page_number=2, start_offset=len(page1), end_offset=len(text)),
+    ]
+    span_text = text[70:110]
+    docs = [_FakeDoc(span_text, 70)]
+    records = _build_chunk_records(docs, [[0.1]], boundaries)
+    assert records[0].page_number == 1
+    assert records[0].page_end == 2
 
 
 @pytest.mark.asyncio

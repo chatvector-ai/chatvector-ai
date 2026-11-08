@@ -192,6 +192,7 @@ def merge_chunk_matches_with_scores(
                 rrf_score=scores_by_id.get(chunk_id),
                 chunk_index=match.chunk_index,
                 page_number=match.page_number,
+                page_end=match.page_end,
                 character_offset_start=match.character_offset_start,
                 character_offset_end=match.character_offset_end,
                 file_name=match.file_name,

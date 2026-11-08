@@ -644,6 +644,22 @@ def _resolve_page_number(
     return page_boundaries[idx].page_number
 
 
+def _resolve_page_span(
+    start: int,
+    end: int,
+    page_boundaries: list[PageBoundary],
+) -> tuple[int | None, int | None]:
+    """Return (start page, end page) for a chunk with exclusive *end* offset."""
+    if not page_boundaries:
+        return None, None
+    page_number = _resolve_page_number(start, page_boundaries)
+    if end <= start:
+        return page_number, page_number
+    last_offset = end - 1
+    page_end = _resolve_page_number(last_offset, page_boundaries)
+    return page_number, page_end
+
+
 def _build_chunk_records(
     langchain_docs: list,
     embeddings: list[list[float]],
@@ -657,6 +673,7 @@ def _build_chunk_records(
     for chunk_index, (doc, embedding) in enumerate(zip(langchain_docs, embeddings)):
         start = doc.metadata.get("start_index", 0)
         end = start + len(doc.page_content)
+        page_number, page_end = _resolve_page_span(start, end, page_boundaries)
         records.append(
             ChunkRecord(
                 chunk_text=doc.page_content,
@@ -664,7 +681,8 @@ def _build_chunk_records(
                 chunk_index=chunk_index,
                 character_offset_start=start,
                 character_offset_end=end,
-                page_number=_resolve_page_number(start, page_boundaries),
+                page_number=page_number,
+                page_end=page_end,
             )
         )
     return records

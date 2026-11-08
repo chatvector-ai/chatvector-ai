@@ -18,6 +18,7 @@ class _FakeChunk:
         self.created_at = datetime.now(timezone.utc)
         self.chunk_index = 0
         self.page_number = 1
+        self.page_end = None
         self.character_offset_start = 0
         self.character_offset_end = 10
 

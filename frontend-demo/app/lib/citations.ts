@@ -1,9 +1,22 @@
 import type { ChatSource, RetrievalInspectorData } from "./api";
 
+function formatPageLocation(
+  source: Pick<ChatSource, "page_number" | "page_end">,
+): string | null {
+  const { page_number, page_end } = source;
+  if (page_number == null) {
+    return null;
+  }
+  if (page_end == null || page_end === page_number) {
+    return `p.${page_number}`;
+  }
+  return `p.${page_number}-${page_end}`;
+}
+
 export function deduplicatedSources(sources: ChatSource[]): ChatSource[] {
   const seen = new Set<string>();
   return sources.filter((source) => {
-    const key = `${source.file_name}::${source.page_number ?? "null"}::${source.chunk_index ?? "null"}`;
+    const key = `${source.file_name}::${source.page_number ?? "null"}::${source.page_end ?? "null"}::${source.chunk_index ?? "null"}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -12,8 +25,9 @@ export function deduplicatedSources(sources: ChatSource[]): ChatSource[] {
 
 export function formatSourceCitation(source: ChatSource): string {
   const parts = [source.file_name];
-  if (source.page_number != null) {
-    parts.push(`p.${source.page_number}`);
+  const page = formatPageLocation(source);
+  if (page != null) {
+    parts.push(page);
   }
   if (source.chunk_index != null) {
     parts.push(`chunk ${source.chunk_index}`);
@@ -290,8 +304,18 @@ export function inspectorSourceFields(source: ChatSource): InspectorSourceField[
   const fields: InspectorSourceField[] = [
     { label: "File", value: source.file_name },
   ];
-  if (source.page_number != null) {
-    fields.push({ label: "Page", value: String(source.page_number) });
+  const page = formatPageLocation(source);
+  if (page != null) {
+    fields.push({
+      label:
+        source.page_end != null && source.page_end !== source.page_number
+          ? "Pages"
+          : "Page",
+      value:
+        source.page_end != null && source.page_end !== source.page_number
+          ? `${source.page_number}-${source.page_end}`
+          : String(source.page_number),
+    });
   }
   if (source.chunk_index != null) {
     fields.push({ label: "Chunk", value: String(source.chunk_index) });

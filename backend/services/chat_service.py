@@ -559,6 +559,9 @@ def _build_sources(chunks: list) -> list[dict]:
             "chunk_index": chunk.chunk_index,
             "score": chunk.similarity,
         }
+        page_end = getattr(chunk, "page_end", None)
+        if page_end is not None:
+            source["page_end"] = page_end
         if chunk.score_type is not None:
             source["score_type"] = chunk.score_type
         for field in _COMPONENT_SCORE_FIELDS:

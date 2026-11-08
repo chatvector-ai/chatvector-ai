@@ -93,6 +93,7 @@ def test_build_source_snapshot_adds_document_id_beside_live_sources():
         document_id="doc-42",
         file_name="notes.pdf",
         page_number=4,
+        page_end=6,
         chunk_index=1,
         similarity=0.77,
         score_type="vector",
@@ -107,6 +108,7 @@ def test_build_source_snapshot_adds_document_id_beside_live_sources():
         {
             "file_name": "notes.pdf",
             "page_number": 4,
+            "page_end": 6,
             "chunk_index": 1,
             "score": 0.77,
             "score_type": "vector",
@@ -128,15 +130,16 @@ def test_build_source_snapshot_reuses_live_sources_without_rebuilding():
         document_id="doc-1",
         file_name="notes.pdf",
         page_number=1,
+        page_end=3,
         chunk_index=0,
         similarity=0.5,
         score_type="vector",
     )
     live = _build_sources([chunk])
-    live[0]["page_end"] = 3
 
     snapshot = _build_source_snapshot([chunk], live)
 
+    assert live[0]["page_end"] == 3
     assert snapshot[0]["page_end"] == 3
     assert snapshot[0]["document_id"] == "doc-1"
     assert "document_id" not in live[0]
@@ -231,6 +234,7 @@ async def test_replace_document_does_not_mutate_stored_sources(svc):
             "document_id": doc_id,
             "file_name": "handbook-v1.pdf",
             "page_number": 3,
+            "page_end": 5,
             "chunk_index": 0,
             "score": 0.88,
         }
@@ -257,6 +261,7 @@ async def test_replace_document_does_not_mutate_stored_sources(svc):
 
     history = await svc.get_session_history(session_id, tenant_id)
     assert history[1]["sources"] == snapshot
+    assert history[1]["sources"][0]["page_end"] == 5
     document = await svc.get_document(doc_id, tenant_id)
     assert document["file_name"] == "handbook-v2.pdf"
 

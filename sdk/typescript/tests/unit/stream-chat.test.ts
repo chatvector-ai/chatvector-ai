@@ -113,6 +113,7 @@ describe("streamChat", () => {
           {
             fileName: "guide.pdf",
             pageNumber: 1,
+            pageEnd: null,
             chunkIndex: 0,
             score: 0.9,
             scoreType: "vector",

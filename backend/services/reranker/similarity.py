@@ -93,6 +93,7 @@ class SimilarityRerankerProvider(RerankerProvider):
                     rerank_order=rerank_order,
                     chunk_index=chunk.chunk_index,
                     page_number=chunk.page_number,
+                    page_end=chunk.page_end,
                     character_offset_start=chunk.character_offset_start,
                     character_offset_end=chunk.character_offset_end,
                     file_name=chunk.file_name,
