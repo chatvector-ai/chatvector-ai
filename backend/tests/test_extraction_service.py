@@ -274,6 +274,27 @@ def test_markdown_extractor_preserves_structure_and_normalizes_links():
     assert doc.page_boundaries == []
 
 
+def test_markdown_embedded_html_table_cells_survive_cleaning():
+    payload = b"""# Product Guide
+
+Plain markdown paragraph unchanged.
+
+<table><tr><td>Parachute flares</td><td>88421</td></tr></table>
+
+See [Example Link](https://example.com/ignored) for details.
+"""
+    doc = MarkdownExtractor().extract(payload, filename="mixed.md")
+    cleaned, boundaries = prepare_extracted_document_for_chunking(doc.text, doc.page_boundaries)
+
+    assert "Plain markdown paragraph unchanged." in cleaned
+    assert "88421" in cleaned
+    assert "flares88421" not in cleaned
+    assert "Parachute flares 88421" in cleaned
+    assert "Example Link" in cleaned
+    assert "https://example.com/ignored" not in cleaned
+    assert boundaries == []
+
+
 def test_markdown_content_type_and_filename_helpers():
     assert is_markdown_content_type("text/markdown")
     assert is_markdown_content_type("Text/Markdown; charset=utf-8")
@@ -325,6 +346,53 @@ def test_html_extractor_strips_script_and_style():
     assert "secret-style-phrase" not in doc.text
     assert "must-not-persist-script" not in doc.text
     assert doc.page_boundaries == []
+
+
+_HTML_TABLE_FIXTURE = b"""<!DOCTYPE html>
+<html><body>
+  <p>Prose sentence without the table-only value.</p>
+  <table>
+    <tr><td>Parachute flares</td><td>88421</td></tr>
+    <tr><td>Handheld flares</td><td>6</td></tr>
+  </table>
+</body></html>
+"""
+
+_HTML_PROSE_CLEANED_BASELINE = (
+    "Fixture Page\n\nHTML Ingest Fixture Unique visible phrase for HTML ingestion tests."
+)
+
+
+def test_html_table_cells_and_rows_survive_cleaning():
+    doc = HtmlExtractor().extract(_HTML_TABLE_FIXTURE, filename="inventory.html")
+    cleaned, boundaries = prepare_extracted_document_for_chunking(doc.text, doc.page_boundaries)
+
+    assert "88421" in cleaned
+    assert "flares88421" not in cleaned
+    assert "flares6" not in cleaned
+    assert "Parachute flares 88421" in cleaned
+    assert "Handheld flares 6" in cleaned
+    assert "\n\n" in cleaned
+    assert "Prose sentence without the table-only value." in cleaned
+    assert boundaries == []
+
+
+def test_html_extractor_header_cells_survive_cleaning():
+    fixture = b"<table><tr><th>Parachute flares</th><th>88421</th></tr></table>"
+    doc = HtmlExtractor().extract(fixture, filename="headers.html")
+    cleaned, _ = prepare_extracted_document_for_chunking(doc.text, doc.page_boundaries)
+
+    assert "88421" in cleaned
+    assert "flares88421" not in cleaned
+    assert "Parachute flares 88421" in cleaned
+
+
+def test_html_prose_only_fixture_unchanged_after_cleaning():
+    doc = HtmlExtractor().extract(_HTML_FIXTURE, filename="page.html")
+    cleaned, boundaries = prepare_extracted_document_for_chunking(doc.text, doc.page_boundaries)
+
+    assert cleaned == _HTML_PROSE_CLEANED_BASELINE
+    assert boundaries == []
 
 
 def test_html_extractor_respects_declared_charset():
