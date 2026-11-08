@@ -18,6 +18,8 @@ import { BatchResultCard } from "../components/batch/BatchResultCard";
 import BatchPageSkeleton from "../components/batch/BatchPageSkeleton";
 import RetrievalSettingsPanel from "../components/RetrievalSettingsPanel";
 import BatchResultSkeleton from "./BatchResultSkeleton";
+import DocumentMetadataPairs from "../components/DocumentMetadataPairs";
+import type { DocumentScalarMetadata } from "../lib/documentMetadata";
 import { EmptyState } from "../components/ui/EmptyState";
 import { InfoPopover } from "../components/ui/InfoPopover";
 import { InlineAlert } from "../components/ui/InlineAlert";
@@ -28,6 +30,7 @@ type BatchDocument = {
   documentId: string;
   fileName: string;
   status: string;
+  metadata?: DocumentScalarMetadata;
 };
 
 type BatchMode = "compare" | "synthesize";
@@ -78,6 +81,7 @@ export default function BatchPage() {
             documentId: doc.document_id,
             fileName: doc.file_name,
             status: doc.status,
+            ...(doc.metadata !== undefined ? { metadata: doc.metadata } : {}),
           }))
         );
       } catch (err) {
@@ -310,7 +314,13 @@ export default function BatchPage() {
                       className="h-4 w-4 accent-[color:var(--accent)]"
                     />
                     <FileText size={16} className="shrink-0 text-muted" />
-                    <span className="truncate text-sm">{doc.fileName}</span>
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate text-sm">{doc.fileName}</span>
+                      <DocumentMetadataPairs
+                        metadata={doc.metadata}
+                        className="mt-0.5 flex flex-wrap gap-x-2"
+                      />
+                    </div>
                     <span className="ml-auto truncate font-mono text-xs text-muted">
                       {doc.documentId.slice(0, 8)}
                     </span>

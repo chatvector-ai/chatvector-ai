@@ -9,6 +9,7 @@ vi.mock("../lib/api", () => ({
 }));
 
 import { uploadDocument, deleteDocument } from "../lib/api";
+import { BackendApiError } from "../lib/apiErrors";
 
 describe("UploadModal", () => {
   beforeEach(() => {
@@ -86,7 +87,7 @@ describe("UploadModal", () => {
     fireEvent.change(fileInput, { target: { files: [file] } });
 
     await screen.findByText("guide.pdf");
-    expect(uploadDocument).toHaveBeenCalledWith(file, undefined);
+    expect(uploadDocument).toHaveBeenCalledWith(file, undefined, null, undefined);
     expect(deleteDocument).not.toHaveBeenCalled();
     expect(onUploadAccepted).toHaveBeenCalledWith({
       fileName: "guide.pdf",
@@ -121,7 +122,7 @@ describe("UploadModal", () => {
     fireEvent.change(fileInput, { target: { files: [file] } });
 
     await screen.findByText("new-guide.pdf");
-    expect(uploadDocument).toHaveBeenCalledWith(file, "sess-1", "doc-old");
+    expect(uploadDocument).toHaveBeenCalledWith(file, "sess-1", "doc-old", undefined);
     expect(deleteDocument).not.toHaveBeenCalled();
     expect(onUploadAccepted).toHaveBeenCalledWith({
       fileName: "new-guide.pdf",
@@ -154,7 +155,7 @@ describe("UploadModal", () => {
     expect(
       await screen.findByText("File exceeds the maximum size limit")
     ).toBeInTheDocument();
-    expect(uploadDocument).toHaveBeenCalledWith(file, "sess-1", "doc-old");
+    expect(uploadDocument).toHaveBeenCalledWith(file, "sess-1", "doc-old", undefined);
     expect(deleteDocument).not.toHaveBeenCalled();
     expect(onUploadAccepted).not.toHaveBeenCalled();
   });
@@ -195,7 +196,13 @@ describe("UploadModal", () => {
 
     await screen.findByText("fixed.pdf");
     expect(uploadDocument).toHaveBeenCalledTimes(2);
-    expect(uploadDocument).toHaveBeenNthCalledWith(2, file, "sess-1", "doc-failed");
+    expect(uploadDocument).toHaveBeenNthCalledWith(
+      2,
+      file,
+      "sess-1",
+      "doc-failed",
+      undefined,
+    );
     expect(deleteDocument).not.toHaveBeenCalled();
     expect(onUploadAccepted).toHaveBeenCalledWith({
       fileName: "fixed.pdf",
@@ -203,6 +210,97 @@ describe("UploadModal", () => {
       statusEndpoint: "/documents/doc-failed/status",
       queuePosition: 1,
     });
+  });
+
+  it("does not send metadata when the optional section stays closed", async () => {
+    vi.mocked(uploadDocument).mockResolvedValue({
+      documentId: "doc-123",
+      statusEndpoint: "/documents/doc-123/status",
+    });
+
+    render(
+      <UploadModal
+        onClose={vi.fn()}
+        onUploadAccepted={vi.fn()}
+        attachment={null}
+      />
+    );
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["%PDF"], "guide.pdf", { type: "application/pdf" });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await screen.findByText("guide.pdf");
+    expect(uploadDocument).toHaveBeenCalledWith(file, undefined, null, undefined);
+  });
+
+  it("sends metadata when the advanced section is open with department=legal", async () => {
+    vi.mocked(uploadDocument).mockResolvedValue({
+      documentId: "doc-123",
+      statusEndpoint: "/documents/doc-123/status",
+    });
+    const onUploadAccepted = vi.fn();
+
+    render(
+      <UploadModal
+        onClose={vi.fn()}
+        onUploadAccepted={onUploadAccepted}
+        attachment={null}
+      />
+    );
+
+    await userEvent.click(screen.getByText("Document metadata"));
+    const keyInput = screen.getByRole("textbox", { name: "Metadata key 1" });
+    const valueInput = screen.getByRole("textbox", { name: "Metadata value 1" });
+    await userEvent.type(keyInput, "department");
+    await userEvent.type(valueInput, "legal");
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["%PDF"], "guide.pdf", { type: "application/pdf" });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await screen.findByText("guide.pdf");
+    expect(uploadDocument).toHaveBeenCalledWith(file, undefined, null, {
+      department: "legal",
+    });
+    expect(onUploadAccepted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fileName: "guide.pdf",
+        metadata: { department: "legal" },
+      }),
+    );
+  });
+
+  it("surfaces API metadata validation errors without accepting the upload", async () => {
+    vi.mocked(uploadDocument).mockRejectedValue(
+      new BackendApiError("metadata value invalid", {
+        code: "invalid_metadata",
+        message: "metadata value invalid",
+      }, 422),
+    );
+    const onUploadAccepted = vi.fn();
+
+    render(
+      <UploadModal
+        onClose={vi.fn()}
+        onUploadAccepted={onUploadAccepted}
+        attachment={null}
+      />
+    );
+
+    await userEvent.click(screen.getByText("Document metadata"));
+    const keyInput = screen.getByRole("textbox", { name: "Metadata key 1" });
+    const valueInput = screen.getByRole("textbox", { name: "Metadata value 1" });
+    fireEvent.change(keyInput, { target: { value: "bad" } });
+    fireEvent.change(valueInput, { target: { value: "x" } });
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, {
+      target: { files: [new File(["%PDF"], "guide.pdf", { type: "application/pdf" })] },
+    });
+
+    expect(await screen.findByText("metadata value invalid")).toBeInTheDocument();
+    expect(onUploadAccepted).not.toHaveBeenCalled();
   });
 
   it("surfaces server-side replacement failure when attachment status rolls back to ready with errorMessage", () => {

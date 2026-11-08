@@ -629,6 +629,46 @@ describe("uploadDocument", () => {
     expect(formData.get("file")).toBeInstanceOf(File);
   });
 
+  it("omits metadata from FormData when metadata is not provided", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          document_id: "doc-1",
+          status_endpoint: "/documents/doc-1/status",
+        }),
+        { status: 202 }
+      )
+    );
+
+    const file = new File(["content"], "initial.pdf", {
+      type: "application/pdf",
+    });
+    await uploadDocument(file, "sess-123");
+
+    const [, init] = vi.mocked(globalThis.fetch).mock.calls[0];
+    const formData = init?.body as FormData;
+    expect(formData.get("metadata")).toBeNull();
+  });
+
+  it("sends metadata as a JSON multipart field when provided", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          document_id: "doc-1",
+          status_endpoint: "/documents/doc-1/status",
+        }),
+        { status: 202 }
+      )
+    );
+
+    const file = new File(["content"], "legal.pdf", { type: "application/pdf" });
+    await uploadDocument(file, "sess-123", null, { department: "legal" });
+
+    const [, init] = vi.mocked(globalThis.fetch).mock.calls[0];
+    const formData = init?.body as FormData;
+    expect(formData.get("metadata")).toBe(JSON.stringify({ department: "legal" }));
+  });
+
   it("omits replace_document_id from FormData when replaceDocumentId is not provided", async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(
@@ -707,6 +747,41 @@ describe("listDocuments", () => {
     );
 
     await expect(listDocuments()).rejects.toBeInstanceOf(BackendApiError);
+  });
+
+  it("keeps metadata and status_detail from document summaries", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          tenant_id: "dev",
+          documents: [
+            {
+              document_id: "doc-1",
+              file_name: "japan.txt",
+              status: "completed",
+              metadata: { department: "legal", year: 2026 },
+              status_detail: "replacement_in_progress",
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(listDocuments()).resolves.toEqual({
+      tenant_id: "dev",
+      documents: [
+        {
+          document_id: "doc-1",
+          file_name: "japan.txt",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+          metadata: { department: "legal", year: 2026 },
+          status_detail: "replacement_in_progress",
+        },
+      ],
+    });
   });
 });
 
@@ -859,6 +934,40 @@ describe("getDocumentStatus", () => {
       file_name: "notes.txt",
       chunks: { processed: 1, total: 1 },
     });
+  });
+
+  it("parses scalar metadata from status responses", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: "completed",
+          file_name: "notes.txt",
+          metadata: { department: "legal", year: 2026, active: true },
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(getDocumentStatus("/documents/doc-123/status")).resolves.toEqual({
+      status: "completed",
+      file_name: "notes.txt",
+      metadata: { department: "legal", year: 2026, active: true },
+    });
+  });
+
+  it("drops non-scalar metadata from status responses", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: "completed",
+          metadata: { nested: { bad: true } },
+        }),
+        { status: 200 }
+      )
+    );
+
+    const result = await getDocumentStatus("/documents/doc-123/status");
+    expect(result.metadata).toBeUndefined();
   });
 
   it("omits a missing or blank file_name", async () => {

@@ -400,12 +400,14 @@ class DocumentSummary:
     created_at: str | None = None
     updated_at: str | None = None
     status_detail: str | None = None
+    metadata: JSONDict | None = None
     raw: JSONDict = field(default_factory=dict, repr=False)
 
     @classmethod
     def from_dict(cls, payload: JSONMapping) -> "DocumentSummary":
         """Build a document summary from an API response payload."""
         raw = dict(payload)
+        metadata = payload.get("metadata")
         return cls(
             document_id=str(payload.get("document_id", "")),
             file_name=_optional_str(payload.get("file_name")),
@@ -413,6 +415,7 @@ class DocumentSummary:
             created_at=_optional_str(payload.get("created_at")),
             updated_at=_optional_str(payload.get("updated_at")),
             status_detail=_optional_str(payload.get("status_detail")),
+            metadata=dict(metadata) if isinstance(metadata, Mapping) else None,
             raw=raw,
         )
 
@@ -429,6 +432,8 @@ class DocumentSummary:
             payload["updated_at"] = self.updated_at
         if self.status_detail is not None:
             payload["status_detail"] = self.status_detail
+        if self.metadata is not None:
+            payload["metadata"] = dict(self.metadata)
         return payload
 
 

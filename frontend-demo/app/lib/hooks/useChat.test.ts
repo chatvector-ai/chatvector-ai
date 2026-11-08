@@ -768,6 +768,28 @@ describe("useChat", () => {
     expect(mockGetUploadedDocument).toHaveBeenCalledWith(documentId);
   });
 
+  it("restores document metadata from status on session load", async () => {
+    const documentId = "0a22a97f-2222-4222-8222-222222222222";
+    mockGetSession.mockResolvedValue(sessionPayload("session-a", [documentId]));
+    mockGetDocumentStatus.mockResolvedValue({
+      status: "completed",
+      file_name: "notes.txt",
+      metadata: { department: "legal", year: 2026 },
+    });
+    mockGetUploadedDocument.mockReturnValue(undefined);
+
+    const { result } = renderHook(() =>
+      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+    );
+
+    await waitFor(() => expect(result.current.attachment?.status).toBe("ready"));
+
+    expect(result.current.attachment?.metadata).toEqual({
+      department: "legal",
+      year: 2026,
+    });
+  });
+
   it.each([
     ["processing", "embedding", "processing"],
     ["failed", "failed", "failed"],

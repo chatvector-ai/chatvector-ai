@@ -110,6 +110,20 @@ describe("AttachmentChip retrying state", () => {
     expect(screen.queryByText("Failed")).not.toBeInTheDocument();
   });
 
+  it("shows stored metadata beside the file name without replacing it", () => {
+    render(
+      <AttachmentChip
+        fileName="guide.pdf"
+        status="ready"
+        metadata={{ department: "legal" }}
+        onRemove={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("guide.pdf")).toBeInTheDocument();
+    expect(screen.getByText("department=legal")).toBeInTheDocument();
+  });
+
   it("keeps notes.txt visible for processing, ready, and failed chips", () => {
     const { rerender } = render(
       <AttachmentChip
