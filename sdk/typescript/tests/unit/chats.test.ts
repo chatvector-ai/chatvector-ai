@@ -62,6 +62,7 @@ describe("chat", () => {
       {
         fileName: "guide.pdf",
         pageNumber: 1,
+        pageEnd: null,
         chunkIndex: 0,
         score: 0.95,
         scoreType: "hybrid_rrf",
@@ -69,6 +70,7 @@ describe("chat", () => {
       {
         fileName: null,
         pageNumber: null,
+        pageEnd: null,
         chunkIndex: null,
         score: null,
         scoreType: null,
@@ -122,7 +124,9 @@ describe("chat", () => {
       latencyMs: 0,
       model: "",
       status: "ok",
-      sources: [{ fileName: null, pageNumber: null, chunkIndex: null }],
+      sources: [
+        { fileName: null, pageNumber: null, pageEnd: null, chunkIndex: null },
+      ],
     });
   });
 

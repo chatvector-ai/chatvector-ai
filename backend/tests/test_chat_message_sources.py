@@ -234,6 +234,7 @@ async def test_replace_document_does_not_mutate_stored_sources(svc):
             "document_id": doc_id,
             "file_name": "handbook-v1.pdf",
             "page_number": 3,
+            "page_end": 5,
             "chunk_index": 0,
             "score": 0.88,
         }
@@ -260,6 +261,7 @@ async def test_replace_document_does_not_mutate_stored_sources(svc):
 
     history = await svc.get_session_history(session_id, tenant_id)
     assert history[1]["sources"] == snapshot
+    assert history[1]["sources"][0]["page_end"] == 5
     document = await svc.get_document(doc_id, tenant_id)
     assert document["file_name"] == "handbook-v2.pdf"
 
