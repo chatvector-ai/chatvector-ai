@@ -16,10 +16,15 @@ import {
   hasActiveMetadataFilter,
 } from "../lib/advancedRetrieval";
 import { formatMetadataPair } from "../lib/documentMetadata";
-import type { MetadataCorpusDocument } from "../lib/metadataCorpus";
+import {
+  metadataCorpusForSessionDocuments,
+  metadataCorpusFromDocumentList,
+} from "../lib/metadataCorpus";
 import {
   fetchRetrievalDiscovery,
+  getSession,
   listDocuments,
+  type DocumentSummary,
   type RetrievalDiscoveryResponse,
 } from "../lib/api";
 
@@ -32,7 +37,8 @@ export default function ChatPage() {
     presets: [],
     reranker_providers: ["similarity"],
   });
-  const [tenantCorpus, setTenantCorpus] = useState<MetadataCorpusDocument[]>([]);
+  const [documentSummaries, setDocumentSummaries] = useState<DocumentSummary[]>([]);
+  const [sessionDocumentIds, setSessionDocumentIds] = useState<string[]>([]);
   const uploadButtonRef = useRef<HTMLButtonElement>(null);
   const {
     sessions,
@@ -68,25 +74,6 @@ export default function ChatPage() {
     void fetchRetrievalDiscovery().then(setDiscovery);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    void listDocuments()
-      .then((response) => {
-        if (cancelled) return;
-        setTenantCorpus(
-          response.documents.map((doc) =>
-            doc.metadata !== undefined ? { metadata: doc.metadata } : {}
-          )
-        );
-      })
-      .catch(() => {
-        if (!cancelled) setTenantCorpus([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const {
     messages,
     historyLoading,
@@ -116,16 +103,41 @@ export default function ChatPage() {
     inspectMode,
   );
 
+  const attachedDocumentId = attachment?.documentId;
+  const attachedDocumentStatus = attachment?.status;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      const [documentsResult, sessionResult] = await Promise.all([
+        listDocuments().catch(() => null),
+        activeSessionId
+          ? getSession(activeSessionId).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+
+      if (cancelled) return;
+
+      setDocumentSummaries(documentsResult?.documents ?? []);
+      setSessionDocumentIds(sessionResult?.document_ids ?? []);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionId, attachedDocumentId, attachedDocumentStatus]);
+
   const indicatorScope = effectiveScope(retrievalState);
-  const metadataCorpus = useMemo((): MetadataCorpusDocument[] => {
+  const metadataCorpus = useMemo(() => {
     if (indicatorScope === "tenant") {
-      return tenantCorpus;
+      return metadataCorpusFromDocumentList(documentSummaries);
     }
-    if (attachment?.metadata) {
-      return [{ metadata: attachment.metadata }];
-    }
-    return [];
-  }, [indicatorScope, tenantCorpus, attachment?.metadata]);
+    return metadataCorpusForSessionDocuments(
+      sessionDocumentIds,
+      documentSummaries
+    );
+  }, [indicatorScope, documentSummaries, sessionDocumentIds]);
 
   const metadataFilterSummary = useMemo(() => {
     if (!hasActiveMetadataFilter(retrievalState)) return null;

@@ -1,9 +1,9 @@
 import { useState, createRef } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ChatPage from "./page";
-import type { AttachmentState } from "../lib/api";
+import { getSession, listDocuments, type AttachmentState } from "../lib/api";
 import type { ChatSession } from "../lib/hooks/useSessionManager";
 import type { AdvancedRetrievalState } from "../lib/advancedRetrieval";
 import type { RetrievalScope } from "../lib/retrievalSettings";
@@ -26,6 +26,14 @@ vi.mock("../lib/api", async (importOriginal) => {
       reranker_providers: ["similarity"],
     }),
     listDocuments: vi.fn().mockResolvedValue({ tenant_id: "t", documents: [] }),
+    getSession: vi.fn().mockResolvedValue({
+      id: "session-1",
+      created_at: "2026-01-01T00:00:00Z",
+      last_active: "2026-01-01T00:00:00Z",
+      metadata: {},
+      document_ids: [],
+      display_label: "New session",
+    }),
   };
 });
 
@@ -99,6 +107,87 @@ vi.mock("../lib/hooks/useChat", () => ({
     stopStreaming: vi.fn(),
   }),
 }));
+
+describe("ChatPage metadata corpus", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockInitialScope = undefined;
+    mockActiveSessionId = "session-1";
+    mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
+    mockAttachment = {
+      fileName: "notes.txt",
+      documentId: "doc-1",
+      statusEndpoint: "/documents/doc-1/status",
+      status: "ready",
+    };
+    vi.mocked(getSession).mockResolvedValue({
+      id: "session-1",
+      created_at: "2026-01-01T00:00:00Z",
+      last_active: "2026-01-01T00:00:00Z",
+      metadata: {},
+      document_ids: ["doc-1", "doc-2"],
+      display_label: "New session",
+    });
+    vi.mocked(listDocuments).mockResolvedValue({
+      tenant_id: "t",
+      documents: [
+        {
+          document_id: "doc-1",
+          file_name: "notes.txt",
+          status: "ready",
+          created_at: null,
+          updated_at: null,
+          metadata: { department: "legal" },
+        },
+        {
+          document_id: "doc-2",
+          file_name: "other.txt",
+          status: "ready",
+          created_at: null,
+          updated_at: null,
+          metadata: { region: "us" },
+        },
+      ],
+    });
+  });
+
+  it("uses metadata from every session document, not only the attachment", async () => {
+    const user = userEvent.setup();
+    render(<ChatPage />);
+
+    await waitFor(() => {
+      expect(getSession).toHaveBeenCalledWith("session-1");
+    });
+
+    await user.click(screen.getByTestId("advanced-retrieval-open"));
+
+    await waitFor(() => {
+      const keySelect = screen.getByTestId("metadata-filter-key");
+      expect(keySelect).toContainHTML("department");
+      expect(keySelect).toContainHTML("region");
+    });
+  });
+
+  it("reloads document metadata when the attached document changes", async () => {
+    const { rerender } = render(<ChatPage />);
+
+    await waitFor(() => {
+      expect(listDocuments).toHaveBeenCalledTimes(1);
+    });
+
+    mockAttachment = {
+      fileName: "other.txt",
+      documentId: "doc-2",
+      statusEndpoint: "/documents/doc-2/status",
+      status: "processing",
+    };
+    rerender(<ChatPage />);
+
+    await waitFor(() => {
+      expect(listDocuments).toHaveBeenCalledTimes(2);
+    });
+  });
+});
 
 describe("ChatPage scope indicator", () => {
   beforeEach(() => {

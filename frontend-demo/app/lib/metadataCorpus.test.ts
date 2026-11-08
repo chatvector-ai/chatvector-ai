@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   collectMetadataKeys,
   distinctMetadataValuesForKey,
+  metadataCorpusForSessionDocuments,
+  metadataCorpusFromDocumentList,
   parseStoredMetadataFilter,
   type MetadataCorpusDocument,
 } from "./metadataCorpus";
@@ -27,6 +29,31 @@ describe("metadataCorpus", () => {
       "legal",
     ]);
     expect(distinctMetadataValuesForKey(corpus, "active")).toEqual([true]);
+  });
+
+  it("builds tenant and session corpora from document lists", () => {
+    const documents = [
+      {
+        document_id: "doc-1",
+        metadata: { department: "legal" as const },
+      },
+      {
+        document_id: "doc-2",
+        metadata: { region: "us" as const },
+      },
+      { document_id: "doc-3" },
+    ];
+
+    expect(metadataCorpusFromDocumentList(documents)).toEqual([
+      { metadata: { department: "legal" } },
+      { metadata: { region: "us" } },
+      {},
+    ]);
+    expect(
+      collectMetadataKeys(
+        metadataCorpusForSessionDocuments(["doc-2", "doc-1", "missing"], documents)
+      )
+    ).toEqual(["department", "region"]);
   });
 
   it("parses stored metadata filters and rejects invalid shapes", () => {

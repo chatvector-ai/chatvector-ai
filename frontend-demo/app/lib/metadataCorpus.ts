@@ -7,6 +7,30 @@ export type MetadataCorpusDocument = {
   metadata?: DocumentScalarMetadata;
 };
 
+export type MetadataCorpusSourceDocument = {
+  document_id: string;
+  metadata?: DocumentScalarMetadata;
+};
+
+export function metadataCorpusFromDocumentList(
+  documents: Array<{ metadata?: DocumentScalarMetadata }>
+): MetadataCorpusDocument[] {
+  return documents.map((doc) =>
+    doc.metadata !== undefined ? { metadata: doc.metadata } : {}
+  );
+}
+
+export function metadataCorpusForSessionDocuments(
+  documentIds: string[],
+  documents: MetadataCorpusSourceDocument[]
+): MetadataCorpusDocument[] {
+  const byId = new Map(documents.map((doc) => [doc.document_id, doc]));
+  return documentIds.map((documentId) => {
+    const doc = byId.get(documentId);
+    return doc?.metadata !== undefined ? { metadata: doc.metadata } : {};
+  });
+}
+
 function scalarLabel(value: string | number | boolean): string {
   return String(value);
 }
