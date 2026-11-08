@@ -63,6 +63,29 @@ describe("BatchPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows file type and failure detail in the batch document list", async () => {
+    vi.mocked(listDocuments).mockResolvedValue({
+      tenant_id: "dev",
+      documents: [
+        {
+          document_id: "doc-1",
+          file_name: "File 1.pdf",
+          status: "failed",
+          created_at: null,
+          updated_at: null,
+          error: { stage: "parse", message: "bad pdf" },
+        },
+      ],
+    });
+
+    render(<BatchPage />);
+
+    expect(await screen.findByText("pdf")).toBeInTheDocument();
+    expect(screen.getByTestId("document-failure-detail")).toHaveTextContent(
+      "parse: bad pdf"
+    );
+  });
+
   it("shows document metadata in the batch document list", async () => {
     vi.mocked(listDocuments).mockResolvedValue({
       tenant_id: "dev",

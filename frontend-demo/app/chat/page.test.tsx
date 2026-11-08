@@ -1,6 +1,6 @@
 import { useState, createRef } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ChatPage from "./page";
 import { getSession, listDocuments, type AttachmentState } from "../lib/api";
@@ -239,6 +239,82 @@ describe("ChatPage scope indicator", () => {
   });
 });
 
+describe("ChatPage session document list", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockInitialScope = undefined;
+    mockActiveSessionId = "session-1";
+    mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
+    mockAttachment = {
+      fileName: "notes.txt",
+      documentId: "doc-1",
+      statusEndpoint: "/documents/doc-1/status",
+      status: "ready",
+    };
+    vi.mocked(getSession).mockResolvedValue({
+      id: "session-1",
+      created_at: "2026-01-01T00:00:00Z",
+      last_active: "2026-01-01T00:00:00Z",
+      metadata: {},
+      document_ids: ["doc-1", "doc-2"],
+      display_label: "New session",
+    });
+    vi.mocked(listDocuments).mockResolvedValue({
+      tenant_id: "t",
+      documents: [
+        {
+          document_id: "doc-1",
+          file_name: "notes.txt",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+        },
+        {
+          document_id: "doc-2",
+          file_name: "other.pdf",
+          status: "failed",
+          created_at: null,
+          updated_at: null,
+          error: { stage: "embedding", message: "boom" },
+        },
+      ],
+    });
+  });
+
+  it("renders both session document names from one listDocuments response", async () => {
+    render(<ChatPage />);
+
+  await screen.findByTestId("session-document-list");
+    expect(screen.getByTestId("document-list-row-doc-1")).toHaveTextContent(
+      "notes.txt"
+    );
+    expect(screen.getByTestId("document-list-row-doc-2")).toHaveTextContent(
+      "other.pdf"
+    );
+    await waitFor(() => {
+      expect(vi.mocked(listDocuments)).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("marks only the selected attachment in session scope", async () => {
+    render(<ChatPage />);
+
+    await screen.findByTestId("session-document-list");
+    const inScope = screen.getAllByTestId("document-in-active-scope");
+    expect(inScope).toHaveLength(1);
+    expect(
+      screen.getByTestId("document-list-row-doc-1").contains(inScope[0])
+    ).toBe(true);
+  });
+
+  it("shows failure detail for failed session documents", async () => {
+    render(<ChatPage />);
+
+    const detail = await screen.findByTestId("document-failure-detail");
+    expect(detail).toHaveTextContent("embedding: boom");
+  });
+});
+
 describe("ChatPage session navigation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -290,7 +366,7 @@ describe("ChatPage session navigation", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "Delete notes.txt" })
+      within(sidebar).getByRole("button", { name: "Delete notes.txt" })
     );
     expect(mockDeleteSession).toHaveBeenCalledWith(
       "22222222-aaaa-bbbb-cccc-000000000002"

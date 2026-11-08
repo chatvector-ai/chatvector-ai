@@ -5,6 +5,7 @@ import { PanelLeft } from "lucide-react";
 import UploadModal from "../components/UploadModal";
 import MessageList from "../components/chat/MessageList";
 import ChatInput from "../components/chat/ChatInput";
+import SessionDocumentList from "../components/chat/SessionDocumentList";
 import SessionSidebar from "../components/chat/SessionSidebar";
 import AdvancedRetrievalDrawer from "../components/AdvancedRetrievalDrawer";
 import { InlineAlert } from "../components/ui/InlineAlert";
@@ -21,6 +22,7 @@ import {
   metadataCorpusFromDocumentList,
 } from "../lib/metadataCorpus";
 import {
+  deleteDocument,
   fetchRetrievalDiscovery,
   getSession,
   listDocuments,
@@ -39,6 +41,10 @@ export default function ChatPage() {
   });
   const [documentSummaries, setDocumentSummaries] = useState<DocumentSummary[]>([]);
   const [sessionDocumentIds, setSessionDocumentIds] = useState<string[]>([]);
+  const [documentsRefreshKey, setDocumentsRefreshKey] = useState(0);
+  const [replaceDocumentIdFromList, setReplaceDocumentIdFromList] = useState<
+    string | null
+  >(null);
   const uploadButtonRef = useRef<HTMLButtonElement>(null);
   const {
     sessions,
@@ -126,7 +132,38 @@ export default function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeSessionId, attachedDocumentId, attachedDocumentStatus]);
+  }, [activeSessionId, attachedDocumentId, attachedDocumentStatus, documentsRefreshKey]);
+
+  const refreshSessionDocuments = () => {
+    setDocumentsRefreshKey((key) => key + 1);
+  };
+
+  const resolvedReplaceDocumentId =
+    replaceDocumentIdFromList ??
+    (attachment && attachment.status !== "processing"
+      ? attachment.documentId
+      : null);
+
+  const handleReplaceDocument = (documentId: string) => {
+    setReplaceDocumentIdFromList(documentId);
+    setShowModal(true);
+  };
+
+  const handleDeleteListedDocument = async (documentId: string) => {
+    if (attachment?.documentId === documentId) {
+      await handleRemoveAttachment();
+      refreshSessionDocuments();
+      return;
+    }
+    try {
+      const out = await deleteDocument(documentId);
+      if (out.status === "gone") {
+        refreshSessionDocuments();
+      }
+    } catch {
+      // Row actions are best-effort; chip removeError covers the active attachment.
+    }
+  };
 
   const indicatorScope = effectiveScope(retrievalState);
   const metadataCorpus = useMemo(() => {
@@ -244,13 +281,12 @@ export default function ChatPage() {
         {showModal && (
           <UploadModal
             sessionId={activeSessionId}
-            onClose={() => setShowModal(false)}
+            onClose={() => {
+              setShowModal(false);
+              setReplaceDocumentIdFromList(null);
+            }}
             returnFocusRef={uploadButtonRef}
-            replaceDocumentId={
-              attachment && attachment.status !== "processing"
-                ? attachment.documentId
-                : null
-            }
+            replaceDocumentId={resolvedReplaceDocumentId}
             onUploadAccepted={handleUploadAccepted}
             attachment={
               attachment
@@ -275,6 +311,16 @@ export default function ChatPage() {
             historyLoading={historyLoading}
             sessionId={activeSessionId}
             bottomRef={bottomRef}
+          />
+
+          <SessionDocumentList
+            sessionDocumentIds={sessionDocumentIds}
+            documentSummaries={documentSummaries}
+            retrievalState={retrievalState}
+            attachment={attachment}
+            onReplace={handleReplaceDocument}
+            onDelete={(id) => void handleDeleteListedDocument(id)}
+            actionsDisabled={inflight || streaming}
           />
 
           <div className="shrink-0 px-4 pb-2">
