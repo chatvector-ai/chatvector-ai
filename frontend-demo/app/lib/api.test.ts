@@ -4,6 +4,7 @@ import {
   sendMessageStream,
   parseRetrievalDebug,
   sendBatchMessage,
+  sendConfigurationCompareBatchMessage,
   sendSynthesizedBatchMessage,
   ChatError,
   StreamingDisabledError,
@@ -524,6 +525,78 @@ describe("sendSynthesizedBatchMessage", () => {
           session_id: "test-session-id",
         }),
       })
+    );
+  });
+});
+
+describe("sendConfigurationCompareBatchMessage", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("sends two query items with debug_retrieval and sparse overrides", async () => {
+    const response = {
+      count: 2,
+      success_count: 2,
+      failure_count: 0,
+      results: [
+        {
+          status: "ok",
+          question: "Q?",
+          doc_ids: ["doc-1"],
+          answer: "A",
+        },
+        {
+          status: "ok",
+          question: "Q?",
+          doc_ids: ["doc-1"],
+          answer: "B",
+        },
+      ],
+    };
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify(response), { status: 200 }),
+    );
+
+    const {
+      createEmptyRetrievalOverrideDraft,
+      setRetrievalOverride,
+    } = await import("./retrievalRequestOverrides");
+
+    let configA = createEmptyRetrievalOverrideDraft();
+    configA = setRetrievalOverride(configA, "hybrid_enabled", true);
+    let configB = createEmptyRetrievalOverrideDraft();
+    configB = setRetrievalOverride(configB, "match_count", 9);
+
+    await sendConfigurationCompareBatchMessage("Q?", ["doc-1"], configA, configB);
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/chat/batch"),
+      expect.objectContaining({
+        body: JSON.stringify({
+          scope: "session",
+          debug_retrieval: true,
+          queries: [
+            {
+              question: "Q?",
+              doc_ids: ["doc-1"],
+              hybrid_enabled: true,
+            },
+            {
+              question: "Q?",
+              doc_ids: ["doc-1"],
+              match_count: 9,
+            },
+          ],
+          session_id: "test-session-id",
+        }),
+      }),
     );
   });
 });

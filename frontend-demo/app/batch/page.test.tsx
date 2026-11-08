@@ -19,10 +19,16 @@ vi.mock("../lib/api", async (importOriginal) => {
     listDocuments: vi.fn(),
     sendBatchMessage: vi.fn(),
     sendSynthesizedBatchMessage: vi.fn(),
+    sendConfigurationCompareBatchMessage: vi.fn(),
   };
 });
 
-import { listDocuments, sendBatchMessage, type BatchChatResponse } from "../lib/api";
+import {
+  listDocuments,
+  sendBatchMessage,
+  sendConfigurationCompareBatchMessage,
+  type BatchChatResponse,
+} from "../lib/api";
 
 const DOCUMENTS = {
   tenant_id: "dev",
@@ -177,6 +183,63 @@ describe("BatchPage", () => {
     await waitFor(() => {
       expect(screen.getByText("Answer 1")).toBeInTheDocument();
     });
+  });
+
+  it("runs configuration compare with debug_retrieval via two sparse configs", async () => {
+    vi.mocked(sendConfigurationCompareBatchMessage).mockResolvedValue({
+      count: 2,
+      success_count: 2,
+      failure_count: 0,
+      results: [
+        {
+          status: "ok",
+          question: "Hybrid?",
+          doc_ids: ["doc-1"],
+          answer: "Answer A",
+          sources: [{ file_name: "a.pdf", score_type: "vector", score: 0.9 }],
+          latency_ms: 120,
+        },
+        {
+          status: "ok",
+          question: "Hybrid?",
+          doc_ids: ["doc-1"],
+          answer: "Answer B",
+          sources: [{ file_name: "a.pdf", score_type: "hybrid_rrf", score: 0.1 }],
+          latency_ms: 140,
+        },
+      ],
+    });
+
+    render(<BatchPage />);
+    await screen.findByText("File 1.pdf");
+
+    await userEvent.click(screen.getByRole("radio", { name: "Config compare" }));
+    await userEvent.click(screen.getAllByRole("checkbox")[0]!);
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Question" }),
+      "Hybrid?",
+    );
+
+    const overrideLabels = screen.getAllByText("Override hybrid retrieval");
+    await userEvent.click(overrideLabels[0]!);
+    const hybridChecks = screen.getAllByRole("checkbox", { name: /Hybrid enabled/i });
+    await userEvent.click(hybridChecks[0]!);
+
+    await userEvent.click(overrideLabels[1]!);
+    const matchCountOverrides = screen.getAllByText("Override match count");
+    await userEvent.click(matchCountOverrides[1]!);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Compare configurations" }),
+    );
+
+    expect(sendConfigurationCompareBatchMessage).toHaveBeenCalledTimes(1);
+    expect(sendBatchMessage).not.toHaveBeenCalled();
+    expect(await screen.findByText("Answer A")).toBeInTheDocument();
+    expect(screen.getByText("Answer B")).toBeInTheDocument();
+    expect(screen.getAllByText("Configuration A").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Configuration B").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/confidence/i)).not.toBeInTheDocument();
   });
 
   it("does not show chat session-scope indicator copy on the batch page", async () => {

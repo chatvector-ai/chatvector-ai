@@ -24,4 +24,10 @@ describe("batchLimits", () => {
     expect(batchSelectionWithinLimit("synthesize", 10)).toBe(true);
     expect(batchSelectionWithinLimit("synthesize", 11)).toBe(false);
   });
+
+  it("uses the synthesize cap for configuration compare", () => {
+    expect(batchSelectionLimit("config-compare")).toBe(BATCH_MAX_SYNTHESIZE_DOC_IDS);
+    expect(batchSelectionWithinLimit("config-compare", 10)).toBe(true);
+    expect(batchSelectionWithinLimit("config-compare", 11)).toBe(false);
+  });
 });

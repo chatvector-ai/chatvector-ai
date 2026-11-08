@@ -15,6 +15,10 @@ import {
   type DocumentScalarMetadata,
 } from "./documentMetadata";
 import { getSessionId } from "./session";
+import {
+  buildConfigurationCompareQueryItem,
+  type RetrievalOverrideDraft,
+} from "./retrievalRequestOverrides";
 
 export type { DocumentScalarMetadata } from "./documentMetadata";
 import { parseSSEStream, type StreamEvent } from "./stream";
@@ -681,6 +685,30 @@ export async function sendSynthesizedBatchMessage(
       ],
     },
     options.sessionId
+  );
+}
+
+/**
+ * Run the same question and document set twice with different explicit retrieval
+ * overrides. Requests `debug_retrieval` for side-by-side inspection.
+ */
+export async function sendConfigurationCompareBatchMessage(
+  question: string,
+  docIds: string[],
+  configA: RetrievalOverrideDraft,
+  configB: RetrievalOverrideDraft,
+  options: { sessionId?: string | null } = {},
+): Promise<BatchChatResponse> {
+  return postBatchChat(
+    {
+      scope: "session",
+      debug_retrieval: true,
+      queries: [
+        buildConfigurationCompareQueryItem(question, docIds, configA),
+        buildConfigurationCompareQueryItem(question, docIds, configB),
+      ],
+    },
+    options.sessionId,
   );
 }
 
