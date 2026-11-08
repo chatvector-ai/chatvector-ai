@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Settings2, X } from "lucide-react";
 import {
-  DEFAULT_DISPLAY_MATCH_COUNT,
   effectiveMatchCount,
   fieldInheritSource,
   inheritSourceLabel,
@@ -94,6 +93,13 @@ export default function AdvancedRetrievalDrawer({
     useState(false);
   const [generationWindowEditorOpen, setGenerationWindowEditorOpen] =
     useState(false);
+  const [matchCountDraft, setMatchCountDraft] = useState<number | null>(null);
+  const [retrievalWindowDraft, setRetrievalWindowDraft] = useState<
+    number | null
+  >(null);
+  const [generationWindowDraft, setGenerationWindowDraft] = useState<
+    number | null
+  >(null);
   const activePreset = selectedPresetName(state);
   const scopeInherit = fieldInheritSource(
     state,
@@ -122,10 +128,8 @@ export default function AdvancedRetrievalDrawer({
   const matchCountExplicit = state.explicit.matchCount;
   const matchCountEditorVisible =
     matchCountExplicit !== undefined || matchCountEditorOpen;
-  const displayMatchCount =
-    matchCountExplicit !== undefined
-      ? effectiveMatchCount(state)
-      : DEFAULT_DISPLAY_MATCH_COUNT;
+  const committedMatchCount =
+    matchCountExplicit !== undefined ? effectiveMatchCount(state) : null;
   const metadataKeys = useMemo(
     () => collectMetadataKeys(metadataCorpus),
     [metadataCorpus]
@@ -398,9 +402,6 @@ export default function AdvancedRetrievalDrawer({
                 </div>
                 <p className="mb-2 text-muted" data-testid="match-count-inherit-label">
                   {inheritSourceLabel(matchCountInherit)}
-                  {matchCountInherit === "process-default"
-                    ? ` (${DEFAULT_DISPLAY_MATCH_COUNT})`
-                    : null}
                 </p>
                 {matchCountEditorVisible ? (
                   <div className="flex items-center gap-3">
@@ -410,13 +411,21 @@ export default function AdvancedRetrievalDrawer({
                       min={MIN_MATCH_COUNT}
                       max={MAX_MATCH_COUNT}
                       step={1}
-                      value={displayMatchCount}
-                      onChange={(e) =>
-                        onMatchCountChange(Number(e.target.value))
+                      value={
+                        committedMatchCount ??
+                        matchCountDraft ??
+                        MIN_MATCH_COUNT
                       }
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        setMatchCountDraft(next);
+                        onMatchCountChange(next);
+                      }}
                       aria-valuemin={MIN_MATCH_COUNT}
                       aria-valuemax={MAX_MATCH_COUNT}
-                      aria-valuenow={displayMatchCount}
+                      aria-valuenow={
+                        committedMatchCount ?? matchCountDraft ?? undefined
+                      }
                       className="h-1.5 flex-1 accent-[color:var(--accent)]"
                     />
                     <input
@@ -424,10 +433,14 @@ export default function AdvancedRetrievalDrawer({
                       min={MIN_MATCH_COUNT}
                       max={MAX_MATCH_COUNT}
                       step={1}
-                      value={displayMatchCount}
-                      onChange={(e) =>
-                        onMatchCountChange(Number(e.target.value))
-                      }
+                      value={committedMatchCount ?? matchCountDraft ?? ""}
+                      placeholder="—"
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        if (Number.isNaN(next)) return;
+                        setMatchCountDraft(next);
+                        onMatchCountChange(next);
+                      }}
                       aria-label="Match count"
                       className="w-14 rounded-md border border-border bg-background px-2 py-1 text-center text-xs text-foreground outline-none focus:border-accent"
                     />
@@ -436,7 +449,10 @@ export default function AdvancedRetrievalDrawer({
                   <button
                     type="button"
                     data-testid="match-count-set-explicit"
-                    onClick={() => setMatchCountEditorOpen(true)}
+                    onClick={() => {
+                      setMatchCountDraft(null);
+                      setMatchCountEditorOpen(true);
+                    }}
                     className="text-accent hover:underline"
                   >
                     Set match count explicitly
@@ -617,7 +633,10 @@ export default function AdvancedRetrievalDrawer({
                       </p>
                       <button
                         type="button"
-                        onClick={() => setRetrievalWindowEditorOpen(true)}
+                        onClick={() => {
+                          setRetrievalWindowDraft(null);
+                          setRetrievalWindowEditorOpen(true);
+                        }}
                         className="text-accent hover:underline"
                       >
                         Set retrieval history window
@@ -628,10 +647,18 @@ export default function AdvancedRetrievalDrawer({
                       type="number"
                       min={0}
                       max={100}
-                      value={state.explicit.retrievalHistoryWindow ?? 4}
-                      onChange={(e) =>
-                        onRetrievalHistoryWindowChange(Number(e.target.value))
+                      value={
+                        state.explicit.retrievalHistoryWindow ??
+                        retrievalWindowDraft ??
+                        ""
                       }
+                      placeholder="—"
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        if (Number.isNaN(next)) return;
+                        setRetrievalWindowDraft(next);
+                        onRetrievalHistoryWindowChange(next);
+                      }}
                       className="w-24 rounded-md border border-border bg-background px-2 py-1 text-foreground outline-none focus:border-accent"
                     />
                   )}
@@ -653,7 +680,10 @@ export default function AdvancedRetrievalDrawer({
                       </p>
                       <button
                         type="button"
-                        onClick={() => setGenerationWindowEditorOpen(true)}
+                        onClick={() => {
+                          setGenerationWindowDraft(null);
+                          setGenerationWindowEditorOpen(true);
+                        }}
                         className="text-accent hover:underline"
                       >
                         Set generation history window
@@ -664,10 +694,18 @@ export default function AdvancedRetrievalDrawer({
                       type="number"
                       min={0}
                       max={100}
-                      value={state.explicit.generationHistoryWindow ?? 8}
-                      onChange={(e) =>
-                        onGenerationHistoryWindowChange(Number(e.target.value))
+                      value={
+                        state.explicit.generationHistoryWindow ??
+                        generationWindowDraft ??
+                        ""
                       }
+                      placeholder="—"
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        if (Number.isNaN(next)) return;
+                        setGenerationWindowDraft(next);
+                        onGenerationHistoryWindowChange(next);
+                      }}
                       className="w-24 rounded-md border border-border bg-background px-2 py-1 text-foreground outline-none focus:border-accent"
                     />
                   )}

@@ -233,6 +233,63 @@ describe("AdvancedRetrievalDrawer", () => {
     expect(body.match_count).toBe(11);
   });
 
+  it("omitted match count shows inherit label without a concrete digit", () => {
+    render(<AdvancedRetrievalDrawer {...baseProps} open />);
+
+    const label = screen.getByTestId("match-count-inherit-label");
+    expect(label).toHaveTextContent(/process default/i);
+    expect(label.textContent).not.toMatch(/\(\s*\d+\s*\)/);
+  });
+
+  it("does not commit match count until the user sets a value", async () => {
+    let latestState: AdvancedRetrievalState = { explicit: {} };
+    function DrawerProbe() {
+      const [state, setState] = useState<AdvancedRetrievalState>({ explicit: {} });
+      latestState = state;
+      return (
+        <AdvancedRetrievalDrawer
+          {...baseProps}
+          open
+          state={state}
+          onMatchCountChange={(matchCount) =>
+            setState((prev) => ({
+              explicit: { ...prev.explicit, matchCount },
+            }))
+          }
+        />
+      );
+    }
+
+    render(<DrawerProbe />);
+    await userEvent.click(screen.getByTestId("match-count-set-explicit"));
+    expect(latestState.explicit.matchCount).toBeUndefined();
+    expect(
+      buildChatRequestBody({ question: "q", docId: "d", retrieval: latestState })
+    ).not.toHaveProperty("match_count");
+  });
+
+  it("history window editors stay unset until the user enters a value", async () => {
+    const onRetrieval = vi.fn();
+    const onGeneration = vi.fn();
+    render(
+      <AdvancedRetrievalDrawer
+        {...baseProps}
+        open
+        onRetrievalHistoryWindowChange={onRetrieval}
+        onGenerationHistoryWindowChange={onGeneration}
+      />
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /set retrieval history window/i })
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /set generation history window/i })
+    );
+    expect(onRetrieval).not.toHaveBeenCalled();
+    expect(onGeneration).not.toHaveBeenCalled();
+  });
+
   it("does not select session or tenant scope when only a preset is active", () => {
     render(
       <AdvancedRetrievalDrawer
