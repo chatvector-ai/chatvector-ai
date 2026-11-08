@@ -48,3 +48,52 @@ async def test_list_documents_requires_auth_tenant_context():
             )
 
     assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_list_tenant_document_summaries_includes_error_from_row():
+    from db.sqlalchemy_service import SQLAlchemyService
+    from unittest.mock import MagicMock
+
+    document = MagicMock()
+    document.id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    document.file_name = "broken.pdf"
+    document.status = "failed"
+    document.doc_metadata = {}
+    document.status_detail = None
+    document.error = {"stage": "embedding", "message": "boom"}
+    document.created_at = None
+    document.updated_at = None
+
+    class _ScalarResult:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return [document]
+
+    class _Session:
+        async def execute(self, _stmt):
+            return _ScalarResult()
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+    svc = SQLAlchemyService.__new__(SQLAlchemyService)
+    svc.async_session = lambda: _Session()
+
+    summaries = await svc.list_tenant_document_summaries("tenant-a")
+    assert summaries == [
+        {
+            "document_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "file_name": "broken.pdf",
+            "status": "failed",
+            "metadata": {},
+            "created_at": None,
+            "updated_at": None,
+            "error": {"stage": "embedding", "message": "boom"},
+        }
+    ]
