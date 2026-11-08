@@ -1,8 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
+
+vi.mock("../lib/session", () => ({ getSessionId: () => "test-session-id" }));
 import { useState } from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AdvancedRetrievalState, RerankerProvider } from "../lib/advancedRetrieval";
+import { buildChatRequestBody } from "../lib/buildChatBody";
 import type { DocumentScalarMetadata } from "../lib/documentMetadata";
 import AdvancedRetrievalDrawer from "./AdvancedRetrievalDrawer";
 
@@ -164,6 +167,70 @@ describe("AdvancedRetrievalDrawer", () => {
       "alpha"
     );
     expect(onPresetChange).toHaveBeenCalledWith("alpha");
+  });
+
+  it("labels each omitted boolean independently when hybrid is explicit", () => {
+    render(
+      <AdvancedRetrievalDrawer
+        {...baseProps}
+        open
+        state={{ explicit: { hybridEnabled: true } }}
+      />
+    );
+
+    expect(screen.getByTestId("hybrid-inherit-label")).toHaveTextContent(
+      /Explicit override/
+    );
+    expect(screen.getByTestId("reranking-inherit-label")).toHaveTextContent(
+      /Process default/
+    );
+    expect(screen.getByTestId("query-transformation-inherit-label")).toHaveTextContent(
+      /Process default/
+    );
+    expect(screen.getByTestId("history-aware-inherit-label")).toHaveTextContent(
+      /Process default/
+    );
+  });
+
+  it("with empty preset discovery, explicit match count is sent without preset", async () => {
+    let latestState: AdvancedRetrievalState = { explicit: {} };
+    function DrawerWithMatchCount() {
+      const [state, setState] = useState<AdvancedRetrievalState>({ explicit: {} });
+      latestState = state;
+      return (
+        <AdvancedRetrievalDrawer
+          {...baseProps}
+          open
+          availablePresets={[]}
+          state={state}
+          onMatchCountChange={(matchCount) =>
+            setState((prev) => ({
+              explicit: { ...prev.explicit, matchCount },
+            }))
+          }
+        />
+      );
+    }
+
+    render(<DrawerWithMatchCount />);
+
+    expect(screen.getByTestId("retrieval-preset-picker")).toBeInTheDocument();
+    await userEvent.click(screen.getByTestId("match-count-set-explicit"));
+    const numberInput = screen.getByRole("spinbutton", { name: /match count/i });
+    fireEvent.change(numberInput, { target: { value: "11" } });
+
+    await waitFor(() => {
+      expect(latestState.explicit.matchCount).toBe(11);
+    });
+
+    const body = buildChatRequestBody({
+      question: "q",
+      docId: "doc-1",
+      retrieval: latestState,
+    });
+
+    expect(body).not.toHaveProperty("retrieval");
+    expect(body.match_count).toBe(11);
   });
 
   it("does not select session or tenant scope when only a preset is active", () => {

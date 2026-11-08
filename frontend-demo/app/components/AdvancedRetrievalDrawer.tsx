@@ -107,6 +107,18 @@ export default function AdvancedRetrievalDrawer({
     state,
     state.explicit.hybridEnabled !== undefined
   );
+  const rerankingInherit = fieldInheritSource(
+    state,
+    state.explicit.rerankingEnabled !== undefined
+  );
+  const queryTransformationInherit = fieldInheritSource(
+    state,
+    state.explicit.queryTransformationEnabled !== undefined
+  );
+  const historyAwareInherit = fieldInheritSource(
+    state,
+    state.explicit.historyAwareRetrieval !== undefined
+  );
   const matchCountExplicit = state.explicit.matchCount;
   const matchCountEditorVisible =
     matchCountExplicit !== undefined || matchCountEditorOpen;
@@ -433,25 +445,40 @@ export default function AdvancedRetrievalDrawer({
               </section>
 
               <section className="space-y-3">
-                <p className="text-muted">{inheritSourceLabel(hybridInherit)}</p>
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={state.explicit.hybridEnabled === true}
-                    onChange={(e) => onHybridEnabledChange(e.target.checked)}
-                    className="h-3.5 w-3.5 accent-[color:var(--accent)]"
-                  />
-                  <span className="font-medium text-foreground">Hybrid search</span>
-                </label>
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={state.explicit.rerankingEnabled === true}
-                    onChange={(e) => onRerankingEnabledChange(e.target.checked)}
-                    className="h-3.5 w-3.5 accent-[color:var(--accent)]"
-                  />
-                  <span className="font-medium text-foreground">Reranking</span>
-                </label>
+                <div>
+                  <p
+                    className="mb-1 text-muted"
+                    data-testid="hybrid-inherit-label"
+                  >
+                    {inheritSourceLabel(hybridInherit)}
+                  </p>
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={state.explicit.hybridEnabled === true}
+                      onChange={(e) => onHybridEnabledChange(e.target.checked)}
+                      className="h-3.5 w-3.5 accent-[color:var(--accent)]"
+                    />
+                    <span className="font-medium text-foreground">Hybrid search</span>
+                  </label>
+                </div>
+                <div>
+                  <p
+                    className="mb-1 text-muted"
+                    data-testid="reranking-inherit-label"
+                  >
+                    {inheritSourceLabel(rerankingInherit)}
+                  </p>
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={state.explicit.rerankingEnabled === true}
+                      onChange={(e) => onRerankingEnabledChange(e.target.checked)}
+                      className="h-3.5 w-3.5 accent-[color:var(--accent)]"
+                    />
+                    <span className="font-medium text-foreground">Reranking</span>
+                  </label>
+                </div>
                 <div>
                   <p className="mb-2 font-medium text-foreground">Reranker provider</p>
                   {state.explicit.rerankerProvider === undefined ? (
@@ -495,19 +522,27 @@ export default function AdvancedRetrievalDrawer({
               </section>
 
               <section className="space-y-3">
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={state.explicit.queryTransformationEnabled === true}
-                    onChange={(e) =>
-                      onQueryTransformationEnabledChange(e.target.checked)
-                    }
-                    className="h-3.5 w-3.5 accent-[color:var(--accent)]"
-                  />
-                  <span className="font-medium text-foreground">
-                    Query transformation
-                  </span>
-                </label>
+                <div>
+                  <p
+                    className="mb-1 text-muted"
+                    data-testid="query-transformation-inherit-label"
+                  >
+                    {inheritSourceLabel(queryTransformationInherit)}
+                  </p>
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={state.explicit.queryTransformationEnabled === true}
+                      onChange={(e) =>
+                        onQueryTransformationEnabledChange(e.target.checked)
+                      }
+                      className="h-3.5 w-3.5 accent-[color:var(--accent)]"
+                    />
+                    <span className="font-medium text-foreground">
+                      Query transformation
+                    </span>
+                  </label>
+                </div>
                 <label className="block">
                   <span className="mb-1 block font-medium text-foreground">
                     Transform strategy
@@ -544,19 +579,27 @@ export default function AdvancedRetrievalDrawer({
               </section>
 
               <section className="space-y-3">
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={state.explicit.historyAwareRetrieval === true}
-                    onChange={(e) =>
-                      onHistoryAwareRetrievalChange(e.target.checked)
-                    }
-                    className="h-3.5 w-3.5 accent-[color:var(--accent)]"
-                  />
-                  <span className="font-medium text-foreground">
-                    History-aware retrieval
-                  </span>
-                </label>
+                <div>
+                  <p
+                    className="mb-1 text-muted"
+                    data-testid="history-aware-inherit-label"
+                  >
+                    {inheritSourceLabel(historyAwareInherit)}
+                  </p>
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={state.explicit.historyAwareRetrieval === true}
+                      onChange={(e) =>
+                        onHistoryAwareRetrievalChange(e.target.checked)
+                      }
+                      className="h-3.5 w-3.5 accent-[color:var(--accent)]"
+                    />
+                    <span className="font-medium text-foreground">
+                      History-aware retrieval
+                    </span>
+                  </label>
+                </div>
                 <div>
                   <span className="mb-1 block font-medium text-foreground">
                     Retrieval history window
