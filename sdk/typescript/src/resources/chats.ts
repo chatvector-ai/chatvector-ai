@@ -215,6 +215,7 @@ function mapChatSource(source: Record<string, unknown>): ChatSource {
   const result: ChatSource = {
     fileName: nullableString(source.file_name),
     pageNumber: nullableNumber(source.page_number),
+    pageEnd: nullableNumber(source.page_end),
     chunkIndex: nullableNumber(source.chunk_index),
   };
   if (source.score === null || typeof source.score === "number") {

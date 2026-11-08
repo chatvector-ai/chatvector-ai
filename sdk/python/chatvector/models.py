@@ -119,6 +119,7 @@ class ChatSource:
     file_name: str | None
     page_number: int | None
     chunk_index: int | None
+    page_end: int | None = None
     score: float | None = None
     score_type: str | None = None
     vector_score: float | None = None
@@ -134,6 +135,7 @@ class ChatSource:
         return cls(
             file_name=_optional_str(payload.get("file_name")),
             page_number=_optional_int(payload.get("page_number")),
+            page_end=_optional_int(payload.get("page_end")),
             chunk_index=_optional_int(payload.get("chunk_index")),
             score=_optional_float(payload.get("score")),
             score_type=_optional_str(payload.get("score_type")),
@@ -151,6 +153,8 @@ class ChatSource:
             "page_number": self.page_number,
             "chunk_index": self.chunk_index,
         }
+        if self.page_end is not None:
+            d["page_end"] = self.page_end
         if self.score is not None:
             d["score"] = self.score
         if self.score_type is not None:

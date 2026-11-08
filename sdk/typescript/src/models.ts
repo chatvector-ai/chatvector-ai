@@ -111,6 +111,7 @@ export type BatchChatRequest = {
 export type ChatSource = {
   fileName: string | null;
   pageNumber: number | null;
+  pageEnd?: number | null;
   chunkIndex: number | null;
   score?: number | null;
   scoreType?: string | null;

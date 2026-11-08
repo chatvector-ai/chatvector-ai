@@ -16,6 +16,15 @@ import {
 import type { ChatSource } from "./api";
 
 describe("citations helpers", () => {
+  it("deduplicates sources that share a start page but differ at page_end", () => {
+    const sources: ChatSource[] = [
+      { file_name: "a.pdf", page_number: 3, page_end: 4, chunk_index: 0 },
+      { file_name: "a.pdf", page_number: 3, page_end: 5, chunk_index: 0 },
+    ];
+
+    expect(deduplicatedSources(sources)).toEqual(sources);
+  });
+
   it("deduplicates by file, page, and chunk index", () => {
     const sources: ChatSource[] = [
       { file_name: "a.pdf", page_number: 2, chunk_index: 0 },
@@ -265,6 +274,26 @@ describe("citations helpers", () => {
     ).toBe("report.pdf · p.2 · chunk 3 · score 0.77");
   });
 
+  it("formats inclusive page span on the visible citation line", () => {
+    expect(
+      formatSourceCitation({
+        file_name: "report.pdf",
+        page_number: 1,
+        page_end: 2,
+        chunk_index: 0,
+      }),
+    ).toBe("report.pdf · p.1-2 · chunk 0");
+
+    expect(
+      formatSourceCitation({
+        file_name: "report.pdf",
+        page_number: 7,
+        page_end: null,
+        chunk_index: 1,
+      }),
+    ).toBe("report.pdf · p.7 · chunk 1");
+  });
+
   it("formats visible source citation with file and location without score", () => {
     expect(
       formatSourceCitation({
@@ -283,6 +312,16 @@ describe("citations helpers", () => {
         score: 0.88,
       })
     ).toBe("report.pdf · p.4 · chunk 2");
+
+    expect(
+      formatSourceCitation({
+        file_name: "report.pdf",
+        page_number: 1,
+        page_end: 2,
+        chunk_index: 0,
+        score: 0.77,
+      }),
+    ).toBe("report.pdf · p.1-2 · chunk 0");
   });
 
   it("formats deduplicated citation summary and returns null when empty", () => {
