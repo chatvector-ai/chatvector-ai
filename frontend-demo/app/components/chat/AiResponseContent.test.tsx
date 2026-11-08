@@ -22,6 +22,29 @@ function executableMarkup(container: HTMLElement) {
 }
 
 describe("AiResponseContent", () => {
+  it("shows anchor_document_excluded_by_filter using the API message", () => {
+    const message =
+      "The requested document is not in the retrieval scope after applying metadata_filter.";
+    render(
+      <AiResponseContent
+        error={{ code: "anchor_document_excluded_by_filter", message }}
+      />
+    );
+
+    expect(screen.getByText(message)).toBeInTheDocument();
+  });
+
+  it("shows no_documents_in_scope using the API message", () => {
+    const message = "No documents available for retrieval in the requested scope.";
+    render(
+      <AiResponseContent
+        error={{ code: "no_documents_in_scope", message }}
+      />
+    );
+
+    expect(screen.getByText(message)).toBeInTheDocument();
+  });
+
   it("renders file and chunk on the visible citation line without score or confidence while inspector is closed", () => {
     render(
       <AiResponseContent

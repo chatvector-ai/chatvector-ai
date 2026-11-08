@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { PanelLeft } from "lucide-react";
 import UploadModal from "../components/UploadModal";
 import MessageList from "../components/chat/MessageList";
@@ -11,9 +11,20 @@ import { InlineAlert } from "../components/ui/InlineAlert";
 import { useChat } from "../lib/hooks/useChat";
 import { useAdvancedRetrieval } from "../lib/hooks/useAdvancedRetrieval";
 import { useSessionManager } from "../lib/hooks/useSessionManager";
-import { effectiveScope } from "../lib/advancedRetrieval";
+import {
+  effectiveScope,
+  hasActiveMetadataFilter,
+} from "../lib/advancedRetrieval";
+import { formatMetadataPair } from "../lib/documentMetadata";
+import {
+  metadataCorpusForSessionDocuments,
+  metadataCorpusFromDocumentList,
+} from "../lib/metadataCorpus";
 import {
   fetchRetrievalDiscovery,
+  getSession,
+  listDocuments,
+  type DocumentSummary,
   type RetrievalDiscoveryResponse,
 } from "../lib/api";
 
@@ -26,6 +37,8 @@ export default function ChatPage() {
     presets: [],
     reranker_providers: ["similarity"],
   });
+  const [documentSummaries, setDocumentSummaries] = useState<DocumentSummary[]>([]);
+  const [sessionDocumentIds, setSessionDocumentIds] = useState<string[]>([]);
   const uploadButtonRef = useRef<HTMLButtonElement>(null);
   const {
     sessions,
@@ -54,6 +67,7 @@ export default function ChatPage() {
     setHistoryAwareRetrieval,
     setRetrievalHistoryWindow,
     setGenerationHistoryWindow,
+    setMetadataFilter,
   } = useAdvancedRetrieval();
 
   useEffect(() => {
@@ -89,7 +103,51 @@ export default function ChatPage() {
     inspectMode,
   );
 
+  const attachedDocumentId = attachment?.documentId;
+  const attachedDocumentStatus = attachment?.status;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      const [documentsResult, sessionResult] = await Promise.all([
+        listDocuments().catch(() => null),
+        activeSessionId
+          ? getSession(activeSessionId).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+
+      if (cancelled) return;
+
+      setDocumentSummaries(documentsResult?.documents ?? []);
+      setSessionDocumentIds(sessionResult?.document_ids ?? []);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionId, attachedDocumentId, attachedDocumentStatus]);
+
   const indicatorScope = effectiveScope(retrievalState);
+  const metadataCorpus = useMemo(() => {
+    if (indicatorScope === "tenant") {
+      return metadataCorpusFromDocumentList(documentSummaries);
+    }
+    return metadataCorpusForSessionDocuments(
+      sessionDocumentIds,
+      documentSummaries
+    );
+  }, [indicatorScope, documentSummaries, sessionDocumentIds]);
+
+  const metadataFilterSummary = useMemo(() => {
+    if (!hasActiveMetadataFilter(retrievalState)) return null;
+    const filter = retrievalState.explicit.metadataFilter;
+    if (!filter) return null;
+    const entries = Object.entries(filter);
+    if (entries.length !== 1) return null;
+    const [key, value] = entries[0];
+    return formatMetadataPair(key, value);
+  }, [retrievalState]);
 
   if (!isLoaded || !retrievalLoaded) {
     return (
@@ -234,6 +292,8 @@ export default function ChatPage() {
               onHistoryAwareRetrievalChange={setHistoryAwareRetrieval}
               onRetrievalHistoryWindowChange={setRetrievalHistoryWindow}
               onGenerationHistoryWindowChange={setGenerationHistoryWindow}
+              onMetadataFilterChange={setMetadataFilter}
+              metadataCorpus={metadataCorpus}
               availableRerankerProviders={discovery.reranker_providers}
               inspectMode={inspectMode}
               onInspectModeChange={setInspectMode}
@@ -257,6 +317,7 @@ export default function ChatPage() {
             uploadButtonRef={uploadButtonRef}
             stopStreaming={stopStreaming}
             scope={indicatorScope}
+            metadataFilterSummary={metadataFilterSummary}
           />
         </div>
       </div>

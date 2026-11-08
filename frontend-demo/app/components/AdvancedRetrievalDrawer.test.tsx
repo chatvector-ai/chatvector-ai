@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
+import { useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { RerankerProvider } from "../lib/advancedRetrieval";
+import type { AdvancedRetrievalState, RerankerProvider } from "../lib/advancedRetrieval";
+import type { DocumentScalarMetadata } from "../lib/documentMetadata";
 import AdvancedRetrievalDrawer from "./AdvancedRetrievalDrawer";
 
 const baseProps = {
@@ -18,6 +20,8 @@ const baseProps = {
   onHistoryAwareRetrievalChange: vi.fn(),
   onRetrievalHistoryWindowChange: vi.fn(),
   onGenerationHistoryWindowChange: vi.fn(),
+  onMetadataFilterChange: vi.fn(),
+  metadataCorpus: [],
   availableRerankerProviders: ["similarity"] satisfies RerankerProvider[],
 };
 
@@ -50,6 +54,57 @@ describe("AdvancedRetrievalDrawer", () => {
     expect(screen.queryByText(/llm provider/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/chunk strategy/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/graphrag/i)).not.toBeInTheDocument();
+  });
+
+  it("shows empty metadata controls when the corpus has no keys", () => {
+    render(<AdvancedRetrievalDrawer {...baseProps} open />);
+
+    expect(
+      screen.getByText("No metadata on the current documents.")
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("metadata-filter-key")).not.toBeInTheDocument();
+  });
+
+  it("emits metadata_filter when a key and value are chosen", async () => {
+    const onMetadataFilterChange = vi.fn();
+    function DrawerWithFilterState() {
+      const [state, setState] = useState<AdvancedRetrievalState>({ explicit: {} });
+      return (
+        <AdvancedRetrievalDrawer
+          {...baseProps}
+          open
+          state={state}
+          onMetadataFilterChange={(filter: DocumentScalarMetadata | undefined) => {
+            onMetadataFilterChange(filter);
+            setState({
+              explicit: filter ? { metadataFilter: filter } : {},
+            });
+          }}
+          metadataCorpus={[
+            { metadata: { department: "legal" } },
+            { metadata: { department: "hr" } },
+          ]}
+        />
+      );
+    }
+
+    render(<DrawerWithFilterState />);
+
+    await userEvent.selectOptions(
+      screen.getByTestId("metadata-filter-key"),
+      "department"
+    );
+    expect(onMetadataFilterChange).toHaveBeenCalledWith({
+      department: "hr",
+    });
+
+    await userEvent.selectOptions(
+      screen.getByTestId("metadata-filter-value"),
+      "legal"
+    );
+    expect(onMetadataFilterChange).toHaveBeenLastCalledWith({
+      department: "legal",
+    });
   });
 
   it("marks hybrid explicit when toggled", async () => {

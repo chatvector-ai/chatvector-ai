@@ -20,6 +20,7 @@ describe("buildChatRequestBody", () => {
     expect(body).not.toHaveProperty("scope");
     expect(body).not.toHaveProperty("hybrid_enabled");
     expect(body).not.toHaveProperty("history");
+    expect(body).not.toHaveProperty("metadata_filter");
   });
 
   it("includes only fields the user explicitly set", () => {
@@ -50,6 +51,18 @@ describe("buildChatRequestBody", () => {
 
     expect(body.scope).toBe("tenant");
     expect(body.match_count).toBe(9);
+  });
+
+  it("sends metadata_filter when explicitly set", () => {
+    const body = buildChatRequestBody({
+      question: "q",
+      docId: "doc-1",
+      retrieval: {
+        explicit: { metadataFilter: { department: "legal" } },
+      },
+    });
+
+    expect(body.metadata_filter).toEqual({ department: "legal" });
   });
 
   it("adds debug_retrieval without implicit retrieval fields", () => {

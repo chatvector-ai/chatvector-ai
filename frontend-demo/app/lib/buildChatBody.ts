@@ -47,6 +47,12 @@ export function buildChatRequestBody(
   if (ex.queryTransformationStrategy !== undefined) {
     body.query_transformation_strategy = ex.queryTransformationStrategy;
   }
+  if (
+    ex.metadataFilter !== undefined &&
+    Object.keys(ex.metadataFilter).length > 0
+  ) {
+    body.metadata_filter = ex.metadataFilter;
+  }
 
   const history: Record<string, unknown> = {};
   if (ex.historyAwareRetrieval !== undefined) {
