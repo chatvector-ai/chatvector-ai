@@ -142,6 +142,7 @@ async function restoreSessionAttachment(
         ...(status.queue_position !== undefined
           ? { queue_position: status.queue_position }
           : {}),
+        ...(status.metadata !== undefined ? { metadata: status.metadata } : {}),
       },
       notice: null,
       replacementError:

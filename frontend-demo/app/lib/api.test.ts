@@ -936,6 +936,40 @@ describe("getDocumentStatus", () => {
     });
   });
 
+  it("parses scalar metadata from status responses", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: "completed",
+          file_name: "notes.txt",
+          metadata: { department: "legal", year: 2026, active: true },
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(getDocumentStatus("/documents/doc-123/status")).resolves.toEqual({
+      status: "completed",
+      file_name: "notes.txt",
+      metadata: { department: "legal", year: 2026, active: true },
+    });
+  });
+
+  it("drops non-scalar metadata from status responses", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: "completed",
+          metadata: { nested: { bad: true } },
+        }),
+        { status: 200 }
+      )
+    );
+
+    const result = await getDocumentStatus("/documents/doc-123/status");
+    expect(result.metadata).toBeUndefined();
+  });
+
   it("omits a missing or blank file_name", async () => {
     for (const fileName of [undefined, "", "   "]) {
       vi.mocked(globalThis.fetch).mockResolvedValue(

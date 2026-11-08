@@ -518,6 +518,7 @@ export type DocumentStatusPayload = {
    * non-blank name, so the chip can fall back without treating "" as a label.
    */
   file_name?: string;
+  metadata?: DocumentScalarMetadata;
 };
 
 function parseStatusFileName(raw: unknown): string | undefined {
@@ -591,6 +592,7 @@ export async function getDocumentStatus(
   const updatedAt = data?.updated_at as string | null | undefined;
   const queuePosition = parseQueuePosition(data?.queue_position);
   const fileName = parseStatusFileName(data?.file_name);
+  const metadata = parseDocumentScalarMetadata(data?.metadata);
   return {
     status,
     ...(statusDetail !== undefined ? { status_detail: statusDetail } : {}),
@@ -601,6 +603,7 @@ export async function getDocumentStatus(
     ...(updatedAt !== undefined ? { updated_at: updatedAt } : {}),
     ...(queuePosition !== undefined ? { queue_position: queuePosition } : {}),
     ...(fileName !== undefined ? { file_name: fileName } : {}),
+    ...(metadata !== undefined ? { metadata } : {}),
   };
 }
 
