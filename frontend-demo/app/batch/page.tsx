@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Layers, Loader2, FileText } from "lucide-react";
 import {
   sendBatchMessage,
+  sendConfigurationCompareBatchMessage,
   sendSynthesizedBatchMessage,
   listDocuments,
   type BatchResultItem,
@@ -17,6 +18,10 @@ import {
 import { BatchResultCard } from "../components/batch/BatchResultCard";
 import BatchPageSkeleton from "../components/batch/BatchPageSkeleton";
 import RetrievalSettingsPanel from "../components/RetrievalSettingsPanel";
+import RetrievalOverrideEditor, {
+  emptyRetrievalOverrideDraft,
+} from "../components/RetrievalOverrideEditor";
+import type { RetrievalOverrideDraft } from "../lib/retrievalRequestOverrides";
 import BatchResultSkeleton from "./BatchResultSkeleton";
 import DocumentMetadataPairs from "../components/DocumentMetadataPairs";
 import type { DocumentScalarMetadata } from "../lib/documentMetadata";
@@ -33,7 +38,7 @@ type BatchDocument = {
   metadata?: DocumentScalarMetadata;
 };
 
-type BatchMode = "compare" | "synthesize";
+type BatchMode = "compare" | "synthesize" | "config-compare";
 
 type ActiveBatchRequest = {
   mode: BatchMode;
@@ -44,6 +49,7 @@ type ActiveBatchRequest = {
 const BATCH_MODE_OPTIONS: { value: BatchMode; label: string }[] = [
   { value: "compare", label: "Compare" },
   { value: "synthesize", label: "Synthesize" },
+  { value: "config-compare", label: "Config compare" },
 ];
 
 export default function BatchPage() {
@@ -64,6 +70,12 @@ export default function BatchPage() {
   } | null>(null);
   const [activeRequest, setActiveRequest] = useState<ActiveBatchRequest | null>(
     null,
+  );
+  const [configA, setConfigA] = useState<RetrievalOverrideDraft>(
+    emptyRetrievalOverrideDraft(),
+  );
+  const [configB, setConfigB] = useState<RetrievalOverrideDraft>(
+    emptyRetrievalOverrideDraft(),
   );
   const inflightRef = useRef(false);
 
@@ -172,10 +184,17 @@ export default function BatchPage() {
               matchCount: settings.matchCount,
               scope: "session",
             })
-          : await sendSynthesizedBatchMessage(request.question, request.docIds, {
-              matchCount: settings.matchCount,
-              scope: "session",
-            });
+          : request.mode === "synthesize"
+            ? await sendSynthesizedBatchMessage(request.question, request.docIds, {
+                matchCount: settings.matchCount,
+                scope: "session",
+              })
+            : await sendConfigurationCompareBatchMessage(
+                request.question,
+                request.docIds,
+                configA,
+                configB,
+              );
       setResults(response.results);
       setSummary({
         count: response.count,
@@ -246,6 +265,15 @@ export default function BatchPage() {
                   combined answer with citations from every contributing file — best
                   for cross-document questions. Up to{" "}
                   {batchSelectionLimit("synthesize")} documents per query.
+                </p>
+                <p className="mt-3">
+                  <strong className="font-medium text-foreground/80">
+                    Config compare
+                  </strong>{" "}
+                  runs one question across the same selected documents under two
+                  explicit retrieval configurations and shows both answers side by side.
+                  This is a reference view, not the eval CLI. Up to{" "}
+                  {batchSelectionLimit("config-compare")} documents per run.
                 </p>
               </InfoPopover>
             </div>
@@ -335,11 +363,35 @@ export default function BatchPage() {
             </ul>
           </div>
 
-          <RetrievalSettingsPanel
-            settings={settings}
-            onMatchCountChange={setMatchCount}
-            showScope={false}
-          />
+          {mode === "config-compare" ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted">
+                Reference comparison only — not the eval CLI and experiments are not
+                saved. Set only the retrieval fields each side should override; omitted
+                fields stay on process defaults.
+              </p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <RetrievalOverrideEditor
+                  title="Configuration A"
+                  draft={configA}
+                  onChange={setConfigA}
+                  disabled={inflight}
+                />
+                <RetrievalOverrideEditor
+                  title="Configuration B"
+                  draft={configB}
+                  onChange={setConfigB}
+                  disabled={inflight}
+                />
+              </div>
+            </div>
+          ) : (
+            <RetrievalSettingsPanel
+              settings={settings}
+              onMatchCountChange={setMatchCount}
+              showScope={false}
+            />
+          )}
 
           <div>
             <button
@@ -353,7 +405,9 @@ export default function BatchPage() {
                 ? "Querying..."
                 : mode === "compare"
                   ? "Run batch query"
-                  : "Synthesize answer"}
+                  : mode === "synthesize"
+                    ? "Synthesize answer"
+                    : "Compare configurations"}
             </button>
           </div>
 
@@ -384,8 +438,27 @@ export default function BatchPage() {
               </div>
             )}
 
+            {inflight && renderMode === "config-compare" && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <BatchResultSkeleton />
+                <BatchResultSkeleton />
+              </div>
+            )}
+
             {!inflight && results && renderMode === "synthesize" && results[0] && (
               <BatchResultCard result={results[0]} title={synthesizeTitle} />
+            )}
+
+            {!inflight && results && renderMode === "config-compare" && (
+              <div className="grid gap-4 md:grid-cols-2">
+                {results.slice(0, 2).map((result, index) => (
+                  <BatchResultCard
+                    key={`config-${index}`}
+                    result={result}
+                    title={index === 0 ? "Configuration A" : "Configuration B"}
+                  />
+                ))}
+              </div>
             )}
 
             {!inflight && results && renderMode === "compare" && (

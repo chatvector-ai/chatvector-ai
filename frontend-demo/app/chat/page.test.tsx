@@ -219,4 +219,12 @@ describe("ChatPage session navigation", () => {
       "11111111-aaaa-bbbb-cccc-000000000001"
     );
   });
+
+  it("does not show batch-style configuration compare controls", () => {
+    render(<ChatPage />);
+
+    expect(screen.queryByRole("radio", { name: "Config compare" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Configuration A")).not.toBeInTheDocument();
+    expect(screen.queryByText("Configuration B")).not.toBeInTheDocument();
+  });
 });
