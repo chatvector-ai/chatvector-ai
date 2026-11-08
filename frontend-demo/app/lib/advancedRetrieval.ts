@@ -49,6 +49,63 @@ export function effectiveMatchCount(state: AdvancedRetrievalState): number {
   );
 }
 
+export function selectedPresetName(
+  state: AdvancedRetrievalState
+): string | undefined {
+  const name = state.explicit.preset;
+  if (typeof name !== "string") return undefined;
+  const trimmed = name.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+export type ScopeIndicatorKind =
+  | { kind: "session"; fileName?: string }
+  | { kind: "tenant" }
+  | { kind: "preset" }
+  | { kind: "default-session"; fileName?: string };
+
+/** Simple composer scope line — omits session/tenant when only a preset applies. */
+export function resolveScopeIndicator(
+  state: AdvancedRetrievalState,
+  attachmentFileName?: string | null
+): ScopeIndicatorKind {
+  if (state.explicit.scope === "tenant") {
+    return { kind: "tenant" };
+  }
+  if (state.explicit.scope === "session") {
+    return { kind: "session", fileName: attachmentFileName ?? undefined };
+  }
+  if (selectedPresetName(state)) {
+    return { kind: "preset" };
+  }
+  return {
+    kind: "default-session",
+    fileName: attachmentFileName ?? undefined,
+  };
+}
+
+export type FieldInheritSource = "explicit" | "preset" | "process-default";
+
+export function fieldInheritSource(
+  state: AdvancedRetrievalState,
+  fieldSet: boolean
+): FieldInheritSource {
+  if (fieldSet) return "explicit";
+  if (selectedPresetName(state)) return "preset";
+  return "process-default";
+}
+
+export function inheritSourceLabel(source: FieldInheritSource): string {
+  switch (source) {
+    case "explicit":
+      return "Explicit override";
+    case "preset":
+      return "Follows selected preset";
+    default:
+      return "Process default";
+  }
+}
+
 function isRetrievalScope(value: unknown): value is RetrievalScope {
   return value === "session" || value === "tenant";
 }
@@ -69,6 +126,10 @@ function parseExplicitFields(
   }
   const obj = raw as Record<string, unknown>;
   const explicit: AdvancedRetrievalExplicitFields = {};
+  if (typeof obj.preset === "string") {
+    const trimmed = obj.preset.trim();
+    if (trimmed.length > 0) explicit.preset = trimmed;
+  }
   if (isRetrievalScope(obj.scope)) explicit.scope = obj.scope;
   if (typeof obj.matchCount === "number") {
     explicit.matchCount = clampMatchCount(obj.matchCount);

@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Settings2, X } from "lucide-react";
 import {
   effectiveMatchCount,
-  effectiveScope,
+  fieldInheritSource,
+  inheritSourceLabel,
+  selectedPresetName,
   type AdvancedRetrievalState,
   type QueryTransformationStrategy,
   type RerankerProvider,
@@ -38,7 +40,9 @@ type Props = {
   onRetrievalHistoryWindowChange: (value: number) => void;
   onGenerationHistoryWindowChange: (value: number) => void;
   onMetadataFilterChange: (filter: DocumentScalarMetadata | undefined) => void;
+  onPresetChange: (preset: string | undefined) => void;
   metadataCorpus: MetadataCorpusDocument[];
+  availablePresets: string[];
   availableRerankerProviders: RerankerProvider[];
   inspectMode?: boolean;
   onInspectModeChange?: (enabled: boolean) => void;
@@ -75,25 +79,57 @@ export default function AdvancedRetrievalDrawer({
   onRetrievalHistoryWindowChange,
   onGenerationHistoryWindowChange,
   onMetadataFilterChange,
+  onPresetChange,
   metadataCorpus,
+  availablePresets,
   availableRerankerProviders,
   inspectMode = false,
   onInspectModeChange,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLButtonElement>(null);
-  const displayScope = effectiveScope(state);
-  const displayMatchCount = effectiveMatchCount(state);
-  const displayHybrid = state.explicit.hybridEnabled ?? false;
-  const displayReranking = state.explicit.rerankingEnabled ?? false;
-  const displayReranker = state.explicit.rerankerProvider ?? "similarity";
-  const displayTransformEnabled =
-    state.explicit.queryTransformationEnabled ?? false;
-  const displayTransformStrategy =
-    state.explicit.queryTransformationStrategy ?? "rewrite";
-  const displayHistoryAware = state.explicit.historyAwareRetrieval ?? true;
-  const displayRetrievalWindow = state.explicit.retrievalHistoryWindow ?? 4;
-  const displayGenerationWindow = state.explicit.generationHistoryWindow ?? 8;
+  const [matchCountEditorOpen, setMatchCountEditorOpen] = useState(false);
+  const [retrievalWindowEditorOpen, setRetrievalWindowEditorOpen] =
+    useState(false);
+  const [generationWindowEditorOpen, setGenerationWindowEditorOpen] =
+    useState(false);
+  const [matchCountDraft, setMatchCountDraft] = useState<number | null>(null);
+  const [retrievalWindowDraft, setRetrievalWindowDraft] = useState<
+    number | null
+  >(null);
+  const [generationWindowDraft, setGenerationWindowDraft] = useState<
+    number | null
+  >(null);
+  const activePreset = selectedPresetName(state);
+  const scopeInherit = fieldInheritSource(
+    state,
+    state.explicit.scope !== undefined
+  );
+  const matchCountInherit = fieldInheritSource(
+    state,
+    state.explicit.matchCount !== undefined
+  );
+  const hybridInherit = fieldInheritSource(
+    state,
+    state.explicit.hybridEnabled !== undefined
+  );
+  const rerankingInherit = fieldInheritSource(
+    state,
+    state.explicit.rerankingEnabled !== undefined
+  );
+  const queryTransformationInherit = fieldInheritSource(
+    state,
+    state.explicit.queryTransformationEnabled !== undefined
+  );
+  const historyAwareInherit = fieldInheritSource(
+    state,
+    state.explicit.historyAwareRetrieval !== undefined
+  );
+  const matchCountExplicit = state.explicit.matchCount;
+  const matchCountEditorVisible =
+    matchCountExplicit !== undefined || matchCountEditorOpen;
+  const committedMatchCount =
+    matchCountExplicit !== undefined ? effectiveMatchCount(state) : null;
   const metadataKeys = useMemo(
     () => collectMetadataKeys(metadataCorpus),
     [metadataCorpus]
@@ -179,6 +215,38 @@ export default function AdvancedRetrievalDrawer({
             </div>
 
             <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4 text-xs">
+              <section>
+                <div className="mb-2 flex items-center gap-1.5">
+                  <p className="font-medium text-foreground">Preset</p>
+                  <InfoPopover label="Preset help">
+                    Names loaded at API startup. A preset fills omitted retrieval
+                    fields; explicit drawer values still override the preset on
+                    the request.
+                  </InfoPopover>
+                </div>
+                <label className="block">
+                  <span className="sr-only">Retrieval preset</span>
+                  <select
+                    data-testid="retrieval-preset-picker"
+                    value={state.explicit.preset ?? ""}
+                    onChange={(e) =>
+                      onPresetChange(e.target.value || undefined)
+                    }
+                    className="w-full max-w-xs rounded-md border border-border bg-background px-2 py-1.5 text-foreground outline-none focus:border-accent"
+                  >
+                    <option value="">None</option>
+                    {availablePresets.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {availablePresets.length === 0 && (
+                  <p className="mt-2 text-muted">No presets are loaded.</p>
+                )}
+              </section>
+
               <section>
                 <div className="mb-2 flex items-center gap-1.5">
                   <p className="font-medium text-foreground">Metadata filter</p>
@@ -283,6 +351,13 @@ export default function AdvancedRetrievalDrawer({
                     </p>
                   </InfoPopover>
                 </div>
+                <p className="mb-2 text-muted" data-testid="scope-inherit-label">
+                  {inheritSourceLabel(scopeInherit)}
+                  {scopeInherit === "process-default" ? " (session)" : null}
+                  {scopeInherit === "preset" && activePreset
+                    ? ` (${activePreset})`
+                    : null}
+                </p>
                 <div
                   className="inline-flex rounded-lg border border-border bg-background p-0.5"
                   role="radiogroup"
@@ -294,13 +369,13 @@ export default function AdvancedRetrievalDrawer({
                         type="radio"
                         name="advanced-retrieval-scope"
                         value={scope}
-                        checked={displayScope === scope}
+                        checked={state.explicit.scope === scope}
                         onChange={() => onScopeChange(scope)}
                         className="sr-only"
                       />
                       <span
                         className={`inline-block rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
-                          displayScope === scope
+                          state.explicit.scope === scope
                             ? "bg-accent text-accent-foreground"
                             : "text-muted hover:text-foreground"
                         }`}
@@ -325,54 +400,113 @@ export default function AdvancedRetrievalDrawer({
                     {MAX_MATCH_COUNT}).
                   </InfoPopover>
                 </div>
-                <div className="flex items-center gap-3">
-                  <input
-                    id="advanced-match-count"
-                    type="range"
-                    min={MIN_MATCH_COUNT}
-                    max={MAX_MATCH_COUNT}
-                    step={1}
-                    value={displayMatchCount}
-                    onChange={(e) => onMatchCountChange(Number(e.target.value))}
-                    aria-valuemin={MIN_MATCH_COUNT}
-                    aria-valuemax={MAX_MATCH_COUNT}
-                    aria-valuenow={displayMatchCount}
-                    className="h-1.5 flex-1 accent-[color:var(--accent)]"
-                  />
-                  <input
-                    type="number"
-                    min={MIN_MATCH_COUNT}
-                    max={MAX_MATCH_COUNT}
-                    step={1}
-                    value={displayMatchCount}
-                    onChange={(e) => onMatchCountChange(Number(e.target.value))}
-                    aria-label="Match count"
-                    className="w-14 rounded-md border border-border bg-background px-2 py-1 text-center text-xs text-foreground outline-none focus:border-accent"
-                  />
-                </div>
+                <p className="mb-2 text-muted" data-testid="match-count-inherit-label">
+                  {inheritSourceLabel(matchCountInherit)}
+                </p>
+                {matchCountEditorVisible ? (
+                  <div className="flex items-center gap-3">
+                    <input
+                      id="advanced-match-count"
+                      type="range"
+                      min={MIN_MATCH_COUNT}
+                      max={MAX_MATCH_COUNT}
+                      step={1}
+                      value={
+                        committedMatchCount ??
+                        matchCountDraft ??
+                        MIN_MATCH_COUNT
+                      }
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        setMatchCountDraft(next);
+                        onMatchCountChange(next);
+                      }}
+                      aria-valuemin={MIN_MATCH_COUNT}
+                      aria-valuemax={MAX_MATCH_COUNT}
+                      aria-valuenow={
+                        committedMatchCount ?? matchCountDraft ?? undefined
+                      }
+                      className="h-1.5 flex-1 accent-[color:var(--accent)]"
+                    />
+                    <input
+                      type="number"
+                      min={MIN_MATCH_COUNT}
+                      max={MAX_MATCH_COUNT}
+                      step={1}
+                      value={committedMatchCount ?? matchCountDraft ?? ""}
+                      placeholder="—"
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        if (Number.isNaN(next)) return;
+                        setMatchCountDraft(next);
+                        onMatchCountChange(next);
+                      }}
+                      aria-label="Match count"
+                      className="w-14 rounded-md border border-border bg-background px-2 py-1 text-center text-xs text-foreground outline-none focus:border-accent"
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    data-testid="match-count-set-explicit"
+                    onClick={() => {
+                      setMatchCountDraft(null);
+                      setMatchCountEditorOpen(true);
+                    }}
+                    className="text-accent hover:underline"
+                  >
+                    Set match count explicitly
+                  </button>
+                )}
               </section>
 
               <section className="space-y-3">
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={displayHybrid}
-                    onChange={(e) => onHybridEnabledChange(e.target.checked)}
-                    className="h-3.5 w-3.5 accent-[color:var(--accent)]"
-                  />
-                  <span className="font-medium text-foreground">Hybrid search</span>
-                </label>
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={displayReranking}
-                    onChange={(e) => onRerankingEnabledChange(e.target.checked)}
-                    className="h-3.5 w-3.5 accent-[color:var(--accent)]"
-                  />
-                  <span className="font-medium text-foreground">Reranking</span>
-                </label>
+                <div>
+                  <p
+                    className="mb-1 text-muted"
+                    data-testid="hybrid-inherit-label"
+                  >
+                    {inheritSourceLabel(hybridInherit)}
+                  </p>
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={state.explicit.hybridEnabled === true}
+                      onChange={(e) => onHybridEnabledChange(e.target.checked)}
+                      className="h-3.5 w-3.5 accent-[color:var(--accent)]"
+                    />
+                    <span className="font-medium text-foreground">Hybrid search</span>
+                  </label>
+                </div>
+                <div>
+                  <p
+                    className="mb-1 text-muted"
+                    data-testid="reranking-inherit-label"
+                  >
+                    {inheritSourceLabel(rerankingInherit)}
+                  </p>
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={state.explicit.rerankingEnabled === true}
+                      onChange={(e) => onRerankingEnabledChange(e.target.checked)}
+                      className="h-3.5 w-3.5 accent-[color:var(--accent)]"
+                    />
+                    <span className="font-medium text-foreground">Reranking</span>
+                  </label>
+                </div>
                 <div>
                   <p className="mb-2 font-medium text-foreground">Reranker provider</p>
+                  {state.explicit.rerankerProvider === undefined ? (
+                    <p className="mb-2 text-muted">
+                      {inheritSourceLabel(
+                        fieldInheritSource(
+                          state,
+                          state.explicit.rerankerProvider !== undefined
+                        )
+                      )}
+                    </p>
+                  ) : null}
                   <div
                     className="inline-flex flex-wrap gap-1 rounded-lg border border-border bg-background p-0.5"
                     role="radiogroup"
@@ -384,13 +518,13 @@ export default function AdvancedRetrievalDrawer({
                           type="radio"
                           name="advanced-reranker-provider"
                           value={provider}
-                          checked={displayReranker === provider}
+                          checked={state.explicit.rerankerProvider === provider}
                           onChange={() => onRerankerProviderChange(provider)}
                           className="sr-only"
                         />
                         <span
                           className={`inline-block rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
-                            displayReranker === provider
+                            state.explicit.rerankerProvider === provider
                               ? "bg-accent text-accent-foreground"
                               : "text-muted hover:text-foreground"
                           }`}
@@ -404,32 +538,53 @@ export default function AdvancedRetrievalDrawer({
               </section>
 
               <section className="space-y-3">
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={displayTransformEnabled}
-                    onChange={(e) =>
-                      onQueryTransformationEnabledChange(e.target.checked)
-                    }
-                    className="h-3.5 w-3.5 accent-[color:var(--accent)]"
-                  />
-                  <span className="font-medium text-foreground">
-                    Query transformation
-                  </span>
-                </label>
+                <div>
+                  <p
+                    className="mb-1 text-muted"
+                    data-testid="query-transformation-inherit-label"
+                  >
+                    {inheritSourceLabel(queryTransformationInherit)}
+                  </p>
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={state.explicit.queryTransformationEnabled === true}
+                      onChange={(e) =>
+                        onQueryTransformationEnabledChange(e.target.checked)
+                      }
+                      className="h-3.5 w-3.5 accent-[color:var(--accent)]"
+                    />
+                    <span className="font-medium text-foreground">
+                      Query transformation
+                    </span>
+                  </label>
+                </div>
                 <label className="block">
                   <span className="mb-1 block font-medium text-foreground">
                     Transform strategy
                   </span>
+                  {state.explicit.queryTransformationStrategy === undefined ? (
+                    <p className="mb-1 text-muted">
+                      {inheritSourceLabel(
+                        fieldInheritSource(
+                          state,
+                          state.explicit.queryTransformationStrategy !== undefined
+                        )
+                      )}
+                    </p>
+                  ) : null}
                   <select
-                    value={displayTransformStrategy}
-                    onChange={(e) =>
+                    value={state.explicit.queryTransformationStrategy ?? ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (!value) return;
                       onQueryTransformationStrategyChange(
-                        e.target.value as QueryTransformationStrategy
-                      )
-                    }
+                        value as QueryTransformationStrategy
+                      );
+                    }}
                     className="w-full max-w-xs rounded-md border border-border bg-background px-2 py-1.5 text-foreground outline-none focus:border-accent"
                   >
+                    <option value="">Set strategy…</option>
                     {TRANSFORM_STRATEGIES.map(({ value: v, label }) => (
                       <option key={v} value={v}>
                         {label}
@@ -440,49 +595,121 @@ export default function AdvancedRetrievalDrawer({
               </section>
 
               <section className="space-y-3">
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={displayHistoryAware}
-                    onChange={(e) =>
-                      onHistoryAwareRetrievalChange(e.target.checked)
-                    }
-                    className="h-3.5 w-3.5 accent-[color:var(--accent)]"
-                  />
-                  <span className="font-medium text-foreground">
-                    History-aware retrieval
-                  </span>
-                </label>
-                <label className="block">
+                <div>
+                  <p
+                    className="mb-1 text-muted"
+                    data-testid="history-aware-inherit-label"
+                  >
+                    {inheritSourceLabel(historyAwareInherit)}
+                  </p>
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={state.explicit.historyAwareRetrieval === true}
+                      onChange={(e) =>
+                        onHistoryAwareRetrievalChange(e.target.checked)
+                      }
+                      className="h-3.5 w-3.5 accent-[color:var(--accent)]"
+                    />
+                    <span className="font-medium text-foreground">
+                      History-aware retrieval
+                    </span>
+                  </label>
+                </div>
+                <div>
                   <span className="mb-1 block font-medium text-foreground">
                     Retrieval history window
                   </span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={displayRetrievalWindow}
-                    onChange={(e) =>
-                      onRetrievalHistoryWindowChange(Number(e.target.value))
-                    }
-                    className="w-24 rounded-md border border-border bg-background px-2 py-1 text-foreground outline-none focus:border-accent"
-                  />
-                </label>
-                <label className="block">
+                  {state.explicit.retrievalHistoryWindow === undefined &&
+                  !retrievalWindowEditorOpen ? (
+                    <>
+                      <p className="mb-1 text-muted">
+                        {inheritSourceLabel(
+                          fieldInheritSource(
+                            state,
+                            state.explicit.retrievalHistoryWindow !== undefined
+                          )
+                        )}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRetrievalWindowDraft(null);
+                          setRetrievalWindowEditorOpen(true);
+                        }}
+                        className="text-accent hover:underline"
+                      >
+                        Set retrieval history window
+                      </button>
+                    </>
+                  ) : (
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={
+                        state.explicit.retrievalHistoryWindow ??
+                        retrievalWindowDraft ??
+                        ""
+                      }
+                      placeholder="—"
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        if (Number.isNaN(next)) return;
+                        setRetrievalWindowDraft(next);
+                        onRetrievalHistoryWindowChange(next);
+                      }}
+                      className="w-24 rounded-md border border-border bg-background px-2 py-1 text-foreground outline-none focus:border-accent"
+                    />
+                  )}
+                </div>
+                <div>
                   <span className="mb-1 block font-medium text-foreground">
                     Generation history window
                   </span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={displayGenerationWindow}
-                    onChange={(e) =>
-                      onGenerationHistoryWindowChange(Number(e.target.value))
-                    }
-                    className="w-24 rounded-md border border-border bg-background px-2 py-1 text-foreground outline-none focus:border-accent"
-                  />
-                </label>
+                  {state.explicit.generationHistoryWindow === undefined &&
+                  !generationWindowEditorOpen ? (
+                    <>
+                      <p className="mb-1 text-muted">
+                        {inheritSourceLabel(
+                          fieldInheritSource(
+                            state,
+                            state.explicit.generationHistoryWindow !== undefined
+                          )
+                        )}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGenerationWindowDraft(null);
+                          setGenerationWindowEditorOpen(true);
+                        }}
+                        className="text-accent hover:underline"
+                      >
+                        Set generation history window
+                      </button>
+                    </>
+                  ) : (
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={
+                        state.explicit.generationHistoryWindow ??
+                        generationWindowDraft ??
+                        ""
+                      }
+                      placeholder="—"
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        if (Number.isNaN(next)) return;
+                        setGenerationWindowDraft(next);
+                        onGenerationHistoryWindowChange(next);
+                      }}
+                      className="w-24 rounded-md border border-border bg-background px-2 py-1 text-foreground outline-none focus:border-accent"
+                    />
+                  )}
+                </div>
               </section>
 
               {onInspectModeChange && (

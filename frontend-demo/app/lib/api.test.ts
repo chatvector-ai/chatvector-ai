@@ -6,6 +6,7 @@ import {
   sendBatchMessage,
   sendConfigurationCompareBatchMessage,
   sendSynthesizedBatchMessage,
+  fetchRetrievalDiscovery,
   ChatError,
   StreamingDisabledError,
   getDocumentStatus,
@@ -34,6 +35,67 @@ const MOCK_RESPONSE = {
 };
 
 vi.mock("./session", () => ({ getSessionId: () => "test-session-id" }));
+
+describe("fetchRetrievalDiscovery", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("parses preset_names and reranker_providers from GET /retrieval/presets", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          preset_names: ["alpha", "beta"],
+          reranker_providers: ["similarity"],
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(fetchRetrievalDiscovery()).resolves.toEqual({
+      presets: ["alpha", "beta"],
+      reranker_providers: ["similarity"],
+    });
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/retrieval/presets"),
+      expect.objectContaining({ headers: expect.any(Object) })
+    );
+  });
+
+  it("accepts legacy presets key when preset_names is absent", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          presets: ["gamma"],
+          reranker_providers: ["cohere", "similarity"],
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(fetchRetrievalDiscovery()).resolves.toEqual({
+      presets: ["gamma"],
+      reranker_providers: ["cohere", "similarity"],
+    });
+  });
+
+  it("falls back when the request fails", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(null, { status: 503 })
+    );
+
+    await expect(fetchRetrievalDiscovery()).resolves.toEqual({
+      presets: [],
+      reranker_providers: ["similarity"],
+    });
+  });
+});
 
 describe("sendMessage", () => {
   const originalFetch = globalThis.fetch;
@@ -109,6 +171,50 @@ describe("sendMessage", () => {
         }),
       })
     );
+  });
+
+  it("sends a nested retrieval preset without implicit overrides", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify(MOCK_RESPONSE), { status: 200 })
+    );
+
+    await sendMessage("q", "doc-123", {
+      retrieval: { explicit: { preset: "alpha" } },
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/chat"),
+      expect.objectContaining({
+        body: JSON.stringify({
+          question: "q",
+          doc_id: "doc-123",
+          session_id: "test-session-id",
+          retrieval: { preset: "alpha" },
+        }),
+      })
+    );
+  });
+
+  it("surfaces preset_not_found as a ChatError message", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: {
+            code: "preset_not_found",
+            message: "Unknown retrieval preset 'missing'.",
+          },
+        }),
+        { status: 400 }
+      )
+    );
+
+    await expect(sendMessage("q", "doc-123", {
+      retrieval: { explicit: { preset: "missing" } },
+    })).rejects.toMatchObject({
+      code: "api_error",
+      backendCode: "preset_not_found",
+      message: "Unknown retrieval preset 'missing'.",
+    });
   });
 
   it("passes custom scope and match_count when provided", async () => {

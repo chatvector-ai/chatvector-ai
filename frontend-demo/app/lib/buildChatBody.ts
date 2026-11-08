@@ -68,6 +68,10 @@ export function buildChatRequestBody(
     body.history = history;
   }
 
+  if (ex.preset !== undefined) {
+    body.retrieval = { preset: ex.preset };
+  }
+
   if (input.debugRetrieval === true) {
     body.debug_retrieval = true;
   }
