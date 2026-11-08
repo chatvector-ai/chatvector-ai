@@ -21,7 +21,9 @@ const baseProps = {
   onRetrievalHistoryWindowChange: vi.fn(),
   onGenerationHistoryWindowChange: vi.fn(),
   onMetadataFilterChange: vi.fn(),
+  onPresetChange: vi.fn(),
   metadataCorpus: [],
+  availablePresets: [],
   availableRerankerProviders: ["similarity"] satisfies RerankerProvider[],
 };
 
@@ -119,5 +121,67 @@ describe("AdvancedRetrievalDrawer", () => {
 
     await userEvent.click(screen.getByRole("checkbox", { name: /hybrid search/i }));
     expect(onHybrid).toHaveBeenCalledWith(true);
+  });
+
+  it("lists only discovery preset names", () => {
+    render(
+      <AdvancedRetrievalDrawer
+        {...baseProps}
+        open
+        availablePresets={["alpha", "beta"]}
+      />
+    );
+
+    const picker = screen.getByTestId("retrieval-preset-picker");
+    expect(picker).toContainHTML("alpha");
+    expect(picker).toContainHTML("beta");
+    expect(picker).not.toContainHTML("hybrid");
+  });
+
+  it("renders an empty preset picker when discovery returns no names", () => {
+    render(<AdvancedRetrievalDrawer {...baseProps} open availablePresets={[]} />);
+
+    const options = screen
+    .getByTestId("retrieval-preset-picker")
+    .querySelectorAll("option");
+    expect(options).toHaveLength(1);
+    expect(options[0]).toHaveTextContent("None");
+  });
+
+  it("calls onPresetChange when a preset is selected", async () => {
+    const onPresetChange = vi.fn();
+    render(
+      <AdvancedRetrievalDrawer
+        {...baseProps}
+        open
+        availablePresets={["alpha", "beta"]}
+        onPresetChange={onPresetChange}
+      />
+    );
+
+    await userEvent.selectOptions(
+      screen.getByTestId("retrieval-preset-picker"),
+      "alpha"
+    );
+    expect(onPresetChange).toHaveBeenCalledWith("alpha");
+  });
+
+  it("does not select session or tenant scope when only a preset is active", () => {
+    render(
+      <AdvancedRetrievalDrawer
+        {...baseProps}
+        open
+        state={{ explicit: { preset: "alpha" } }}
+        availablePresets={["alpha"]}
+      />
+    );
+
+    expect(
+      screen.getByRole("radio", { name: /session/i })
+    ).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: /tenant/i })).not.toBeChecked();
+    expect(screen.getByTestId("scope-inherit-label")).toHaveTextContent(
+      /Follows selected preset/
+    );
   });
 });

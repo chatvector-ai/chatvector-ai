@@ -15,6 +15,7 @@ import { useSessionManager } from "../lib/hooks/useSessionManager";
 import {
   effectiveScope,
   hasActiveMetadataFilter,
+  resolveScopeIndicator,
 } from "../lib/advancedRetrieval";
 import { formatMetadataPair } from "../lib/documentMetadata";
 import {
@@ -74,11 +75,13 @@ export default function ChatPage() {
     setRetrievalHistoryWindow,
     setGenerationHistoryWindow,
     setMetadataFilter,
+    setPreset,
   } = useAdvancedRetrieval();
 
   useEffect(() => {
+    if (!drawerOpen) return;
     void fetchRetrievalDiscovery().then(setDiscovery);
-  }, []);
+  }, [drawerOpen]);
 
   const {
     messages,
@@ -166,6 +169,10 @@ export default function ChatPage() {
   };
 
   const indicatorScope = effectiveScope(retrievalState);
+  const scopeIndicator = resolveScopeIndicator(
+    retrievalState,
+    attachment?.fileName
+  );
   const metadataCorpus = useMemo(() => {
     if (indicatorScope === "tenant") {
       return metadataCorpusFromDocumentList(documentSummaries);
@@ -339,7 +346,9 @@ export default function ChatPage() {
               onRetrievalHistoryWindowChange={setRetrievalHistoryWindow}
               onGenerationHistoryWindowChange={setGenerationHistoryWindow}
               onMetadataFilterChange={setMetadataFilter}
+              onPresetChange={setPreset}
               metadataCorpus={metadataCorpus}
+              availablePresets={discovery.presets}
               availableRerankerProviders={discovery.reranker_providers}
               inspectMode={inspectMode}
               onInspectModeChange={setInspectMode}
@@ -362,7 +371,7 @@ export default function ChatPage() {
             onUploadClick={() => setShowModal(true)}
             uploadButtonRef={uploadButtonRef}
             stopStreaming={stopStreaming}
-            scope={indicatorScope}
+            scopeIndicator={scopeIndicator}
             metadataFilterSummary={metadataFilterSummary}
           />
         </div>

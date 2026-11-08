@@ -65,6 +65,43 @@ describe("buildChatRequestBody", () => {
     expect(body.metadata_filter).toEqual({ department: "legal" });
   });
 
+  it("sends preset on the nested retrieval object only", () => {
+    const body = buildChatRequestBody({
+      question: "q",
+      docId: "doc-1",
+      retrieval: { explicit: { preset: "alpha" } },
+    });
+
+    expect(body.retrieval).toEqual({ preset: "alpha" });
+    expect(body).not.toHaveProperty("match_count");
+    expect(body).not.toHaveProperty("scope");
+    expect(body).not.toHaveProperty("hybrid_enabled");
+  });
+
+  it("sends hybrid_enabled alongside a nested preset when explicitly set", () => {
+    const body = buildChatRequestBody({
+      question: "q",
+      docId: "doc-1",
+      retrieval: {
+        explicit: { preset: "alpha", hybridEnabled: true },
+      },
+    });
+
+    expect(body.retrieval).toEqual({ preset: "alpha" });
+    expect(body.hybrid_enabled).toBe(true);
+  });
+
+  it("omits preset after it is cleared", () => {
+    const body = buildChatRequestBody({
+      question: "q",
+      docId: "doc-1",
+      retrieval: { explicit: { matchCount: 7 } },
+    });
+
+    expect(body).not.toHaveProperty("retrieval");
+    expect(body.match_count).toBe(7);
+  });
+
   it("adds debug_retrieval without implicit retrieval fields", () => {
     const body = buildChatRequestBody({
       question: "q",

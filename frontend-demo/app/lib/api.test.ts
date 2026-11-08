@@ -111,6 +111,50 @@ describe("sendMessage", () => {
     );
   });
 
+  it("sends a nested retrieval preset without implicit overrides", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify(MOCK_RESPONSE), { status: 200 })
+    );
+
+    await sendMessage("q", "doc-123", {
+      retrieval: { explicit: { preset: "alpha" } },
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/chat"),
+      expect.objectContaining({
+        body: JSON.stringify({
+          question: "q",
+          doc_id: "doc-123",
+          session_id: "test-session-id",
+          retrieval: { preset: "alpha" },
+        }),
+      })
+    );
+  });
+
+  it("surfaces preset_not_found as a ChatError message", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: {
+            code: "preset_not_found",
+            message: "Unknown retrieval preset 'missing'.",
+          },
+        }),
+        { status: 400 }
+      )
+    );
+
+    await expect(sendMessage("q", "doc-123", {
+      retrieval: { explicit: { preset: "missing" } },
+    })).rejects.toMatchObject({
+      code: "api_error",
+      backendCode: "preset_not_found",
+      message: "Unknown retrieval preset 'missing'.",
+    });
+  });
+
   it("passes custom scope and match_count when provided", async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(JSON.stringify(MOCK_RESPONSE), { status: 200 })

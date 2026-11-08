@@ -115,6 +115,21 @@ export function useAdvancedRetrieval() {
     []
   );
 
+  const setPreset = useCallback((preset: string | undefined) => {
+    setState((prev) => {
+      const explicit = { ...prev.explicit };
+      const trimmed = preset?.trim();
+      if (!trimmed) {
+        delete explicit.preset;
+      } else {
+        explicit.preset = trimmed;
+      }
+      const next: AdvancedRetrievalState = { explicit };
+      saveAdvancedRetrievalState(next);
+      return next;
+    });
+  }, []);
+
   return {
     state,
     loaded,
@@ -129,5 +144,6 @@ export function useAdvancedRetrieval() {
     setRetrievalHistoryWindow,
     setGenerationHistoryWindow,
     setMetadataFilter,
+    setPreset,
   };
 }

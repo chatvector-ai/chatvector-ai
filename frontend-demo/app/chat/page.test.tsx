@@ -3,7 +3,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ChatPage from "./page";
-import { getSession, listDocuments, type AttachmentState } from "../lib/api";
+import {
+  fetchRetrievalDiscovery,
+  getSession,
+  listDocuments,
+  type AttachmentState,
+} from "../lib/api";
 import type { ChatSession } from "../lib/hooks/useSessionManager";
 import type { AdvancedRetrievalState } from "../lib/advancedRetrieval";
 import type { RetrievalScope } from "../lib/retrievalSettings";
@@ -71,6 +76,17 @@ vi.mock("../lib/hooks/useAdvancedRetrieval", () => ({
       setRetrievalHistoryWindow: vi.fn(),
       setGenerationHistoryWindow: vi.fn(),
       setMetadataFilter: vi.fn(),
+      setPreset: (preset?: string) =>
+        setState((prev) => {
+          const explicit = { ...prev.explicit };
+          const trimmed = preset?.trim();
+          if (trimmed) {
+            explicit.preset = trimmed;
+          } else {
+            delete explicit.preset;
+          }
+          return { explicit };
+        }),
     };
   },
 }));
@@ -107,6 +123,31 @@ vi.mock("../lib/hooks/useChat", () => ({
     stopStreaming: vi.fn(),
   }),
 }));
+
+describe("ChatPage preset discovery", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAttachment = {
+      fileName: "notes.txt",
+      documentId: "doc-1",
+      statusEndpoint: "/documents/doc-1/status",
+      status: "ready",
+    };
+  });
+
+  it("loads preset discovery when the advanced drawer opens", async () => {
+    const user = userEvent.setup();
+    render(<ChatPage />);
+
+    expect(fetchRetrievalDiscovery).not.toHaveBeenCalled();
+
+    await user.click(screen.getByTestId("advanced-retrieval-open"));
+
+    await waitFor(() => {
+      expect(fetchRetrievalDiscovery).toHaveBeenCalledTimes(1);
+    });
+  });
+});
 
 describe("ChatPage metadata corpus", () => {
   beforeEach(() => {

@@ -6,7 +6,7 @@ import UploadButton from "../UploadButton";
 import AttachmentChip from "../AttachmentChip";
 import type { AttachmentState } from "../../lib/api";
 import { useDocumentPolling } from "../../lib/hooks/useDocumentPolling";
-import type { RetrievalScope } from "../../lib/retrievalSettings";
+import type { ScopeIndicatorKind } from "../../lib/advancedRetrieval";
 
 const TEXTAREA_MIN_PX = 44;
 const TEXTAREA_MAX_PX = 220;
@@ -27,7 +27,7 @@ type Props = {
   onUploadClick: () => void;
   uploadButtonRef?: RefObject<HTMLButtonElement | null>;
   stopStreaming: () => void;
-  scope?: RetrievalScope;
+  scopeIndicator?: ScopeIndicatorKind;
   metadataFilterSummary?: string | null;
 };
 
@@ -47,9 +47,26 @@ export default function ChatInput({
   onUploadClick,
   uploadButtonRef,
   stopStreaming,
-  scope = "session",
+  scopeIndicator = { kind: "default-session" },
   metadataFilterSummary = null,
 }: Props) {
+  const scopeMessage = (() => {
+    switch (scopeIndicator.kind) {
+      case "tenant":
+        return "Tenant scope: searches the tenant's ready documents (can include documents other than the attached chip).";
+      case "preset":
+        return "Scope follows the selected preset until you set scope explicitly.";
+      case "session":
+        return scopeIndicator.fileName
+          ? `Session scope: searches only the selected document (${scopeIndicator.fileName}).`
+          : "Session scope: no document selected — upload a document to search it.";
+      case "default-session":
+      default:
+        return scopeIndicator.fileName
+          ? `Session scope: searches only the selected document (${scopeIndicator.fileName}).`
+          : "Session scope: no document selected — upload a document to search it.";
+    }
+  })();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useLayoutEffect(() => {
@@ -90,11 +107,7 @@ export default function ChatInput({
         data-testid="chat-scope-indicator"
         className="px-4 pt-2 pb-1 text-xs text-muted bg-background"
       >
-        {scope === "tenant"
-          ? "Tenant scope: searches the tenant's ready documents (can include documents other than the attached chip)."
-          : attachment
-            ? `Session scope: searches only the selected document (${attachment.fileName}).`
-            : "Session scope: no document selected — upload a document to search it."}
+        {scopeMessage}
         {metadataFilterSummary ? (
           <>
             {" "}

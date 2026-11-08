@@ -50,6 +50,13 @@ describe("ChatInput", () => {
     );
   });
 
+  it("shows preset scope copy when scope follows a selected preset", () => {
+    renderChatInput({ scopeIndicator: { kind: "preset" } });
+    expect(screen.getByTestId("chat-scope-indicator")).toHaveTextContent(
+      "Scope follows the selected preset until you set scope explicitly."
+    );
+  });
+
   it("does not expose metadata filter controls in the composer", () => {
     renderChatInput({
       metadataFilterSummary: "department=legal",
@@ -135,7 +142,7 @@ describe("ChatInput", () => {
 
   it("shows the selected document name for session scope when a document is attached", () => {
     renderChatInput({
-      scope: "session",
+      scopeIndicator: { kind: "default-session", fileName: "notes.txt" },
       attachment: {
         fileName: "notes.txt",
         documentId: "doc-1",
@@ -151,7 +158,7 @@ describe("ChatInput", () => {
 
   it("does not claim a document is searched when session scope has no attachment", () => {
     renderChatInput({
-      scope: "session",
+      scopeIndicator: { kind: "default-session" },
       attachment: null,
     });
 
@@ -162,7 +169,7 @@ describe("ChatInput", () => {
 
   it("shows ready-document tenant description when scope is tenant", () => {
     renderChatInput({
-      scope: "tenant",
+      scopeIndicator: { kind: "tenant" },
       attachment: {
         fileName: "notes.txt",
         documentId: "doc-1",
