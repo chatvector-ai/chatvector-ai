@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { RerankerProvider } from "../lib/advancedRetrieval";
 import AdvancedRetrievalDrawer from "./AdvancedRetrievalDrawer";
 
 const baseProps = {
@@ -17,7 +18,7 @@ const baseProps = {
   onHistoryAwareRetrievalChange: vi.fn(),
   onRetrievalHistoryWindowChange: vi.fn(),
   onGenerationHistoryWindowChange: vi.fn(),
-  availableRerankerProviders: ["similarity"] as const,
+  availableRerankerProviders: ["similarity"] satisfies RerankerProvider[],
 };
 
 describe("AdvancedRetrievalDrawer", () => {
