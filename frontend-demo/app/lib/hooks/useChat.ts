@@ -24,7 +24,7 @@ import {
   getUploadedDocument,
 } from "../documentStore";
 import type { DocumentScalarMetadata } from "../documentMetadata";
-import type { RetrievalSettings } from "../retrievalSettings";
+import type { AdvancedRetrievalState } from "../advancedRetrieval";
 
 const welcomeMessages: Message[] = [
   {
@@ -183,7 +183,7 @@ function hasUsefulUserQuestion(messages: SessionHistoryMessage[]): boolean {
 
 export function useChat(
   sessionId: string | null,
-  retrievalSettings: RetrievalSettings,
+  advancedRetrieval: AdvancedRetrievalState,
   labelEvents?: ChatLabelEvents,
   inspectMode = false,
 ) {
@@ -735,8 +735,7 @@ export function useChat(
 
       const aiMsgId = base + 1;
       const chatOptions = {
-        matchCount: retrievalSettings.matchCount,
-        scope: retrievalSettings.scope,
+        retrieval: advancedRetrieval,
         sessionId,
         signal: controller.signal,
         ...(inspectMode ? { debugRetrieval: true } : {}),

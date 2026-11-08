@@ -5,16 +5,28 @@ import userEvent from "@testing-library/user-event";
 import ChatPage from "./page";
 import type { AttachmentState } from "../lib/api";
 import type { ChatSession } from "../lib/hooks/useSessionManager";
-import type { RetrievalScope, RetrievalSettings } from "../lib/retrievalSettings";
+import type { AdvancedRetrievalState } from "../lib/advancedRetrieval";
+import type { RetrievalScope } from "../lib/retrievalSettings";
 
 const mockCreateNewSession = vi.fn();
 const mockSwitchSession = vi.fn();
 const mockDeleteSession = vi.fn();
 
 let mockAttachment: AttachmentState | null = null;
-let mockInitialScope: RetrievalScope = "session";
+let mockInitialScope: RetrievalScope | undefined = undefined;
 let mockSessions: ChatSession[] = [];
 let mockActiveSessionId = "11111111-aaaa-bbbb-cccc-000000000001";
+
+vi.mock("../lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/api")>();
+  return {
+    ...actual,
+    fetchRetrievalDiscovery: vi.fn().mockResolvedValue({
+      presets: [],
+      reranker_providers: ["similarity"],
+    }),
+  };
+});
 
 vi.mock("../lib/hooks/useSessionManager", () => ({
   useSessionManager: () => ({
@@ -30,19 +42,25 @@ vi.mock("../lib/hooks/useSessionManager", () => ({
   }),
 }));
 
-vi.mock("../lib/hooks/useRetrievalSettings", () => ({
-  useRetrievalSettings: () => {
-    const [settings, setSettings] = useState<RetrievalSettings>({
-      scope: mockInitialScope,
-      matchCount: 5,
+vi.mock("../lib/hooks/useAdvancedRetrieval", () => ({
+  useAdvancedRetrieval: () => {
+    const [state, setState] = useState<AdvancedRetrievalState>({
+      explicit: mockInitialScope ? { scope: mockInitialScope } : {},
     });
     return {
-      settings,
-      setScope: (scope: RetrievalScope) =>
-        setSettings((prev) => ({ ...prev, scope })),
-      setMatchCount: (matchCount: number) =>
-        setSettings((prev) => ({ ...prev, matchCount })),
+      state,
       loaded: true,
+      setScope: (scope: RetrievalScope) =>
+        setState({ explicit: { ...state.explicit, scope } }),
+      setMatchCount: vi.fn(),
+      setHybridEnabled: vi.fn(),
+      setRerankingEnabled: vi.fn(),
+      setRerankerProvider: vi.fn(),
+      setQueryTransformationEnabled: vi.fn(),
+      setQueryTransformationStrategy: vi.fn(),
+      setHistoryAwareRetrieval: vi.fn(),
+      setRetrievalHistoryWindow: vi.fn(),
+      setGenerationHistoryWindow: vi.fn(),
     };
   },
 }));
@@ -83,7 +101,7 @@ vi.mock("../lib/hooks/useChat", () => ({
 describe("ChatPage scope indicator", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockInitialScope = "session";
+    mockInitialScope = undefined;
     mockActiveSessionId = "session-1";
     mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
     mockAttachment = {
@@ -94,30 +112,28 @@ describe("ChatPage scope indicator", () => {
     };
   });
 
-  it("shows the active scope with the selected document without opening developer settings, and updates when toggling tenant and session", async () => {
-    const { container } = render(<ChatPage />);
+  it("shows session scope by default without opening advanced retrieval", () => {
+    render(<ChatPage />);
 
-    const details = container.querySelector("details");
-    expect(details).not.toBeNull();
-    expect(details).not.toHaveAttribute("open");
-
+    expect(screen.queryByTestId("advanced-retrieval-drawer")).not.toBeInTheDocument();
     expect(
       screen.getByText("Session scope: searches only the selected document (notes.txt).")
     ).toBeVisible();
+    expect(screen.queryByText("Retrieval settings")).not.toBeInTheDocument();
+  });
 
-    await userEvent.click(screen.getByText("Retrieval settings"));
-    await userEvent.click(screen.getByRole("radio", { name: "Tenant" }));
+  it("updates the indicator after explicitly setting tenant scope in the drawer", async () => {
+    render(<ChatPage />);
+
+    await userEvent.click(screen.getByTestId("advanced-retrieval-open"));
+    expect(screen.getByTestId("advanced-retrieval-drawer")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("radio", { name: /tenant/i }));
 
     expect(
       screen.getByText(
         "Tenant scope: searches the tenant's ready documents (can include documents other than the attached chip)."
       )
-    ).toBeVisible();
-
-    await userEvent.click(screen.getByRole("radio", { name: "Session" }));
-
-    expect(
-      screen.getByText("Session scope: searches only the selected document (notes.txt).")
     ).toBeVisible();
   });
 
@@ -135,7 +151,7 @@ describe("ChatPage scope indicator", () => {
 describe("ChatPage session navigation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockInitialScope = "session";
+    mockInitialScope = undefined;
     mockAttachment = null;
     mockActiveSessionId = "11111111-aaaa-bbbb-cccc-000000000001";
     mockSessions = [

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useChat } from "./useChat";
-import { DEFAULT_RETRIEVAL_SETTINGS } from "../retrievalSettings";
+import { EMPTY_ADVANCED_RETRIEVAL } from "../advancedRetrieval";
 import { DocumentNotFoundError, StreamingDisabledError } from "../api";
 
 const mockSendMessageStream = vi.fn();
@@ -109,7 +109,7 @@ describe("useChat", () => {
     });
 
     const { result } = renderHook(
-      ({ sessionId }) => useChat(sessionId, DEFAULT_RETRIEVAL_SETTINGS),
+      ({ sessionId }) => useChat(sessionId, EMPTY_ADVANCED_RETRIEVAL),
       { initialProps: { sessionId: "session-a" } },
     );
 
@@ -164,7 +164,7 @@ describe("useChat", () => {
     }));
 
     const { result, rerender } = renderHook(
-      ({ sessionId }) => useChat(sessionId, DEFAULT_RETRIEVAL_SETTINGS),
+      ({ sessionId }) => useChat(sessionId, EMPTY_ADVANCED_RETRIEVAL),
       { initialProps: { sessionId: "session-a" } },
     );
 
@@ -219,7 +219,7 @@ describe("useChat", () => {
     });
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.historyLoading).toBe(false));
@@ -263,7 +263,7 @@ describe("useChat", () => {
     });
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS, undefined, false),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL, undefined, false),
     );
 
     await waitFor(() => expect(result.current.historyLoading).toBe(false));
@@ -289,12 +289,15 @@ describe("useChat", () => {
       | Record<string, unknown>
       | undefined;
     expect(options?.debugRetrieval).toBeUndefined();
-    expect(options?.matchCount).toBe(DEFAULT_RETRIEVAL_SETTINGS.matchCount);
-    expect(options?.scope).toBe(DEFAULT_RETRIEVAL_SETTINGS.scope);
+    expect(options?.retrieval).toEqual(EMPTY_ADVANCED_RETRIEVAL);
+    expect(options?.matchCount).toBeUndefined();
+    expect(options?.scope).toBeUndefined();
   });
 
   it("sends debugRetrieval when inspect mode is on without changing retrieval fields", async () => {
-    const customSettings = { scope: "tenant" as const, matchCount: 9 };
+    const customSettings = {
+      explicit: { scope: "tenant" as const, matchCount: 9 },
+    };
     mockSendMessageStream.mockImplementation(async function* () {
       yield { type: "token", text: "ok" };
       yield {
@@ -334,8 +337,7 @@ describe("useChat", () => {
       unknown
     >;
     expect(options.debugRetrieval).toBe(true);
-    expect(options.matchCount).toBe(9);
-    expect(options.scope).toBe("tenant");
+    expect(options.retrieval).toEqual(customSettings);
   });
 
   it("keeps the full retrieval_debug payload on the message when inspect is on", async () => {
@@ -359,7 +361,7 @@ describe("useChat", () => {
     });
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS, undefined, true),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL, undefined, true),
     );
 
     await waitFor(() => expect(result.current.historyLoading).toBe(false));
@@ -405,7 +407,7 @@ describe("useChat", () => {
     });
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.historyLoading).toBe(false));
@@ -454,7 +456,7 @@ describe("useChat", () => {
     });
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.historyLoading).toBe(false));
@@ -495,7 +497,7 @@ describe("useChat", () => {
     });
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.historyLoading).toBe(false));
@@ -562,7 +564,7 @@ describe("useChat", () => {
     }));
 
     const { result, rerender } = renderHook(
-      ({ sessionId }) => useChat(sessionId, DEFAULT_RETRIEVAL_SETTINGS),
+      ({ sessionId }) => useChat(sessionId, EMPTY_ADVANCED_RETRIEVAL),
       { initialProps: { sessionId: "session-a" } },
     );
 
@@ -667,7 +669,7 @@ describe("useChat", () => {
     }));
 
     const { result, rerender } = renderHook(
-      ({ sessionId }) => useChat(sessionId, DEFAULT_RETRIEVAL_SETTINGS),
+      ({ sessionId }) => useChat(sessionId, EMPTY_ADVANCED_RETRIEVAL),
       { initialProps: { sessionId: "session-a" } },
     );
 
@@ -752,7 +754,7 @@ describe("useChat", () => {
     mockGetUploadedDocument.mockReturnValue(undefined);
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.attachment?.status).toBe("ready"));
@@ -779,7 +781,7 @@ describe("useChat", () => {
     mockGetUploadedDocument.mockReturnValue(undefined);
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.attachment?.status).toBe("ready"));
@@ -805,7 +807,7 @@ describe("useChat", () => {
       mockGetUploadedDocument.mockReturnValue(undefined);
 
       const { result } = renderHook(() =>
-        useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+        useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
       );
 
       await waitFor(() =>
@@ -828,7 +830,7 @@ describe("useChat", () => {
     });
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.attachment?.fileName).toBe("notes.txt"));
@@ -840,7 +842,7 @@ describe("useChat", () => {
     mockPoll.fileName = undefined;
 
     const { result, rerender } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.historyLoading).toBe(false));
@@ -880,7 +882,7 @@ describe("useChat", () => {
     mockGetDocumentStatus.mockRejectedValue(new DocumentNotFoundError("missing"));
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.historyLoading).toBe(false));
@@ -960,7 +962,7 @@ describe("useChat", () => {
     });
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.historyLoading).toBe(false));
@@ -1047,7 +1049,7 @@ describe("useChat", () => {
     );
 
     const { result, rerender } = renderHook(
-      ({ sessionId }) => useChat(sessionId, DEFAULT_RETRIEVAL_SETTINGS),
+      ({ sessionId }) => useChat(sessionId, EMPTY_ADVANCED_RETRIEVAL),
       { initialProps: { sessionId: "session-a" } },
     );
 
@@ -1084,7 +1086,7 @@ describe("useChat", () => {
       mockGetDocumentStatus.mockRejectedValue(error);
 
       const { result } = renderHook(() =>
-        useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+        useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
       );
 
       await waitFor(() => expect(result.current.historyLoading).toBe(false));
@@ -1112,7 +1114,7 @@ describe("useChat", () => {
     });
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.attachment?.status).toBe("failed"));
@@ -1165,7 +1167,7 @@ describe("useChat", () => {
     );
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.attachment?.status).toBe("ready"));
@@ -1185,7 +1187,7 @@ describe("useChat", () => {
     mockGetSession.mockResolvedValue(sessionPayload("session-a", ["doc-1"]));
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.historyLoading).toBe(false));
@@ -1209,7 +1211,7 @@ describe("useChat", () => {
     mockGetSession.mockRejectedValue(new Error("session failed"));
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.historyLoading).toBe(false));
@@ -1249,7 +1251,7 @@ describe("useChat", () => {
     }));
 
     const { result, rerender } = renderHook(
-      ({ sessionId }) => useChat(sessionId, DEFAULT_RETRIEVAL_SETTINGS),
+      ({ sessionId }) => useChat(sessionId, EMPTY_ADVANCED_RETRIEVAL),
       { initialProps: { sessionId: "session-a" } },
     );
 
@@ -1319,7 +1321,7 @@ describe("useChat", () => {
     }));
 
     const { result, rerender } = renderHook(
-      ({ sessionId }) => useChat(sessionId, DEFAULT_RETRIEVAL_SETTINGS),
+      ({ sessionId }) => useChat(sessionId, EMPTY_ADVANCED_RETRIEVAL),
       { initialProps: { sessionId: "session-a" } },
     );
 
@@ -1397,7 +1399,7 @@ describe("useChat", () => {
     const onHistoryLoaded = vi.fn();
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS, {
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL, {
         onUserQuestion,
         onDocumentAttached,
         onHistoryLoaded,
@@ -1447,7 +1449,7 @@ describe("useChat", () => {
     vi.mocked(saveUploadedDocument).mockClear();
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.historyLoading).toBe(false));
@@ -1506,7 +1508,7 @@ describe("useChat", () => {
     vi.mocked(removeUploadedDocument).mockClear();
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.historyLoading).toBe(false));
@@ -1537,7 +1539,7 @@ describe("useChat", () => {
     vi.mocked(saveUploadedDocument).mockClear();
 
     const { result, rerender } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() => expect(result.current.historyLoading).toBe(false));
@@ -1614,7 +1616,7 @@ describe("useChat", () => {
     mockPoll.statusDetail = "replacement_in_progress";
 
     const { result, rerender } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() =>
@@ -1674,7 +1676,7 @@ describe("useChat", () => {
     });
 
     const { result } = renderHook(() =>
-      useChat("session-a", DEFAULT_RETRIEVAL_SETTINGS),
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
     );
 
     await waitFor(() =>

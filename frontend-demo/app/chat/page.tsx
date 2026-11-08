@@ -1,21 +1,31 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { PanelLeft } from "lucide-react";
 import UploadModal from "../components/UploadModal";
 import MessageList from "../components/chat/MessageList";
 import ChatInput from "../components/chat/ChatInput";
 import SessionSidebar from "../components/chat/SessionSidebar";
-import RetrievalSettingsPanel from "../components/RetrievalSettingsPanel";
+import AdvancedRetrievalDrawer from "../components/AdvancedRetrievalDrawer";
 import { InlineAlert } from "../components/ui/InlineAlert";
 import { useChat } from "../lib/hooks/useChat";
-import { useRetrievalSettings } from "../lib/hooks/useRetrievalSettings";
+import { useAdvancedRetrieval } from "../lib/hooks/useAdvancedRetrieval";
 import { useSessionManager } from "../lib/hooks/useSessionManager";
+import { effectiveScope } from "../lib/advancedRetrieval";
+import {
+  fetchRetrievalDiscovery,
+  type RetrievalDiscoveryResponse,
+} from "../lib/api";
 
 export default function ChatPage() {
   const [showModal, setShowModal] = useState(false);
   const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false);
   const [inspectMode, setInspectMode] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [discovery, setDiscovery] = useState<RetrievalDiscoveryResponse>({
+    presets: [],
+    reranker_providers: ["similarity"],
+  });
   const uploadButtonRef = useRef<HTMLButtonElement>(null);
   const {
     sessions,
@@ -31,7 +41,24 @@ export default function ChatPage() {
     noteDocumentAttached,
     noteSessionHistory,
   } = useSessionManager();
-  const { settings, setScope, setMatchCount, loaded: retrievalLoaded } = useRetrievalSettings();
+  const {
+    state: retrievalState,
+    loaded: retrievalLoaded,
+    setScope,
+    setMatchCount,
+    setHybridEnabled,
+    setRerankingEnabled,
+    setRerankerProvider,
+    setQueryTransformationEnabled,
+    setQueryTransformationStrategy,
+    setHistoryAwareRetrieval,
+    setRetrievalHistoryWindow,
+    setGenerationHistoryWindow,
+  } = useAdvancedRetrieval();
+
+  useEffect(() => {
+    void fetchRetrievalDiscovery().then(setDiscovery);
+  }, []);
 
   const {
     messages,
@@ -53,7 +80,7 @@ export default function ChatPage() {
     stopStreaming,
   } = useChat(
     activeSessionId,
-    settings,
+    retrievalState,
     {
       onUserQuestion: noteUserQuestion,
       onDocumentAttached: noteDocumentAttached,
@@ -61,6 +88,8 @@ export default function ChatPage() {
     },
     inspectMode,
   );
+
+  const indicatorScope = effectiveScope(retrievalState);
 
   if (!isLoaded || !retrievalLoaded) {
     return (
@@ -72,7 +101,6 @@ export default function ChatPage() {
         }}
         aria-busy="true"
       >
-        {/* Sidebar skeleton */}
         <div className="w-64 border-r border-border bg-surface hidden md:flex flex-col animate-pulse">
           <div className="p-4 border-b border-border">
             <div className="h-10 w-full rounded-lg bg-border" />
@@ -87,10 +115,8 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Main area skeleton */}
         <div className="flex-1 flex flex-col overflow-hidden min-h-0 animate-pulse">
           <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden p-4">
-            {/* Message bubbles */}
             <div className="flex-1 space-y-4 py-4">
               <div className="flex justify-start">
                 <div className="h-16 w-72 rounded-xl border border-border bg-surface" />
@@ -103,7 +129,6 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* Input bar skeleton */}
             <div className="shrink-0 space-y-3 pt-2">
               <div className="h-4 w-48 rounded bg-border" />
               <div className="flex items-end gap-2 rounded-xl border border-border bg-surface px-4 py-3">
@@ -195,10 +220,21 @@ export default function ChatPage() {
           />
 
           <div className="shrink-0 px-4 pb-2">
-            <RetrievalSettingsPanel
-              settings={settings}
+            <AdvancedRetrievalDrawer
+              open={drawerOpen}
+              onOpenChange={setDrawerOpen}
+              state={retrievalState}
               onScopeChange={setScope}
               onMatchCountChange={setMatchCount}
+              onHybridEnabledChange={setHybridEnabled}
+              onRerankingEnabledChange={setRerankingEnabled}
+              onRerankerProviderChange={setRerankerProvider}
+              onQueryTransformationEnabledChange={setQueryTransformationEnabled}
+              onQueryTransformationStrategyChange={setQueryTransformationStrategy}
+              onHistoryAwareRetrievalChange={setHistoryAwareRetrieval}
+              onRetrievalHistoryWindowChange={setRetrievalHistoryWindow}
+              onGenerationHistoryWindowChange={setGenerationHistoryWindow}
+              availableRerankerProviders={discovery.reranker_providers}
               inspectMode={inspectMode}
               onInspectModeChange={setInspectMode}
             />
@@ -220,7 +256,7 @@ export default function ChatPage() {
             onUploadClick={() => setShowModal(true)}
             uploadButtonRef={uploadButtonRef}
             stopStreaming={stopStreaming}
-            scope={settings.scope}
+            scope={indicatorScope}
           />
         </div>
       </div>

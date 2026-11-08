@@ -64,8 +64,6 @@ describe("sendMessage", () => {
         body: JSON.stringify({
           question: "What is RAG?",
           doc_id: "doc-123",
-          match_count: 5,
-          scope: "session",
           session_id: "test-session-id",
         }),
       })
@@ -92,7 +90,10 @@ describe("sendMessage", () => {
       new Response(JSON.stringify(MOCK_RESPONSE), { status: 200 })
     );
 
-    await sendMessage("q", "doc-123", { debugRetrieval: true, matchCount: 7, scope: "tenant" });
+    await sendMessage("q", "doc-123", {
+      debugRetrieval: true,
+      retrieval: { explicit: { matchCount: 7, scope: "tenant" } },
+    });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.stringContaining("/chat"),
@@ -100,9 +101,9 @@ describe("sendMessage", () => {
         body: JSON.stringify({
           question: "q",
           doc_id: "doc-123",
-          match_count: 7,
-          scope: "tenant",
           session_id: "test-session-id",
+          scope: "tenant",
+          match_count: 7,
           debug_retrieval: true,
         }),
       })
@@ -115,8 +116,7 @@ describe("sendMessage", () => {
     );
 
     await sendMessage("What is RAG?", "doc-123", {
-      matchCount: 12,
-      scope: "tenant",
+      retrieval: { explicit: { matchCount: 12, scope: "tenant" } },
     });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -125,9 +125,9 @@ describe("sendMessage", () => {
         body: JSON.stringify({
           question: "What is RAG?",
           doc_id: "doc-123",
-          match_count: 12,
-          scope: "tenant",
           session_id: "test-session-id",
+          scope: "tenant",
+          match_count: 12,
         }),
       })
     );
@@ -138,7 +138,9 @@ describe("sendMessage", () => {
       new Response(JSON.stringify(MOCK_RESPONSE), { status: 200 })
     );
 
-    await sendMessage("q", "doc-123", { matchCount: 99 });
+    await sendMessage("q", "doc-123", {
+      retrieval: { explicit: { matchCount: 99 } },
+    });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.any(String),
@@ -146,9 +148,8 @@ describe("sendMessage", () => {
         body: JSON.stringify({
           question: "q",
           doc_id: "doc-123",
-          match_count: 20,
-          scope: "session",
           session_id: "test-session-id",
+          match_count: 20,
         }),
       })
     );
@@ -1204,8 +1205,6 @@ describe("sendMessageStream", () => {
         body: JSON.stringify({
           question: "What is RAG?",
           doc_id: "doc-123",
-          match_count: 5,
-          scope: "session",
           session_id: "test-session-id",
         }),
       })
@@ -1230,8 +1229,6 @@ describe("sendMessageStream", () => {
         body: JSON.stringify({
           question: "q",
           doc_id: "doc-123",
-          match_count: 5,
-          scope: "session",
           session_id: "test-session-id",
           debug_retrieval: true,
         }),
