@@ -13,6 +13,8 @@ export type CompleteEvent = {
   session_id?: string;
   /** Persisted assistant message id. Absent when the turn was not stored. */
   message_id?: string;
+  /** End-to-end request time when the backend includes it on stream complete. */
+  request_latency_ms?: number;
   /** Full backend complete payload, including opt-in fields such as `retrieval_debug`. */
   _raw?: Record<string, unknown>;
 };
@@ -142,6 +144,7 @@ function parseTokenEvent(data: string): TokenEvent | null {
 function parseCompleteEvent(data: string): CompleteEvent | null {
   try {
     const payload = JSON.parse(data) as Record<string, unknown>;
+    const requestLatencyMs = payload.request_latency_ms;
     return {
       type: "complete",
       sources: (payload.sources ?? []) as ChatSource[],
@@ -152,6 +155,9 @@ function parseCompleteEvent(data: string): CompleteEvent | null {
         : {}),
       ...(typeof payload.message_id === "string"
         ? { message_id: payload.message_id }
+        : {}),
+      ...(typeof requestLatencyMs === "number" && Number.isFinite(requestLatencyMs)
+        ? { request_latency_ms: requestLatencyMs }
         : {}),
       _raw: payload,
     };

@@ -117,6 +117,7 @@ export type AiResponseContentProps = {
   chunks?: number;
   model?: string;
   latencyMs?: number;
+  requestLatencyMs?: number;
   question?: string;
   retrievalDebug?: RetrievalDebugMetadata;
   /** When false, hide error, zero-chunks, metadata, and inspector. */
@@ -142,6 +143,7 @@ export default function AiResponseContent({
   chunks,
   model,
   latencyMs,
+  requestLatencyMs,
   question,
   retrievalDebug,
   detailsVisible = true,
@@ -198,6 +200,7 @@ export default function AiResponseContent({
             chunks,
             model,
             latency_ms: latencyMs,
+            request_latency_ms: requestLatencyMs,
           }}
         />
       )}
