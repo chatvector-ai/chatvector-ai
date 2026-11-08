@@ -58,6 +58,7 @@ from .models import (
     ChatResponse,
     DocumentListResponse,
     DocumentResponse,
+    RetrievalPresetDiscoveryResponse,
     DocumentStatus,
     HistoryConfig,
     RetrievalConfig,
@@ -283,6 +284,11 @@ class AsyncChatVectorClient:
         """List document summaries for the authenticated tenant."""
         payload = await self._request_json("GET", "documents")
         return DocumentListResponse.from_dict(payload)
+
+    async def list_retrieval_presets(self) -> RetrievalPresetDiscoveryResponse:
+        """List loaded preset names and reranker identifiers for this process."""
+        payload = await self._request_json("GET", "retrieval/presets")
+        return RetrievalPresetDiscoveryResponse.from_dict(payload)
 
     async def delete_document(self, document_id: str) -> None:
         """Delete a document by identifier."""

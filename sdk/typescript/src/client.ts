@@ -16,6 +16,7 @@ import type {
   Session,
   SessionHistoryResponse,
   SessionListResponse,
+  RetrievalPresetDiscoveryResponse,
   FeedbackItem,
   FeedbackListResponse,
   ListFeedbackInput,
@@ -30,6 +31,7 @@ import { ChatsResource } from "./resources/chats.js";
 import { DocumentsResource } from "./resources/documents.js";
 import { SessionsResource } from "./resources/sessions.js";
 import { FeedbackResource } from "./resources/feedback.js";
+import { RetrievalResource } from "./resources/retrieval.js";
 
 export type ChatVectorClientOptions = {
   baseUrl: string;
@@ -51,6 +53,7 @@ export class ChatVectorClient {
   private readonly chats: ChatsResource;
   private readonly sessions: SessionsResource;
   private readonly feedback: FeedbackResource;
+  private readonly retrieval: RetrievalResource;
 
   constructor(options: ChatVectorClientOptions) {
     if (!options || typeof options !== "object") {
@@ -70,6 +73,7 @@ export class ChatVectorClient {
     this.chats = new ChatsResource(http);
     this.sessions = new SessionsResource(http);
     this.feedback = new FeedbackResource(http);
+    this.retrieval = new RetrievalResource(http);
   }
 
   uploadDocument(
@@ -109,6 +113,12 @@ export class ChatVectorClient {
 
   listDocuments(options?: RequestOptions): Promise<DocumentListResponse> {
     return this.documents.listDocuments(options);
+  }
+
+  listRetrievalPresets(
+    options?: RequestOptions,
+  ): Promise<RetrievalPresetDiscoveryResponse> {
+    return this.retrieval.listRetrievalPresets(options);
   }
 
   deleteDocument(documentId: string, options?: RequestOptions): Promise<void> {

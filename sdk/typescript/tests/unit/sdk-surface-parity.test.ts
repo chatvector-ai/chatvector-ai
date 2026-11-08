@@ -54,6 +54,22 @@ describe("SDK surface parity", () => {
     expect(getFetchCall(fetch, 1).init.method).toBe("DELETE");
   });
 
+  it("listRetrievalPresets hits GET /retrieval/presets", async () => {
+    const fetch = createFetchMock(
+      jsonResponse({
+        preset_names: ["eval_hybrid"],
+        reranker_providers: ["similarity"],
+      }),
+    );
+    const client = makeClient(fetch);
+    const discovery = await client.listRetrievalPresets();
+    expect(getFetchCall(fetch).url).toBe(
+      "https://api.chatvector.test/retrieval/presets",
+    );
+    expect(discovery.presetNames).toEqual(["eval_hybrid"]);
+    expect(discovery.rerankerProviders).toEqual(["similarity"]);
+  });
+
   it("getSessionHistory maps session history messages", async () => {
     const fetch = createFetchMock(
       jsonResponse({

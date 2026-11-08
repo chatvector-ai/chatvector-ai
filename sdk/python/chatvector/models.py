@@ -470,6 +470,36 @@ class DocumentListResponse:
 
 
 @dataclass(slots=True)
+class RetrievalPresetDiscoveryResponse:
+    """Process-local preset names and reranker identifiers from ``GET /retrieval/presets``."""
+
+    preset_names: list[str] = field(default_factory=list)
+    reranker_providers: list[str] = field(default_factory=list)
+    raw: JSONDict = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, payload: JSONMapping) -> "RetrievalPresetDiscoveryResponse":
+        """Build a preset discovery model from an API response payload."""
+        raw = dict(payload)
+        names = payload.get("preset_names")
+        providers = payload.get("reranker_providers")
+        return cls(
+            preset_names=[str(name) for name in names] if isinstance(names, list) else [],
+            reranker_providers=[
+                str(provider) for provider in providers
+            ] if isinstance(providers, list) else [],
+            raw=raw,
+        )
+
+    def to_dict(self) -> JSONDict:
+        """Convert the model back to a JSON-serializable dictionary."""
+        return {
+            "preset_names": list(self.preset_names),
+            "reranker_providers": list(self.reranker_providers),
+        }
+
+
+@dataclass(slots=True)
 class SessionHistoryMessage:
     """One message returned from ``GET /sessions/{id}/history``."""
 

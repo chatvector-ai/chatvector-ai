@@ -32,6 +32,7 @@ from .models import (
     ChatResponse,
     DocumentListResponse,
     DocumentResponse,
+    RetrievalPresetDiscoveryResponse,
     DocumentStatus,
     HistoryConfig,
     RetrievalConfig,
@@ -326,6 +327,16 @@ class ChatVectorClient:
         """
         payload = self._request_json("GET", "documents")
         return DocumentListResponse.from_dict(payload)
+
+    def list_retrieval_presets(self) -> RetrievalPresetDiscoveryResponse:
+        """
+        List loaded retrieval preset names and configured reranker identifiers.
+
+        Returns:
+            Preset names (no bodies) and reranker provider identifiers for this process.
+        """
+        payload = self._request_json("GET", "retrieval/presets")
+        return RetrievalPresetDiscoveryResponse.from_dict(payload)
 
     def delete_document(self, document_id: str) -> None:
         """

@@ -884,6 +884,23 @@ class ChatVectorClientTests(unittest.TestCase):
         self.assertEqual(len(result.documents), 1)
         self.assertEqual(result.documents[0].file_name, "guide.pdf")
 
+    def test_list_retrieval_presets_returns_typed_response(self) -> None:
+        response = make_response(
+            200,
+            url="https://api.chatvector.test/retrieval/presets",
+            json_data={
+                "preset_names": ["eval_hybrid"],
+                "reranker_providers": ["similarity", "cohere"],
+            },
+        )
+
+        with patch.object(self.client._client, "request", return_value=response) as mock_request:
+            result = self.client.list_retrieval_presets()
+
+        self.assertEqual(mock_request.call_args.args[:2], ("GET", "retrieval/presets"))
+        self.assertEqual(result.preset_names, ["eval_hybrid"])
+        self.assertEqual(result.reranker_providers, ["similarity", "cohere"])
+
     def test_delete_document_sends_delete_request(self) -> None:
         response = make_response(
             204,
