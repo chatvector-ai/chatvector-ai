@@ -3,6 +3,12 @@
 import { useRef, useState, useEffect, type RefObject } from "react";
 import { X, Upload, AlertCircle, FileText, Loader2 } from "lucide-react";
 import { uploadDocument } from "../lib/api";
+import {
+  buildMetadataFromRows,
+  hasEmptyMetadataKey,
+  type DocumentScalarMetadata,
+  type MetadataRow,
+} from "../lib/documentMetadata";
 import IngestionPipeline from "./IngestionPipeline";
 
 const FOCUSABLE_SELECTOR =
@@ -20,6 +26,7 @@ export type UploadAcceptedPayload = {
   documentId: string;
   statusEndpoint: string;
   queuePosition?: number;
+  metadata?: DocumentScalarMetadata;
 };
 
 export type UploadModalAttachment = {
@@ -73,6 +80,13 @@ export default function UploadModal({
   /** Tracks whether the pipeline animation has visually reached "completed". */
   const [pipelineVisuallyComplete, setPipelineVisuallyComplete] =
     useState(false);
+  const [metadataOpen, setMetadataOpen] = useState(false);
+  const [metadataRows, setMetadataRows] = useState<MetadataRow[]>([
+    { key: "", value: "" },
+  ]);
+  const [metadataClientError, setMetadataClientError] = useState<string | null>(
+    null,
+  );
 
   const effectiveReplaceDocumentId =
     replaceDocumentId !== undefined
@@ -150,21 +164,40 @@ export default function UploadModal({
     setIsUploading(true);
     setUploadHttpFailed(false);
     setUploadErrorMessage(null);
+    setMetadataClientError(null);
     setPipelineVisuallyComplete(false);
+
+    const metadata = metadataOpen
+      ? buildMetadataFromRows(metadataRows)
+      : undefined;
+    if (metadataOpen && hasEmptyMetadataKey(metadataRows)) {
+      setIsUploading(false);
+      setMetadataClientError("Each metadata key must be non-empty.");
+      setUploadHttpFailed(true);
+      setUploadErrorMessage("Each metadata key must be non-empty.");
+      return;
+    }
+
     try {
       if (onBeforeUpload) {
         await onBeforeUpload();
       }
       const { documentId, statusEndpoint, queuePosition } =
         effectiveReplaceDocumentId
-          ? await uploadDocument(file, sessionId, effectiveReplaceDocumentId)
-          : await uploadDocument(file, sessionId);
+          ? await uploadDocument(
+              file,
+              sessionId,
+              effectiveReplaceDocumentId,
+              metadata,
+            )
+          : await uploadDocument(file, sessionId, null, metadata);
       setHasActiveUpload(true);
       onUploadAccepted({
         fileName: file.name,
         documentId,
         statusEndpoint,
         queuePosition,
+        ...(metadata !== undefined ? { metadata } : {}),
       });
       setAwaitingProcessing(true);
     } catch (err) {
@@ -328,6 +361,68 @@ export default function UploadModal({
             <X size={20} strokeWidth={1.75} />
           </button>
         </div>
+
+        {showPicker && (
+          <details
+            className="mb-3 rounded-lg border border-border bg-background/40 text-xs"
+            onToggle={(event) =>
+              setMetadataOpen((event.currentTarget as HTMLDetailsElement).open)
+            }
+          >
+            <summary className="cursor-pointer list-none px-3 py-2 text-muted transition-colors hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden">
+              <span className="font-medium">Document metadata</span>
+              <span className="ml-1.5 font-normal text-muted/80">(optional)</span>
+            </summary>
+            <div className="space-y-2 border-t border-border px-3 py-3">
+              <p className="text-muted">
+                Add scalar key/value pairs sent as the API{" "}
+                <span className="font-mono">metadata</span> field.
+              </p>
+              {metadataRows.map((row, index) => (
+                <div key={index} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={row.key}
+                    onChange={(e) => {
+                      const next = [...metadataRows];
+                      next[index] = { ...row, key: e.target.value };
+                      setMetadataRows(next);
+                    }}
+                    placeholder="key"
+                    aria-label={`Metadata key ${index + 1}`}
+                    className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-foreground outline-none focus:border-accent"
+                  />
+                  <input
+                    type="text"
+                    value={row.value}
+                    onChange={(e) => {
+                      const next = [...metadataRows];
+                      next[index] = { ...row, value: e.target.value };
+                      setMetadataRows(next);
+                    }}
+                    placeholder="value"
+                    aria-label={`Metadata value ${index + 1}`}
+                    className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-foreground outline-none focus:border-accent"
+                  />
+                </div>
+              ))}
+              {metadataRows.length < 5 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setMetadataRows((rows) => [...rows, { key: "", value: "" }])
+                  }
+                  className="rounded-md border border-border px-2 py-1 text-foreground transition hover:bg-surface"
+                >
+                  Add pair
+                </button>
+              )}
+              {metadataClientError && (
+                <p className="text-danger-text">{metadataClientError}</p>
+              )}
+            </div>
+          </details>
+        )}
 
         <div
           onDrop={dropZoneInteractive ? handleDrop : (e) => e.preventDefault()}
