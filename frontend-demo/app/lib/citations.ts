@@ -70,6 +70,172 @@ export type InspectorSourceField = {
   value: string;
 };
 
+const RANKING_SCORE_LABELS: Record<string, string> = {
+  vector: "Vector similarity score",
+  hybrid_rrf: "Hybrid RRF score",
+  reranked: "Reranked score",
+};
+
+const TIMING_STAGE_ORDER = [
+  "transform",
+  "embed",
+  "search",
+  "rerank",
+  "context",
+  "total",
+] as const;
+
+const TIMING_STAGE_LABELS: Record<string, string> = {
+  transform: "Transform",
+  embed: "Embed",
+  search: "Search",
+  rerank: "Rerank",
+  context: "Context",
+  total: "Retrieval total",
+};
+
+const PACKED_CONTEXT_KEYS = [
+  "packed_chunks",
+  "selected_context",
+  "selected_context_chunks",
+] as const;
+
+function humanizeConfigFieldName(name: string): string {
+  return name
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatConfigScalar(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function formatEffectiveConfigEntry(entry: unknown): string | null {
+  if (entry == null || typeof entry !== "object" || Array.isArray(entry)) {
+    return null;
+  }
+  const record = entry as Record<string, unknown>;
+  if (!("value" in record)) {
+    return null;
+  }
+  const valueText = formatConfigScalar(record.value);
+  if (typeof record.source === "string" && record.source.length > 0) {
+    return `${valueText} (${record.source})`;
+  }
+  return valueText;
+}
+
+export function rankingScoreFieldLabel(
+  scoreType: string | null | undefined,
+): string {
+  if (scoreType && RANKING_SCORE_LABELS[scoreType]) {
+    return RANKING_SCORE_LABELS[scoreType];
+  }
+  if (scoreType) {
+    return `${scoreType} score`;
+  }
+  return "Ranking score";
+}
+
+export function inspectorEffectiveConfigFields(
+  effectiveConfig: Record<string, unknown>,
+): InspectorSourceField[] {
+  const fields: InspectorSourceField[] = [];
+  const names = Object.keys(effectiveConfig).sort();
+  for (const name of names) {
+    const formatted = formatEffectiveConfigEntry(effectiveConfig[name]);
+    if (formatted === null) continue;
+    fields.push({
+      label: humanizeConfigFieldName(name),
+      value: formatted,
+    });
+  }
+  return fields;
+}
+
+export function inspectorScopeField(
+  effectiveConfig: Record<string, unknown> | undefined,
+): InspectorSourceField | null {
+  if (!effectiveConfig?.scope) return null;
+  const formatted = formatEffectiveConfigEntry(effectiveConfig.scope);
+  if (formatted === null) return null;
+  return { label: "Scope", value: formatted };
+}
+
+export function inspectorMetadataFilterField(
+  effectiveConfig: Record<string, unknown> | undefined,
+): InspectorSourceField | null {
+  if (!effectiveConfig?.metadata_filter) return null;
+  const formatted = formatEffectiveConfigEntry(effectiveConfig.metadata_filter);
+  if (formatted === null) return null;
+  return { label: "Metadata filter", value: formatted };
+}
+
+export function inspectorRerankerFields(
+  reranker: Record<string, unknown>,
+): InspectorSourceField[] {
+  const fields: InspectorSourceField[] = [];
+  const provider = reranker.provider;
+  if (typeof provider === "string" && provider.length > 0) {
+    fields.push({ label: "Provider", value: provider });
+  }
+  const model = reranker.model;
+  if (typeof model === "string" && model.length > 0) {
+    fields.push({ label: "Model", value: model });
+  }
+  const fallback = reranker.fallback_reason;
+  if (typeof fallback === "string" && fallback.length > 0) {
+    fields.push({ label: "Fallback reason", value: fallback });
+  }
+  return fields;
+}
+
+export function inspectorTimingStageFields(
+  timingMs: Record<string, number>,
+): InspectorSourceField[] {
+  const fields: InspectorSourceField[] = [];
+  for (const stage of TIMING_STAGE_ORDER) {
+    const value = timingMs[stage];
+    if (value === undefined) continue;
+    fields.push({
+      label: TIMING_STAGE_LABELS[stage] ?? humanizeConfigFieldName(stage),
+      value: formatLatencySeconds(value),
+    });
+  }
+  for (const stage of Object.keys(timingMs).sort()) {
+    if ((TIMING_STAGE_ORDER as readonly string[]).includes(stage)) continue;
+    const value = timingMs[stage];
+    if (value === undefined) continue;
+    fields.push({
+      label: humanizeConfigFieldName(stage),
+      value: formatLatencySeconds(value),
+    });
+  }
+  return fields;
+}
+
+export function packedContextFromDebug(
+  debug: Record<string, unknown> | undefined,
+): unknown[] | null {
+  if (!debug) return null;
+  for (const key of PACKED_CONTEXT_KEYS) {
+    const value = debug[key];
+    if (Array.isArray(value) && value.length > 0) {
+      return value;
+    }
+  }
+  return null;
+}
+
 export function hasInspectableRetrievalData(data: RetrievalInspectorData): boolean {
   if (data.question) return true;
   if (data.retrieval_debug) {
@@ -84,11 +250,39 @@ export function hasInspectableRetrievalData(data: RetrievalInspectorData): boole
     if (debug.history_resolution_fallback_reason) return true;
     if (debug.history_resolved_query) return true;
     if (debug.effective_retrieval_query) return true;
+    if (
+      debug.effective_config &&
+      typeof debug.effective_config === "object" &&
+      !Array.isArray(debug.effective_config) &&
+      Object.keys(debug.effective_config).length > 0
+    ) {
+      return true;
+    }
+    if (typeof debug.resolved_preset === "string" && debug.resolved_preset) {
+      return true;
+    }
+    if (
+      debug.reranker &&
+      typeof debug.reranker === "object" &&
+      !Array.isArray(debug.reranker)
+    ) {
+      return true;
+    }
+    if (
+      debug.timing_ms &&
+      typeof debug.timing_ms === "object" &&
+      !Array.isArray(debug.timing_ms) &&
+      Object.keys(debug.timing_ms).length > 0
+    ) {
+      return true;
+    }
+    if (packedContextFromDebug(debug as Record<string, unknown>)) return true;
   }
   if (data.sources && data.sources.length > 0) return true;
   if (data.chunks !== undefined) return true;
   if (data.model) return true;
   if (data.latency_ms !== undefined) return true;
+  if (data.request_latency_ms !== undefined) return true;
   return false;
 }
 
@@ -103,13 +297,16 @@ export function inspectorSourceFields(source: ChatSource): InspectorSourceField[
     fields.push({ label: "Chunk", value: String(source.chunk_index) });
   }
   if (source.score != null) {
-    fields.push({ label: "Score", value: source.score.toFixed(2) });
-  }
-  if (source.score_type) {
-    fields.push({ label: "Score type", value: source.score_type });
+    fields.push({
+      label: rankingScoreFieldLabel(source.score_type),
+      value: source.score.toFixed(2),
+    });
   }
   if (source.vector_score != null) {
-    fields.push({ label: "Vector score", value: source.vector_score.toFixed(2) });
+    fields.push({
+      label: "Vector similarity",
+      value: source.vector_score.toFixed(2),
+    });
   }
   if (source.full_text_score != null) {
     fields.push({

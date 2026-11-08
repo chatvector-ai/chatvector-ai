@@ -7,7 +7,11 @@ import {
   formatResponseMetadata,
   formatSourceCitation,
   hasInspectableRetrievalData,
+  inspectorEffectiveConfigFields,
+  inspectorRerankerFields,
   inspectorSourceFields,
+  inspectorTimingStageFields,
+  rankingScoreFieldLabel,
 } from "./citations";
 import type { ChatSource } from "./api";
 
@@ -93,22 +97,39 @@ describe("citations helpers", () => {
     ).toBe(true);
   });
 
-  it("formats inspector source fields with score type when present", () => {
+  it("labels vector and hybrid RRF ranking scores on different scales", () => {
+    expect(rankingScoreFieldLabel("vector")).toBe("Vector similarity score");
+    expect(rankingScoreFieldLabel("hybrid_rrf")).toBe("Hybrid RRF score");
+    expect(rankingScoreFieldLabel("vector")).not.toMatch(/confidence/i);
+    expect(rankingScoreFieldLabel("hybrid_rrf")).not.toMatch(/confidence/i);
+
     expect(
       inspectorSourceFields({
-        file_name: "report.pdf",
-        page_number: 2,
-        chunk_index: 3,
+        file_name: "a.pdf",
+        page_number: 1,
+        chunk_index: 0,
         score: 0.82,
         score_type: "vector",
       })
-    ).toEqual([
-      { label: "File", value: "report.pdf" },
-      { label: "Page", value: "2" },
-      { label: "Chunk", value: "3" },
-      { label: "Score", value: "0.82" },
-      { label: "Score type", value: "vector" },
-    ]);
+    ).toEqual(
+      expect.arrayContaining([
+        { label: "Vector similarity score", value: "0.82" },
+      ])
+    );
+
+    expect(
+      inspectorSourceFields({
+        file_name: "b.pdf",
+        page_number: 1,
+        chunk_index: 0,
+        score: 0.016,
+        score_type: "hybrid_rrf",
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        { label: "Hybrid RRF score", value: "0.02" },
+      ])
+    );
   });
 
   it("omits score type from inspector fields when absent", () => {
@@ -143,9 +164,8 @@ describe("citations helpers", () => {
       { label: "File", value: "report.pdf" },
       { label: "Page", value: "2" },
       { label: "Chunk", value: "3" },
-      { label: "Score", value: "0.77" },
-      { label: "Score type", value: "reranked" },
-      { label: "Vector score", value: "0.55" },
+      { label: "Reranked score", value: "0.77" },
+      { label: "Vector similarity", value: "0.55" },
       { label: "Full-text score", value: "0.42" },
       { label: "RRF score", value: "0.03" },
       { label: "Reranker score", value: "0.77" },
@@ -166,9 +186,68 @@ describe("citations helpers", () => {
       { label: "File", value: "report.pdf" },
       { label: "Page", value: "1" },
       { label: "Chunk", value: "0" },
-      { label: "Score", value: "0.82" },
-      { label: "Score type", value: "vector" },
+      { label: "Vector similarity score", value: "0.82" },
     ]);
+  });
+
+  it("formats effective config entries with field source", () => {
+    expect(
+      inspectorEffectiveConfigFields({
+        hybrid_enabled: { value: true, source: "request" },
+        match_count: { value: 5, source: "env" },
+      })
+    ).toEqual([
+      { label: "Hybrid Enabled", value: "true (request)" },
+      { label: "Match Count", value: "5 (env)" },
+    ]);
+  });
+
+  it("formats reranker fallback and omits rerank when absent", () => {
+    expect(
+      inspectorRerankerFields({
+        provider: "cohere",
+        fallback_reason: "timeout",
+      })
+    ).toEqual([
+      { label: "Provider", value: "cohere" },
+      { label: "Fallback reason", value: "timeout" },
+    ]);
+    expect(inspectorRerankerFields({})).toEqual([]);
+  });
+
+  it("formats timing stages when present", () => {
+    expect(
+      inspectorTimingStageFields({
+        search: 120,
+        total: 450,
+      })
+    ).toEqual([
+      { label: "Search", value: "120ms" },
+      { label: "Retrieval total", value: "450ms" },
+    ]);
+  });
+
+  it("detects inspectable debug payloads for config rerank and timings", () => {
+    expect(
+      hasInspectableRetrievalData({
+        retrieval_debug: {
+          effective_config: {
+            hybrid_enabled: { value: false, source: "env" },
+          },
+        },
+      })
+    ).toBe(true);
+    expect(
+      hasInspectableRetrievalData({
+        retrieval_debug: { reranker: { provider: "similarity" } },
+      })
+    ).toBe(true);
+    expect(
+      hasInspectableRetrievalData({
+        retrieval_debug: { timing_ms: { search: 10 } },
+        request_latency_ms: 900,
+      })
+    ).toBe(true);
   });
 
   it("keeps citation lines unchanged when component scores are present", () => {
