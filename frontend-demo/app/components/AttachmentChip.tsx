@@ -1,7 +1,9 @@
 "use client";
 
 import { FileText, X } from "lucide-react";
+import type { DocumentScalarMetadata } from "../lib/documentMetadata";
 import { STAGE_LABELS } from "../lib/stageLabels";
+import DocumentMetadataPairs from "./DocumentMetadataPairs";
 
 type Props = {
   fileName: string;
@@ -11,6 +13,7 @@ type Props = {
   awaitingProcessing?: boolean;
   queuePosition?: number;
   processingTime?: string;
+  metadata?: DocumentScalarMetadata;
   onRemove: () => void;
 };
 
@@ -55,6 +58,7 @@ export default function AttachmentChip({
   awaitingProcessing = false,
   queuePosition,
   processingTime,
+  metadata,
   onRemove,
 }: Props) {
   const label = chipLabel(
@@ -108,6 +112,7 @@ export default function AttachmentChip({
           Position {queuePosition} in queue
         </span>
       )}
+      <DocumentMetadataPairs metadata={metadata} className="flex flex-wrap gap-x-2 pl-6" />
     </div>
   );
 }

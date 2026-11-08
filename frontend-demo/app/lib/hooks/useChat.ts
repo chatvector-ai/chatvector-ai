@@ -23,6 +23,7 @@ import {
   removeUploadedDocument,
   getUploadedDocument,
 } from "../documentStore";
+import type { DocumentScalarMetadata } from "../documentMetadata";
 import type { RetrievalSettings } from "../retrievalSettings";
 
 const welcomeMessages: Message[] = [
@@ -832,6 +833,7 @@ export function useChat(
     documentId: string;
     statusEndpoint: string;
     queuePosition?: number;
+    metadata?: DocumentScalarMetadata;
   }) => {
     const fileName = payload.fileName.trim();
     if (sessionId && fileName && !questionLockedRef.current) {
@@ -862,6 +864,7 @@ export function useChat(
       statusEndpoint: payload.statusEndpoint,
       status: "processing",
       queue_position: payload.queuePosition,
+      ...(payload.metadata !== undefined ? { metadata: payload.metadata } : {}),
     });
   };
 

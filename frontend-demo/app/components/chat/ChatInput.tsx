@@ -79,6 +79,7 @@ export default function ChatInput({
               poll.queuePosition ?? attachment.queue_position
             }
             processingTime={poll.processingTime}
+            metadata={attachment.metadata}
             onRemove={() => void handleRemoveAttachment()}
           />
         </div>

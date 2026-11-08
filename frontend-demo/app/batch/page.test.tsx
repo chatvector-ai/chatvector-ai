@@ -57,6 +57,34 @@ describe("BatchPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows document metadata in the batch document list", async () => {
+    vi.mocked(listDocuments).mockResolvedValue({
+      tenant_id: "dev",
+      documents: [
+        {
+          document_id: "doc-1",
+          file_name: "File 1.pdf",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+          metadata: { department: "legal" },
+        },
+        {
+          document_id: "doc-2",
+          file_name: "File 2.pdf",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+        },
+      ],
+    });
+
+    render(<BatchPage />);
+
+    expect(await screen.findByText("department=legal")).toBeInTheDocument();
+    expect(screen.getByText("File 1.pdf")).toBeInTheDocument();
+  });
+
   it("keeps compare results when mode changes during an in-flight request", async () => {
     let resolveBatch: ((value: BatchChatResponse) => void) | undefined;
     vi.mocked(sendBatchMessage).mockImplementation(
