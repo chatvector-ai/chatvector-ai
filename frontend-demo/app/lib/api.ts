@@ -20,6 +20,7 @@ import {
   parseDocumentScalarMetadata,
   type DocumentScalarMetadata,
 } from "./documentMetadata";
+import type { DocumentIngestionError } from "./documentListDisplay";
 import { getSessionId } from "./session";
 import {
   buildConfigurationCompareQueryItem,
@@ -431,6 +432,8 @@ export type DeleteDocumentResult =
   | { status: "conflict"; message: string }
   | { status: "error"; message: string };
 
+export type { DocumentIngestionError } from "./documentListDisplay";
+
 export type DocumentSummary = {
   document_id: string;
   file_name: string;
@@ -439,7 +442,32 @@ export type DocumentSummary = {
   updated_at: string | null;
   metadata?: DocumentScalarMetadata;
   status_detail?: string;
+  error?: DocumentIngestionError | null;
 };
+
+function parseDocumentIngestionError(
+  raw: unknown
+): DocumentIngestionError | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null) return null;
+  if (typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const record = raw as Record<string, unknown>;
+  const error: DocumentIngestionError = {};
+  let hasField = false;
+  if (typeof record.stage === "string") {
+    error.stage = record.stage;
+    hasField = true;
+  }
+  if (typeof record.code === "string") {
+    error.code = record.code;
+    hasField = true;
+  }
+  if (typeof record.message === "string") {
+    error.message = record.message;
+    hasField = true;
+  }
+  return hasField ? error : undefined;
+}
 
 export type DocumentListResponse = {
   tenant_id: string;
@@ -477,6 +505,7 @@ export async function listDocuments(): Promise<DocumentListResponse> {
               ? statusDetailRaw
               : undefined;
           const metadata = parseDocumentScalarMetadata(record.metadata);
+          const ingestionError = parseDocumentIngestionError(record.error);
           return {
             document_id: documentId,
             file_name: fileName,
@@ -487,6 +516,7 @@ export async function listDocuments(): Promise<DocumentListResponse> {
               typeof record.updated_at === "string" ? record.updated_at : null,
             ...(metadata !== undefined ? { metadata } : {}),
             ...(statusDetail !== undefined ? { status_detail: statusDetail } : {}),
+            ...(ingestionError !== undefined ? { error: ingestionError } : {}),
           } satisfies DocumentSummary;
         })
         .filter((item): item is DocumentSummary => item !== null)
