@@ -29,6 +29,7 @@ export type {
   HistoryConfig,
   RetrievalConfig,
   RetrievalDebugMetadata,
+  RetrievalPresetDiscoveryResponse,
   RetrievalScope,
   Session,
   SessionHistoryMessage,

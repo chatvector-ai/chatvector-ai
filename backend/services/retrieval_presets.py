@@ -147,6 +147,24 @@ def get_retrieval_presets() -> Mapping[str, Mapping[str, Any]]:
     return _loaded_presets
 
 
+def list_configured_reranker_providers() -> list[str]:
+    """Return reranker identifiers available in this process (no secrets)."""
+    from core.config import config
+
+    providers = ["similarity"]
+    if config.COHERE_API_KEY:
+        providers.append("cohere")
+    return providers
+
+
+def build_retrieval_preset_discovery() -> dict[str, list[str]]:
+    """Names of loaded presets and configured reranker identifiers (no bodies)."""
+    return {
+        "preset_names": sorted(get_retrieval_presets().keys()),
+        "reranker_providers": list_configured_reranker_providers(),
+    }
+
+
 def lookup_retrieval_preset(name: str) -> dict[str, Any]:
     preset_name = _normalize_preset_name(name)
     presets = get_retrieval_presets()

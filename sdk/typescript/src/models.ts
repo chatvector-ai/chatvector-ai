@@ -139,6 +139,12 @@ export type DocumentListResponse = {
   _raw?: Record<string, unknown>;
 };
 
+export type RetrievalPresetDiscoveryResponse = {
+  presetNames: string[];
+  rerankerProviders: string[];
+  _raw?: Record<string, unknown>;
+};
+
 export type SessionHistoryMessage = {
   id: string;
   role: string;
