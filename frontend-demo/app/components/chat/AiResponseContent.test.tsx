@@ -61,7 +61,8 @@ describe("AiResponseContent", () => {
     await user.click(screen.getByText("Retrieval inspector"));
 
     expect(screen.getByText("0.63")).toBeInTheDocument();
-    expect(screen.getByText("vector")).toBeInTheDocument();
+    expect(screen.getByText("Vector similarity score")).toBeInTheDocument();
+    expect(screen.queryByText(/confidence/i)).not.toBeInTheDocument();
   });
 
   it("includes page number when present and deduplicates repeated sources", () => {
