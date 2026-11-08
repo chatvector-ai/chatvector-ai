@@ -352,6 +352,30 @@ function uploadSessionHeaders(
   return Object.keys(headers).length > 0 ? headers : undefined;
 }
 
+function mapDocumentScalarMetadata(
+  value: unknown,
+): Record<string, string | number | boolean> | undefined {
+  if (!isRecord(value) || Object.keys(value).length === 0) {
+    return undefined;
+  }
+  const result: Record<string, string | number | boolean> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof key !== "string" || key.length === 0) {
+      return undefined;
+    }
+    if (
+      typeof entry === "string" ||
+      typeof entry === "boolean" ||
+      (typeof entry === "number" && Number.isFinite(entry))
+    ) {
+      result[key] = entry;
+    } else {
+      return undefined;
+    }
+  }
+  return result;
+}
+
 function mapDocumentSummary(
   payload: Record<string, unknown>,
 ): DocumentSummary {
@@ -366,6 +390,10 @@ function mapDocumentSummary(
   };
   if (typeof payload.status_detail === "string") {
     result.statusDetail = payload.status_detail;
+  }
+  const metadata = mapDocumentScalarMetadata(payload.metadata);
+  if (metadata !== undefined) {
+    result.metadata = metadata;
   }
   if (payload.created_at === null || typeof payload.created_at === "string") {
     result.createdAt = payload.created_at;

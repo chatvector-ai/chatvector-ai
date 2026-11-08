@@ -59,6 +59,18 @@ class ModelTests(unittest.TestCase):
             self.assertIsNone(model.status_detail)
             self.assertNotIn("status_detail", model.to_dict())
 
+    def test_document_summary_parses_metadata(self) -> None:
+        summary = DocumentSummary.from_dict(
+            {
+                "document_id": "d",
+                "file_name": "f",
+                "status": "completed",
+                "metadata": {"department": "legal", "year": 2026},
+            }
+        )
+        self.assertEqual(summary.metadata, {"department": "legal", "year": 2026})
+        self.assertEqual(summary.to_dict()["metadata"], {"department": "legal", "year": 2026})
+
     def test_status_and_summary_parse_status_detail(self) -> None:
         status = DocumentStatus.from_dict(
             {"document_id": "d", "status": "completed", "status_detail": "replacement_failed"}

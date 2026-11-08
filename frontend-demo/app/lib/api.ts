@@ -10,7 +10,13 @@ import {
   DEFAULT_MATCH_COUNT,
   type RetrievalScope,
 } from "./retrievalSettings";
+import {
+  parseDocumentScalarMetadata,
+  type DocumentScalarMetadata,
+} from "./documentMetadata";
 import { getSessionId } from "./session";
+
+export type { DocumentScalarMetadata } from "./documentMetadata";
 import { parseSSEStream, type StreamEvent } from "./stream";
 
 export type { StreamEvent } from "./stream";
@@ -396,6 +402,8 @@ export type DocumentSummary = {
   status: string;
   created_at: string | null;
   updated_at: string | null;
+  metadata?: DocumentScalarMetadata;
+  status_detail?: string;
 };
 
 export type DocumentListResponse = {
@@ -428,6 +436,12 @@ export async function listDocuments(): Promise<DocumentListResponse> {
           ) {
             return null;
           }
+          const statusDetailRaw = record.status_detail;
+          const statusDetail =
+            typeof statusDetailRaw === "string" && statusDetailRaw.length > 0
+              ? statusDetailRaw
+              : undefined;
+          const metadata = parseDocumentScalarMetadata(record.metadata);
           return {
             document_id: documentId,
             file_name: fileName,
@@ -436,6 +450,8 @@ export async function listDocuments(): Promise<DocumentListResponse> {
               typeof record.created_at === "string" ? record.created_at : null,
             updated_at:
               typeof record.updated_at === "string" ? record.updated_at : null,
+            ...(metadata !== undefined ? { metadata } : {}),
+            ...(statusDetail !== undefined ? { status_detail: statusDetail } : {}),
           } satisfies DocumentSummary;
         })
         .filter((item): item is DocumentSummary => item !== null)
@@ -480,6 +496,7 @@ export type AttachmentState = {
   chunks?: { total: number; processed: number };
   processingTime?: string;
   queue_position?: number;
+  metadata?: DocumentScalarMetadata;
 };
 
 export type DocumentStatusPayload = {
@@ -706,7 +723,8 @@ async function postBatchChat(
 export async function uploadDocument(
   file: File,
   sessionIdOverride?: string | null,
-  replaceDocumentId?: string | null
+  replaceDocumentId?: string | null,
+  metadata?: DocumentScalarMetadata | null,
 ): Promise<{ documentId: string; statusEndpoint: string; queuePosition?: number }> {
   const sessionId =
     sessionIdOverride !== undefined ? sessionIdOverride : getSessionId();
@@ -714,6 +732,9 @@ export async function uploadDocument(
   formData.append("file", file);
   if (replaceDocumentId) {
     formData.append("replace_document_id", replaceDocumentId);
+  }
+  if (metadata != null && Object.keys(metadata).length > 0) {
+    formData.append("metadata", JSON.stringify(metadata));
   }
   
   const headers: Record<string, string> = { ...authHeaders() };

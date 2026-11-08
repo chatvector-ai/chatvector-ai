@@ -127,6 +127,7 @@ export type DocumentSummary = {
   status: string;
   /** Set while a replacement is running or after one failed; never gates retrieval. */
   statusDetail?: string;
+  metadata?: Record<string, string | number | boolean>;
   createdAt?: string | null;
   updatedAt?: string | null;
   _raw?: Record<string, unknown>;
