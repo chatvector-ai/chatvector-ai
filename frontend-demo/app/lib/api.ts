@@ -72,8 +72,9 @@ export async function fetchRetrievalDiscovery(): Promise<RetrievalDiscoveryRespo
     if (!providers.includes("similarity")) {
       providers.unshift("similarity");
     }
-    const presets = Array.isArray(data.presets)
-      ? data.presets.filter((p): p is string => typeof p === "string")
+    const rawPresetNames = data.preset_names ?? data.presets;
+    const presets = Array.isArray(rawPresetNames)
+      ? rawPresetNames.filter((p): p is string => typeof p === "string")
       : [];
     return { presets, reranker_providers: providers };
   } catch {
