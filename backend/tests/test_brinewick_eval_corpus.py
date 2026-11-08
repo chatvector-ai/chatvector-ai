@@ -90,7 +90,9 @@ def _production_chunks(file_name: str, payload: bytes) -> list[str]:
         payload, filename=file_name
     )
     text, boundaries = prepare_extracted_document_for_chunking(
-        document.text, document.page_boundaries
+        document.text,
+        document.page_boundaries,
+        content_type=content_type,
     )
     chunks = FixedChunkingStrategy(
         chunk_size=DECLARED_CHUNKING["chunk_size"],

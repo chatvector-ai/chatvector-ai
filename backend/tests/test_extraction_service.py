@@ -173,6 +173,41 @@ def test_docx_extractor_extracts_paragraphs_headings_and_tables_in_order():
     assert doc.page_boundaries == []
 
 
+def test_prepare_extracted_docx_preserves_table_cell_and_row_boundaries():
+    docx_bytes = build_minimal_docx(
+        paragraphs=["Prose paragraph unchanged wording."],
+        table_rows=[
+            ["fee-only-7741", "neighbor-cell-992"],
+            ["row-two-a", "row-two-b"],
+        ],
+    )
+    doc = DocxExtractor().extract(docx_bytes, filename="fixture.docx")
+    stored, boundaries = prepare_extracted_document_for_chunking(
+        doc.text,
+        doc.page_boundaries,
+        content_type=DOCX_CONTENT_TYPE,
+    )
+
+    assert boundaries == []
+    assert "Prose paragraph unchanged wording." in stored
+    assert "fee-only-7741\tneighbor-cell-992" in stored
+    assert "row-two-a\trow-two-b" in stored
+    assert "fee-only-7741 neighbor-cell-992" not in stored
+    assert "fee-only-7741\tneighbor-cell-992\nrow-two-a\trow-two-b" in stored
+
+
+def test_prepare_extracted_docx_prose_only_matches_clean_text():
+    docx_bytes = build_minimal_docx(paragraphs=["Unique prose-only docx phrase."])
+    doc = DocxExtractor().extract(docx_bytes, filename="prose.docx")
+    stored, _ = prepare_extracted_document_for_chunking(
+        doc.text,
+        doc.page_boundaries,
+        content_type=DOCX_CONTENT_TYPE,
+    )
+    plain, _ = prepare_extracted_document_for_chunking(doc.text, doc.page_boundaries)
+    assert stored == plain == "Unique prose-only docx phrase."
+
+
 def test_docx_content_type_and_filename_helpers():
     assert is_docx_content_type(DOCX_CONTENT_TYPE)
     assert is_docx_content_type(f"{DOCX_CONTENT_TYPE}; charset=binary")

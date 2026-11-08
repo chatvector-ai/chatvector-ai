@@ -841,7 +841,9 @@ async def test_process_document_docx_ingests_to_completed(monkeypatch):
     mock_create.assert_awaited_once()
     stored_records = mock_store.await_args.args[1]
     assert any("Unique DOCX pipeline phrase omega." in r.chunk_text for r in stored_records)
-    assert "Table cell north" in _TrackingSplitter.last_create["texts"][0]
+    chunked_text = _TrackingSplitter.last_create["texts"][0]
+    assert "Table cell north" in chunked_text
+    assert "Table cell north\tTable cell south" in chunked_text
     assert mock_update.await_args_list[-1].kwargs["status"] == "completed"
 
 

@@ -1080,7 +1080,9 @@ class IngestionPipeline:
             file_meta = _FileMetadata(content_type=file.content_type, filename=safe_filename)
             file_text, page_boundaries = await extract_text_with_metadata(file_meta, file_bytes)
             file_text, page_boundaries = prepare_extracted_document_for_chunking(
-                file_text, page_boundaries
+                file_text,
+                page_boundaries,
+                content_type=file.content_type,
             )
 
             if not file_text:
@@ -1226,7 +1228,9 @@ class IngestionPipeline:
                 )
             file_text, page_boundaries = await extract_text_with_metadata(file_meta, file_bytes)  # type: ignore[arg-type]
             file_text, page_boundaries = prepare_extracted_document_for_chunking(
-                file_text, page_boundaries
+                file_text,
+                page_boundaries,
+                content_type=content_type,
             )
 
             if not file_text:
