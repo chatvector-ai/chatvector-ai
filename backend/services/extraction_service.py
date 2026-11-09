@@ -16,7 +16,7 @@ from services.docx_extraction import (
     is_docx_content_type,
     is_docx_filename,
 )
-from services.text_cleaning_service import clean_text
+from services.text_cleaning_service import clean_docx_text, clean_text
 
 logger = logging.getLogger(__name__)
 
@@ -52,15 +52,20 @@ _PAGE_SEPARATOR = " "
 def prepare_extracted_document_for_chunking(
     raw_text: str,
     page_boundaries: list["PageBoundary"],
+    *,
+    content_type: str | None = None,
 ) -> tuple[str, list["PageBoundary"]]:
     """
     Return cleaned document text and page boundaries in the same coordinate space.
 
     TXT inputs have no page boundaries and are cleaned as one string. PDF inputs
     are cleaned page-by-page, then joined so chunk offsets and page boundaries
-    refer to the identical assembled normalized text.
+    refer to the identical assembled normalized text. DOCX inputs preserve table
+    cell and row delimiters from extraction while normalizing prose blocks.
     """
     if not page_boundaries:
+        if is_docx_content_type(content_type):
+            return clean_docx_text(raw_text), []
         return clean_text(raw_text), []
 
     cleaned_parts: list[str] = []
