@@ -29,7 +29,6 @@ import DocumentListRow from "../components/DocumentListRow";
 import {
   documentFailureDetail,
   fileTypeFromFileName,
-  isDocumentInActiveScope,
 } from "../lib/documentListDisplay";
 import { EmptyState } from "../components/ui/EmptyState";
 import { InfoPopover } from "../components/ui/InfoPopover";

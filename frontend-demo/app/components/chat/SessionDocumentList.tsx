@@ -55,7 +55,6 @@ export default function SessionDocumentList({
                   fileType="file"
                   status="unavailable"
                   failureDetail={null}
-                  inActiveScope={null}
                   unavailable
                 />
               </li>
