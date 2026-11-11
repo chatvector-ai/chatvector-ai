@@ -989,6 +989,53 @@ class SQLAlchemyService(DatabaseService):
             )
             raise
 
+    async def find_hybrid_ranked_lists(
+        self,
+        doc_id: str,
+        query_embedding: list[float],
+        match_count: int,
+        *,
+        tenant_id: str,
+        session_id: Optional[str] = None,
+        query_text: Optional[str] = None,
+        hybrid_enabled: Optional[bool] = None,
+    ) -> tuple[list[ChunkMatch], list[ChunkMatch]]:
+        """Return per-document vector and FTS ranked lists without local RRF."""
+        tenant_id = require_tenant_id(tenant_id, method="find_hybrid_ranked_lists")
+        del session_id
+        hybrid_flag = (
+            config.HYBRID_RETRIEVAL_ENABLED if hybrid_enabled is None else hybrid_enabled
+        )
+        if not hybrid_flag:
+            raise ValueError("find_hybrid_ranked_lists requires hybrid_enabled=True")
+        if not query_text or not query_text.strip():
+            raise ValueError("find_hybrid_ranked_lists requires non-empty query_text")
+        candidate_limit = match_count * 2
+        try:
+            async with self._retrieval_semaphore:
+                async with self.async_session() as session:
+                    vector_matches = await self._find_vector_chunks(
+                        session,
+                        doc_id,
+                        query_embedding,
+                        candidate_limit,
+                        tenant_id=tenant_id,
+                    )
+                    keyword_matches = await self._find_keyword_chunks(
+                        session,
+                        doc_id,
+                        query_text.strip(),
+                        candidate_limit,
+                        tenant_id=tenant_id,
+                    )
+                    return vector_matches, keyword_matches
+        except Exception:
+            logger.exception(
+                "[PostgreSQL] Hybrid ranked-list search failed for doc_id=%s",
+                doc_id,
+            )
+            raise
+
     async def find_similar_chunks(
         self,
         doc_id: str,

@@ -8,7 +8,11 @@ from typing import Any, Mapping, Optional, AsyncGenerator, cast
 from core.auth import AuthContext, require_current_tenant
 from core.config import config
 from core.session import SessionContext
-from db import filter_document_ids_by_metadata, find_similar_chunks
+from db import (
+    filter_document_ids_by_metadata,
+    find_hybrid_ranked_lists,
+    find_similar_chunks,
+)
 from services.context_service import build_context_from_chunks
 from services.history_config import history_load_limit, prepare_turn_history
 from services.query_service import QueryTransformResult, transform_query
@@ -25,6 +29,7 @@ from services.retrieval_presets import (
 )
 from services.retrieval_service import (
     filter_doc_ids_for_tenant,
+    fuse_request_level_hybrid_rrf,
     parse_retrieval_scope,
     rerank_chunks_with_debug,
     resolve_scoped_doc_ids,
@@ -233,6 +238,22 @@ def _scope_error(
     return None
 
 
+def _use_request_level_hybrid_fusion(
+    doc_ids: list[str],
+    *,
+    query_text: Optional[str],
+    hybrid_enabled: Optional[bool],
+) -> bool:
+    hybrid_flag = (
+        config.HYBRID_RETRIEVAL_ENABLED if hybrid_enabled is None else hybrid_enabled
+    )
+    return (
+        len(doc_ids) > 1
+        and bool(hybrid_flag)
+        and bool(query_text and query_text.strip())
+    )
+
+
 async def _retrieve_chunks_for_documents(
     doc_ids: list[str],
     query_embedding: list[float],
@@ -244,6 +265,36 @@ async def _retrieve_chunks_for_documents(
     hybrid_enabled: Optional[bool] = None,
 ) -> list:
     retrieval_semaphore = _get_retrieval_semaphore()
+
+    if _use_request_level_hybrid_fusion(
+        doc_ids,
+        query_text=query_text,
+        hybrid_enabled=hybrid_enabled,
+    ):
+        async def _search_one_document(
+            doc_id: str,
+        ) -> tuple[list, list]:
+            async with retrieval_semaphore:
+                search_kwargs = {
+                    "doc_id": doc_id,
+                    "query_embedding": query_embedding,
+                    "match_count": match_count,
+                    "session_id": session_id,
+                    "query_text": query_text,
+                    "tenant_id": tenant_id,
+                    "hybrid_enabled": True,
+                }
+                return await find_hybrid_ranked_lists(**search_kwargs)
+
+        per_document_lists = await asyncio.gather(
+            *[_search_one_document(doc_id) for doc_id in doc_ids]
+        )
+        all_vector: list = []
+        all_keyword: list = []
+        for vector_matches, keyword_matches in per_document_lists:
+            all_vector.extend(vector_matches)
+            all_keyword.extend(keyword_matches)
+        return fuse_request_level_hybrid_rrf(all_vector, all_keyword)
 
     async def _search_one_document(doc_id: str) -> list:
         async with retrieval_semaphore:
@@ -274,8 +325,8 @@ def _chunk_global_order_key(chunk) -> tuple:
     """Sort key: higher effective score first, then document_id, then chunk_index.
 
     ``ChunkMatch.similarity`` is the comparable score for the current mode
-    (cosine in vector mode, within-document RRF in hybrid). Missing similarity
-    sorts last. Ties do not preserve request order.
+    (cosine in vector mode, request-level RRF in multi-document hybrid).
+    Missing similarity sorts last. Ties do not preserve request order.
     """
     similarity = getattr(chunk, "similarity", None)
     document_id = getattr(chunk, "document_id", None)

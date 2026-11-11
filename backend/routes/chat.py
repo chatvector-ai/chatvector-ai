@@ -209,7 +209,7 @@ class ChatBatchItem(BaseModel):
     doc_ids: list[UUID] = Field(..., min_length=1)
     match_count: int = Field(default=5, ge=1, le=20)
     session_id: Optional[str] = None
-    scope: RetrievalScopeParam = "session"
+    scope: Optional[RetrievalScopeParam] = None
     hybrid_enabled: Optional[bool] = None
     reranking_enabled: Optional[bool] = None
     reranker_provider: Optional[RerankerProviderParam] = None
@@ -224,7 +224,7 @@ class ChatBatchItem(BaseModel):
 class ChatBatchRequest(BaseModel):
     queries: list[ChatBatchItem] = Field(..., min_length=1)
     session_id: Optional[str] = None
-    scope: RetrievalScopeParam = "session"
+    scope: Optional[RetrievalScopeParam] = None
     debug_retrieval: bool = False
     hybrid_enabled: Optional[bool] = None
     reranking_enabled: Optional[bool] = None
@@ -432,11 +432,15 @@ async def chat_batch(
         service_indices = [index for index, _ in service_items]
         service_queries = [query for _, query in service_items]
 
+        batch_scope = (
+            payload.scope if "scope" in payload.model_fields_set else None
+        )
+
         if service_queries:
             service_results = await answer_questions_for_documents_batch(
                 service_queries,
                 auth=auth,
-                scope=payload.scope,
+                scope=batch_scope,
                 debug_retrieval=_resolve_debug_retrieval(
                     query_param=debug_retrieval,
                     request_field=payload.debug_retrieval,

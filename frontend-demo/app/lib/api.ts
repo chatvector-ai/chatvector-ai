@@ -761,7 +761,6 @@ export async function sendConfigurationCompareBatchMessage(
 ): Promise<BatchChatResponse> {
   return postBatchChat(
     {
-      scope: "session",
       debug_retrieval: true,
       queries: [
         buildConfigurationCompareQueryItem(question, docIds, configA),

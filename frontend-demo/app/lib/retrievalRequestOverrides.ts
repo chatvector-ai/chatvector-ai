@@ -11,6 +11,7 @@ export type QueryTransformationStrategy =
   | "none";
 
 export type RetrievalOverrideKey =
+  | "scope"
   | "match_count"
   | "hybrid_enabled"
   | "reranking_enabled"

@@ -369,13 +369,8 @@ export default function BatchPage() {
               {documents.map((doc) => {
                 const processing =
                   doc.status !== "completed" && doc.status !== "failed";
-                const inActiveScope = isDocumentInActiveScope({
-                  scope: "tenant",
-                  scopeIsExplicit: true,
-                  selectedDocumentId: null,
-                  documentId: doc.document_id,
-                  status: doc.status,
-                });
+                const inActiveScope =
+                  selected.has(doc.document_id) && doc.status === "completed";
                 return (
                   <li key={doc.document_id}>
                     <DocumentListRow

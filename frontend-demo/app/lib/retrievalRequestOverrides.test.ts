@@ -36,6 +36,27 @@ describe("retrievalRequestOverrides", () => {
     expect(buildBatchQueryItemFields(draft)).toEqual({});
   });
 
+  it("sends scope only when explicitly overridden on a config side", () => {
+    let draftA = setRetrievalOverride(
+      createEmptyRetrievalOverrideDraft(),
+      "scope",
+      "tenant",
+    );
+    let draftB = createEmptyRetrievalOverrideDraft();
+    draftB = setRetrievalOverride(draftB, "match_count", 7);
+
+    expect(buildConfigurationCompareQueryItem("Q?", ["d1"], draftA)).toEqual({
+      question: "Q?",
+      doc_ids: ["d1"],
+      scope: "tenant",
+    });
+    expect(buildConfigurationCompareQueryItem("Q?", ["d1"], draftB)).toEqual({
+      question: "Q?",
+      doc_ids: ["d1"],
+      match_count: 7,
+    });
+  });
+
   it("builds two query items that share question and documents", () => {
     const question = "What is the policy?";
     const docIds = ["doc-1", "doc-2"];

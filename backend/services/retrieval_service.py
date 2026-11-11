@@ -165,6 +165,104 @@ def merge_chunk_matches(
     return merged
 
 
+def _merge_hybrid_chunk_match(
+    existing: ChunkMatch | None,
+    incoming: ChunkMatch,
+) -> ChunkMatch:
+    """Combine vector and keyword rows for the same chunk ID."""
+    if existing is None:
+        return incoming
+    return ChunkMatch(
+        id=existing.id,
+        chunk_text=existing.chunk_text,
+        document_id=existing.document_id,
+        embedding=existing.embedding,
+        created_at=existing.created_at,
+        similarity=existing.similarity,
+        score_type=existing.score_type,
+        vector_score=(
+            existing.vector_score
+            if existing.vector_score is not None
+            else incoming.vector_score
+        ),
+        full_text_score=(
+            existing.full_text_score
+            if existing.full_text_score is not None
+            else incoming.full_text_score
+        ),
+        rrf_score=existing.rrf_score,
+        chunk_index=existing.chunk_index,
+        page_number=existing.page_number,
+        page_end=existing.page_end,
+        character_offset_start=existing.character_offset_start,
+        character_offset_end=existing.character_offset_end,
+        file_name=existing.file_name,
+    )
+
+
+def _global_component_rank(
+    matches: list[ChunkMatch],
+    score_attr: str,
+) -> list[str]:
+    """Order chunk IDs by a component score across the request candidate set."""
+    ordered = sorted(
+        matches,
+        key=lambda match: (
+            getattr(match, score_attr) is None,
+            -float(getattr(match, score_attr) or 0.0),
+            match.document_id is None,
+            "" if match.document_id is None else str(match.document_id),
+            match.chunk_index is None,
+            -1 if match.chunk_index is None else int(match.chunk_index),
+        ),
+    )
+    ranked_ids: list[str] = []
+    seen: set[str] = set()
+    for match in ordered:
+        if match.id in seen:
+            continue
+        seen.add(match.id)
+        ranked_ids.append(match.id)
+    return ranked_ids
+
+
+def fuse_request_level_hybrid_rrf(
+    vector_matches: list[ChunkMatch],
+    keyword_matches: list[ChunkMatch],
+    *,
+    k: int = RRF_K_DEFAULT,
+) -> list[ChunkMatch]:
+    """
+    Fuse hybrid retrieval across one request's vector and FTS candidate pools.
+
+    ``ChunkMatch.similarity`` is set to request-scoped RRF; global top-k cutting
+    happens later in the chat retrieval pipeline.
+    """
+    matches_by_id: dict[str, ChunkMatch] = {}
+    for match in vector_matches:
+        matches_by_id[match.id] = match
+    for match in keyword_matches:
+        matches_by_id[match.id] = _merge_hybrid_chunk_match(
+            matches_by_id.get(match.id),
+            match,
+        )
+
+    vector_ranked = _global_component_rank(vector_matches, "vector_score")
+    keyword_ranked = _global_component_rank(keyword_matches, "full_text_score")
+    rrf_scores = reciprocal_rank_fusion_scores(
+        [vector_ranked, keyword_ranked],
+        k=k,
+        limit=None,
+    )
+    fused_ids = list(rrf_scores.keys())
+    return merge_chunk_matches_with_scores(
+        fused_ids,
+        matches_by_id,
+        rrf_scores,
+        score_type=SCORE_TYPE_HYBRID_RRF,
+    )
+
+
 def merge_chunk_matches_with_scores(
     ranked_ids: list[str],
     matches_by_id: dict[str, ChunkMatch],
@@ -209,6 +307,7 @@ __all__ = [
     "SCORE_TYPE_VECTOR",
     "assert_tenant_isolation",
     "filter_doc_ids_for_tenant",
+    "fuse_request_level_hybrid_rrf",
     "merge_chunk_matches",
     "merge_chunk_matches_with_scores",
     "parse_retrieval_scope",
