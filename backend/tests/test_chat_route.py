@@ -92,7 +92,7 @@ def test_chat_batch_route_delegates_to_chat_service():
     mock_batch.assert_awaited_once_with(
         [{"question": "q", "doc_ids": [_DOC_ID_1], "match_count": 5, "session_id": ANY}],
         auth=ANY,
-        scope="session",
+        scope=None,
         debug_retrieval=False,
     )
 

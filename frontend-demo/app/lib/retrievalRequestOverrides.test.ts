@@ -37,7 +37,7 @@ describe("retrievalRequestOverrides", () => {
   });
 
   it("sends scope only when explicitly overridden on a config side", () => {
-    let draftA = setRetrievalOverride(
+    const draftA = setRetrievalOverride(
       createEmptyRetrievalOverrideDraft(),
       "scope",
       "tenant",

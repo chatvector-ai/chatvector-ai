@@ -34,6 +34,9 @@ export function documentFailureDetail(
   return parts.length > 0 ? parts.join(": ") : null;
 }
 
+/** UI scope membership: definite in/out, or preset-controlled ambiguity. */
+export type ActiveScopeMembership = true | false | "follows-preset";
+
 export type ActiveScopeParams = {
   scope: RetrievalScope;
   /** When false, scope may come from env/preset and in-scope membership is unknown. */
@@ -51,10 +54,12 @@ export function isRetrievalScopeMembershipDefinite(
   return !(preset !== undefined && state.explicit.scope === undefined);
 }
 
-/** null means active-scope membership is not known (e.g. scope follows a preset). */
-export function isDocumentInActiveScope(params: ActiveScopeParams): boolean | null {
+/** "follows-preset" when scope is env/preset-driven and per-document membership is indeterminate. */
+export function isDocumentInActiveScope(
+  params: ActiveScopeParams
+): ActiveScopeMembership {
   if (!params.scopeIsExplicit) {
-    return null;
+    return "follows-preset";
   }
   if (params.scope === "tenant") {
     return params.status === "completed";

@@ -3,6 +3,7 @@
 import { FileText, RefreshCw, Trash2 } from "lucide-react";
 import DocumentMetadataPairs from "./DocumentMetadataPairs";
 import type { DocumentScalarMetadata } from "../lib/documentMetadata";
+import type { ActiveScopeMembership } from "../lib/documentListDisplay";
 
 type Props = {
   documentId: string;
@@ -11,7 +12,7 @@ type Props = {
   status: string;
   failureDetail: string | null;
   metadata?: DocumentScalarMetadata;
-  inActiveScope: boolean | null;
+  inActiveScope?: ActiveScopeMembership;
   onReplace?: () => void;
   onDelete?: () => void;
   disabled?: boolean;
@@ -64,7 +65,7 @@ export default function DocumentListRow({
                 In scope
               </span>
             )}
-            {inActiveScope === null && (
+            {inActiveScope === "follows-preset" && (
               <span
                 className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted"
                 data-testid="document-scope-follows-preset"

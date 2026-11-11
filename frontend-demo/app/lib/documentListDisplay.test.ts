@@ -78,7 +78,7 @@ describe("isDocumentInActiveScope", () => {
     ).toBe(false);
   });
 
-  it("returns null when scope is not explicit", () => {
+  it('returns "follows-preset" when scope is not explicit', () => {
     expect(
       isDocumentInActiveScope({
         scope: "session",
@@ -87,7 +87,7 @@ describe("isDocumentInActiveScope", () => {
         documentId: "doc-a",
         status: "completed",
       })
-    ).toBeNull();
+    ).toBe("follows-preset");
   });
 });
 
