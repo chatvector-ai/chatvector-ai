@@ -265,6 +265,18 @@ describe("BatchPage", () => {
     expect(screen.queryByText(/confidence/i)).not.toBeInTheDocument();
   });
 
+  it("marks only selected completed documents as in scope", async () => {
+    render(<BatchPage />);
+    await screen.findByText("File 1.pdf");
+
+    expect(screen.queryByTestId("document-in-active-scope")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole("checkbox")[0]!);
+
+    expect(screen.getByTestId("document-in-active-scope")).toBeInTheDocument();
+    expect(screen.getAllByTestId("document-in-active-scope")).toHaveLength(1);
+  });
+
   it("does not show chat session-scope indicator copy on the batch page", async () => {
     render(<BatchPage />);
     await screen.findByText("File 1.pdf");

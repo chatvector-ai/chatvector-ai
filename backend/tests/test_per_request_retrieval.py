@@ -719,3 +719,103 @@ async def test_omitted_preset_keeps_phase3_behavior_matrix(
 
     assert retrieved_ids == list(PHASE3_ORDER)
     assert all("hybrid_enabled" not in call.kwargs for call in find_similar.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_batch_config_compare_omits_implicit_scope_override(
+    pinned_phase3_env, passthrough_docs, eval_hybrid_preset
+):
+    """Batch items without an explicit scope inherit env/preset, not a phantom request scope."""
+    find_similar = AsyncMock(return_value=_baseline_chunks())
+    with (
+        patch(
+            "services.chat_service.get_embeddings",
+            new=AsyncMock(side_effect=lambda texts, **kwargs: [[0.1] for _ in texts]),
+        ),
+        patch("services.chat_service.find_similar_chunks", new=find_similar),
+        patch(
+            "services.chat_service.build_context_from_chunks",
+            return_value="ctx",
+        ),
+        patch(
+            "services.chat_service.generate_answer",
+            new=AsyncMock(return_value=("ok", 1, "m")),
+        ),
+    ):
+        results = await answer_questions_for_documents_batch(
+            [
+                {
+                    "question": "q",
+                    "doc_ids": ["doc-1"],
+                    "match_count": 5,
+                    "retrieval_fields": {
+                        "hybrid_enabled": True,
+                        "retrieval": {"preset": "eval_hybrid"},
+                    },
+                },
+                {
+                    "question": "q",
+                    "doc_ids": ["doc-1"],
+                    "match_count": 5,
+                    "retrieval_fields": {"hybrid_enabled": False},
+                },
+            ],
+            auth=TEST_AUTH,
+            scope=None,
+            debug_retrieval=True,
+        )
+
+    scope_a = results[0]["retrieval_debug"]["effective_config"]["scope"]
+    scope_b = results[1]["retrieval_debug"]["effective_config"]["scope"]
+    assert scope_a["source"] == "env"
+    assert scope_b["source"] == "env"
+
+
+@pytest.mark.asyncio
+async def test_batch_config_compare_side_specific_scope_stays_request_sourced(
+    pinned_phase3_env, passthrough_docs,
+):
+    find_similar = AsyncMock(return_value=_baseline_chunks())
+    with (
+        patch(
+            "services.chat_service.get_embeddings",
+            new=AsyncMock(side_effect=lambda texts, **kwargs: [[0.1] for _ in texts]),
+        ),
+        patch("services.chat_service.find_similar_chunks", new=find_similar),
+        patch(
+            "services.chat_service.build_context_from_chunks",
+            return_value="ctx",
+        ),
+        patch(
+            "services.chat_service.generate_answer",
+            new=AsyncMock(return_value=("ok", 1, "m")),
+        ),
+    ):
+        results = await answer_questions_for_documents_batch(
+            [
+                {
+                    "question": "q",
+                    "doc_ids": ["doc-1"],
+                    "match_count": 5,
+                    "retrieval_fields": {
+                        "hybrid_enabled": True,
+                        "scope": "tenant",
+                    },
+                },
+                {
+                    "question": "q",
+                    "doc_ids": ["doc-1"],
+                    "match_count": 5,
+                    "retrieval_fields": {"hybrid_enabled": False},
+                },
+            ],
+            auth=TEST_AUTH,
+            scope=None,
+            debug_retrieval=True,
+        )
+
+    assert results[0]["retrieval_debug"]["effective_config"]["scope"] == {
+        "value": "tenant",
+        "source": "request",
+    }
+    assert results[1]["retrieval_debug"]["effective_config"]["scope"]["source"] == "env"

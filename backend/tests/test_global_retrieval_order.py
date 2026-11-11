@@ -266,30 +266,51 @@ async def test_rerank_failure_packs_globally_ordered_head(retrieval_env):
 
 @pytest.mark.asyncio
 async def test_hybrid_mode_orders_by_similarity_not_vector_score(retrieval_env):
-    """Hybrid comparable score is ChunkMatch.similarity (RRF), not vector_score."""
-    earlier = _chunk(
-        "doc-a",
-        0,
-        similarity=0.02,
-        score_type=SCORE_TYPE_HYBRID_RRF,
-    )
-    earlier.vector_score = 0.99
-    later = _chunk(
-        "doc-b",
-        0,
-        similarity=0.05,
-        score_type=SCORE_TYPE_HYBRID_RRF,
-    )
-    later.vector_score = 0.10
-    result, find_similar = await _retrieve(
-        ["doc-a", "doc-b"],
-        {"doc-a": [earlier], "doc-b": [later]},
-        fields={"reranking_enabled": False, "hybrid_enabled": True, "match_count": 5},
-    )
+    """Request-level RRF (similarity) can outrank a higher vector_score."""
+    from unittest.mock import AsyncMock, patch
 
-    assert [chunk.id for chunk in result.chunks] == ["doc-b:0", "doc-a:0"]
-    assert all(chunk.score_type == SCORE_TYPE_HYBRID_RRF for chunk in result.chunks)
-    assert all(call.kwargs.get("hybrid_enabled") is True for call in find_similar.await_args_list)
+    doc_a_vec = _chunk("doc-a", 0, similarity=0.99)
+    doc_a_vec.vector_score = 0.99
+    doc_b_vec = _chunk("doc-b", 0, similarity=0.10)
+    doc_b_vec.vector_score = 0.10
+    doc_b_key = ChunkMatch(
+        id="doc-b:0",
+        chunk_text=doc_b_vec.chunk_text,
+        document_id="doc-b",
+        chunk_index=0,
+        full_text_score=0.90,
+        file_name="doc-b.txt",
+    )
+    lists_by_doc = {
+        "doc-a": ([doc_a_vec], []),
+        "doc-b": ([doc_b_vec], [doc_b_key]),
+    }
+
+    async def fake_hybrid_lists(**kwargs):
+        return lists_by_doc[kwargs["doc_id"]]
+
+    with (
+        patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1]])),
+        patch(
+            "services.chat_service.find_hybrid_ranked_lists",
+            new=AsyncMock(side_effect=fake_hybrid_lists),
+        ),
+        patch(
+            "services.chat_service.find_similar_chunks",
+            new=AsyncMock(side_effect=AssertionError("unexpected per-doc search")),
+        ),
+    ):
+        result = await retrieve_for_documents(
+            "hybrid query",
+            ["doc-a", "doc-b"],
+            "dev",
+            _effective(reranking_enabled=False, hybrid_enabled=True, match_count=5),
+        )
+
+    assert result.chunks[0].id == "doc-b:0"
+    assert result.chunks[0].score_type == SCORE_TYPE_HYBRID_RRF
+    assert result.chunks[0].vector_score == pytest.approx(0.10)
+    assert result.chunks[0].similarity > result.chunks[1].similarity
 
 
 @pytest.mark.asyncio

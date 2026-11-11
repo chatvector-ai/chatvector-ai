@@ -195,6 +195,40 @@ async def find_similar_chunks(
     )
 
 
+async def find_hybrid_ranked_lists(
+    doc_id: str,
+    query_embedding: list[float],
+    match_count: int,
+    *,
+    tenant_id: str,
+    session_id: str | None = None,
+    query_text: str | None = None,
+    hybrid_enabled: bool | None = None,
+) -> tuple[list[ChunkMatch], list[ChunkMatch]]:
+    tenant_id = require_tenant_id(tenant_id, method="find_hybrid_ranked_lists")
+    service = get_db_service()
+
+    async def _search():
+        return await service.find_hybrid_ranked_lists(
+            doc_id,
+            query_embedding,
+            match_count,
+            tenant_id=tenant_id,
+            session_id=session_id,
+            query_text=query_text,
+            hybrid_enabled=hybrid_enabled,
+        )
+
+    return await retry_async(
+        _search,
+        max_retries=DEFAULT_MAX_RETRIES,
+        base_delay=DEFAULT_BASE_DELAY,
+        backoff=DEFAULT_BACKOFF,
+        timeout=get_default_db_timeout_sec(),
+        func_name=f"{service.__class__.__name__}.find_hybrid_ranked_lists",
+    )
+
+
 async def update_document_status(
     doc_id: str,
     status: str,
@@ -684,6 +718,7 @@ __all__ = [
     "get_document",
     "create_document_with_chunks_atomic",
     "find_similar_chunks",
+    "find_hybrid_ranked_lists",
     "list_tenant_documents",
     "list_tenant_document_summaries",
     "filter_document_ids_by_metadata",

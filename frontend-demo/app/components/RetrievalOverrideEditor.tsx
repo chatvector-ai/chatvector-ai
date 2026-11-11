@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import {
   MAX_MATCH_COUNT,
   MIN_MATCH_COUNT,
+  type RetrievalScope,
 } from "../lib/retrievalSettings";
 import {
   clearRetrievalOverride,
@@ -69,6 +70,7 @@ export default function RetrievalOverrideEditor({
   onChange,
   disabled = false,
 }: Props) {
+  const scopeExplicit = isRetrievalOverrideExplicit(draft, "scope");
   const matchExplicit = isRetrievalOverrideExplicit(draft, "match_count");
   const hybridExplicit = isRetrievalOverrideExplicit(draft, "hybrid_enabled");
   const rerankExplicit = isRetrievalOverrideExplicit(draft, "reranking_enabled");
@@ -93,6 +95,11 @@ export default function RetrievalOverrideEditor({
     draft,
     "generation_history_window",
   );
+
+  const scopeValue =
+    typeof draft.explicit.scope === "string"
+      ? (draft.explicit.scope as RetrievalScope)
+      : "session";
 
   const matchValue =
     typeof draft.explicit.match_count === "number"
@@ -148,6 +155,37 @@ export default function RetrievalOverrideEditor({
         {title}
       </summary>
       <div className="space-y-4 border-t border-border px-3 py-3">
+        <OverrideToggle
+          label="Override scope"
+          checked={scopeExplicit}
+          disabled={disabled}
+          onChange={(enabled) => {
+            onChange(
+              enabled
+                ? setRetrievalOverride(draft, "scope", scopeValue)
+                : clearRetrievalOverride(draft, "scope"),
+            );
+          }}
+        >
+          <select
+            value={scopeValue}
+            disabled={disabled}
+            onChange={(e) =>
+              onChange(
+                setRetrievalOverride(
+                  draft,
+                  "scope",
+                  e.target.value as RetrievalScope,
+                ),
+              )
+            }
+            className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-foreground outline-none focus:border-accent"
+          >
+            <option value="session">session</option>
+            <option value="tenant">tenant</option>
+          </select>
+        </OverrideToggle>
+
         <OverrideToggle
           label="Override match count"
           checked={matchExplicit}

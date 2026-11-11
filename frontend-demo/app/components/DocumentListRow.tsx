@@ -64,6 +64,14 @@ export default function DocumentListRow({
                 In scope
               </span>
             )}
+            {inActiveScope === null && (
+              <span
+                className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted"
+                data-testid="document-scope-follows-preset"
+              >
+                Scope follows preset
+              </span>
+            )}
           </div>
           {failureDetail && (
             <p

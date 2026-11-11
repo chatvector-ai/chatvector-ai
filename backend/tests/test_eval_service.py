@@ -611,6 +611,10 @@ async def test_config_overrides_restored_after_run():
     async def fake_find_similar_chunks(*, doc_id, query_embedding, match_count, tenant_id, query_text=None, session_id=None, hybrid_enabled=None):
         return [_chunk(doc_id, 0)]
 
+    async def fake_hybrid_ranked_lists(**kwargs):
+        chunk = _chunk(kwargs["doc_id"], 0)
+        return ([chunk], [])
+
     original_hybrid = config.HYBRID_RETRIEVAL_ENABLED
     original_rerank = config.ENABLE_RERANKING
 
@@ -621,6 +625,7 @@ async def test_config_overrides_restored_after_run():
     )
 
     with patch("services.chat_service.find_similar_chunks", AsyncMock(side_effect=fake_find_similar_chunks)), \
+         patch("services.chat_service.find_hybrid_ranked_lists", AsyncMock(side_effect=fake_hybrid_ranked_lists)), \
          patch("services.chat_service.get_embeddings", AsyncMock(side_effect=lambda texts, **kwargs: [[0.1, 0.2, 0.3] for _ in texts])):
         await run_eval(dataset, [arm], tenant_id="tenant-eval-test")
 

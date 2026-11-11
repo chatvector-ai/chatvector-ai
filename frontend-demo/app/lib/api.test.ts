@@ -687,7 +687,6 @@ describe("sendConfigurationCompareBatchMessage", () => {
       expect.stringContaining("/chat/batch"),
       expect.objectContaining({
         body: JSON.stringify({
-          scope: "session",
           debug_retrieval: true,
           queries: [
             {
