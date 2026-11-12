@@ -1,6 +1,6 @@
 # ChatVector Frontend Demo
 
-This folder contains the ChatVector frontend demo. It is a Next.js app for trying the local ChatVector flow: upload PDF, text, Markdown, HTML, or DOCX files, watch ingestion progress, chat with retrieved context and citations, run batch queries, and inspect retrieval metadata. It is a contributor demo, not a standalone product. Production apps should keep the API key on a server proxy (`sdk/typescript/examples/next-proxy` or `sdk/python/examples/fastapi-proxy`). The demo's `NEXT_PUBLIC_API_KEY` is only for local experiments against a development backend.
+This folder contains the ChatVector frontend demo. It is a Next.js app for trying the local ChatVector flow: upload PDF, text, Markdown, HTML, or DOCX files, watch ingestion progress, chat with retrieved context and citations, run batch queries, and inspect retrieval metadata. It is a contributor demo, not a standalone product. Production apps should keep the API key on a server proxy (`sdk/typescript/examples/next-proxy` or `sdk/python/examples/fastapi-proxy`). The demo's `NEXT_PUBLIC_CHATVECTOR_API_KEY` is only for local experiments against a development backend.
 
 ## What the demo includes
 
@@ -37,7 +37,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 For production backends (`APP_ENV=production`), also set an API key:
 
 ```env
-NEXT_PUBLIC_API_KEY=cv_live_yourprefix.yoursecret
+NEXT_PUBLIC_CHATVECTOR_API_KEY=cv_live_yourprefix.yoursecret
 ```
 
 ## Run
