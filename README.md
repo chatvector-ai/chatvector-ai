@@ -206,6 +206,31 @@ GEN_AI_KEY=your_google_ai_studio_api_key
 
 Supported combinations include Gemini, OpenAI, Ollama, Anthropic Claude (generation), and Voyage AI (embeddings), including mixed setups (for example Claude + Voyage). See `backend/.env.example` for all variables.
 
+#### Ollama with Docker
+
+`make quickstart` and `docker compose` run the API **in a container** while Ollama usually runs on your **host**. Set:
+
+```env
+LLM_PROVIDER=ollama
+EMBEDDING_PROVIDER=ollama
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+```
+
+Inside the container, `localhost` is the container itself, not your machine — `http://localhost:11434` is refused. `host.docker.internal` reaches Ollama on the host. On Linux, Compose maps that hostname through `extra_hosts: host.docker.internal:host-gateway` on the `api` service (already in `docker-compose.yml`).
+
+Default models when `LLM_MODEL` and `EMBEDDING_MODEL` are unset: **`llama3`** (generation) and **`nomic-embed-text`** (embeddings). Pull them on the host before ingesting:
+
+```bash
+ollama pull llama3
+ollama pull nomic-embed-text
+```
+
+Or set `LLM_MODEL` and `EMBEDDING_MODEL` to models you already have installed.
+
+Startup logs **Provider configuration validated**, but Ollama has no credentials to check — startup does **not** verify reachability or installed models. A wrong URL often appears at ingestion as `provider_unreachable`; a missing or incompatible model can surface on chat as a soft `llm_unexpected` error.
+
+If you run the API **outside** Docker (native Python on the host), use `OLLAMA_BASE_URL=http://localhost:11434`.
+
 ### URLs
 
 - Frontend demo (non-core reference UI): http://localhost:3000

@@ -30,6 +30,31 @@ Backend-only:
 docker compose up --build
 ```
 
+## Ollama with Docker
+
+If you use Ollama instead of a hosted API key, run Ollama on your **host** and point the **containerized** API at it:
+
+```env
+LLM_PROVIDER=ollama
+EMBEDDING_PROVIDER=ollama
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+```
+
+Inside the API container, `localhost` is the container, not your machine — `http://localhost:11434` fails. `host.docker.internal` reaches the host. On Linux, `docker-compose.yml` already maps it via `extra_hosts: host.docker.internal:host-gateway` on the `api` service.
+
+Defaults (when unset): **`llama3`** for chat and **`nomic-embed-text`** for embeddings. On the host:
+
+```bash
+ollama pull llama3
+ollama pull nomic-embed-text
+```
+
+You can instead set `LLM_MODEL` and `EMBEDDING_MODEL` to installed models.
+
+Startup prints **Provider configuration validated** but Ollama has no API key — startup does not test connectivity or whether models are pulled. Wrong URLs tend to show `provider_unreachable` during ingestion; missing models can produce a soft `llm_unexpected` on chat.
+
+For an API process running **on the host** (not in Docker), use `OLLAMA_BASE_URL=http://localhost:11434`.
+
 When the stack is healthy:
 
 | Service | URL |
