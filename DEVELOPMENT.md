@@ -164,36 +164,24 @@ set automatically).
 | ---- | ------ |
 | Location | `backend/db/init/` |
 | Filename | `NNN_descriptive_name.sql` — three-digit prefix, then a short slug |
-| Order | Lexical sort on the filename (`001` … `014` today; next is `015_*`) |
+| Order | Lexical sort on the filename (three-digit prefix, then slug) |
+| New prefix | List `backend/db/init/*.sql`, find an unused `NNN_` prefix — do not duplicate an existing number |
 | Idempotency | Prefer `CREATE … IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, and guarded `DO …` blocks so re-runs are safe |
 | ORM models | Update SQLAlchemy models in `backend/db/` to match new tables/columns |
 | Ledger | Migrations after `008_schema_migrations.sql` must record their own filename as their final operation before `COMMIT` |
 
-Current files (in apply order):
+To see what is already in the tree (and in what order CI applies it):
 
-```
-001_init.sql
-002_dimensionless_vector.sql
-003_atomic_delete.sql
-004_chat_history.sql
-004_hybrid_retrieval.sql   ← two files share prefix 004; order is alphabetical
-005_api_keys.sql
-006_tenant_fk_and_backfill.sql
-007_sessions.sql
-008_schema_migrations.sql
-009_documents_tenant_id_not_null.sql
-010_api_key_lifecycle.sql
-011_document_chunks_unique_index.sql
-012_documents_tenant_id_not_null_reconcile.sql
-013_document_metadata.sql
-014_document_replacement.sql
+```bash
+ls backend/db/init/*.sql | sort
 ```
 
-> **Do not add another `004_*` file.** Use the next unused number (`015_*` at
-> time of writing). The duplicate `004` pair is historical; chat history always
-> runs before hybrid retrieval because of alphabetical sort. Migration `008`
-> baselines `004_hybrid_retrieval.sql` for databases created before the ledger;
-> it does not re-apply hybrid DDL on every fresh install.
+> **Do not add another `004_*` file.** The repo already has a historical duplicate:
+> `004_chat_history.sql` and `004_hybrid_retrieval.sql`. Chat history always runs
+> before hybrid retrieval because of alphabetical sort. Pick a fresh three-digit
+> prefix by listing `backend/db/init/` — never reuse a prefix that already exists.
+> Migration `008` baselines `004_hybrid_retrieval.sql` for databases created before
+> the ledger; it does not re-apply hybrid DDL on every fresh install.
 
 ### How migrations are applied
 
@@ -231,10 +219,10 @@ psql -d chatvector_dev -v ON_ERROR_STOP=1 \
 
 ### Adding a new migration (contributors)
 
-1. Pick the next number — check `backend/db/init/`; use `015_*` if
-   `014_document_replacement.sql` is the latest.
-2. Add `backend/db/init/015_your_change.sql` with idempotent DDL (and any
-   backfill `UPDATE`/`INSERT` the change needs) inside a transaction.
+1. Run `ls backend/db/init/*.sql | sort`, choose an unused three-digit prefix
+   (`NNN_`), and add `backend/db/init/NNN_your_change.sql`.
+2. Put idempotent DDL (and any backfill `UPDATE`/`INSERT` the change needs) inside
+   a transaction.
 3. Make the idempotent ledger insert the final operation before `COMMIT`, so the
    schema changes and their ledger row become visible atomically:
 
