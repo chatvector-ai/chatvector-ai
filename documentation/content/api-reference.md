@@ -32,6 +32,7 @@ Create keys with `python -m backend.cli create-tenant-key`. See [Getting Started
 | `POST` | `/chat` | RAG chat (non-streaming) |
 | `POST` | `/chat/stream` | RAG chat (SSE streaming) |
 | `POST` | `/chat/batch` | Batch compare or synthesize |
+| `GET` | `/retrieval/presets` | List loaded retrieval preset names and reranker providers |
 | `POST` | `/sessions` | Create a chat session |
 | `GET` | `/sessions` | List sessions |
 | `GET` | `/sessions/{session_id}` | Get session metadata |
@@ -136,6 +137,26 @@ The filter applies at document level, after the session or tenant scope is resol
 
 Unknown preset names return 400 `preset_not_found` on `/chat`, `/chat/stream`, and `/chat/batch` before a stream starts. Invalid preset values fail at startup. An invalid `RERANKER_PROVIDER` environment name also fails at startup; a live Cohere call that times out or errors still falls back to pre-rerank order.
 
+### Preset discovery
+
+`GET /retrieval/presets` is a read-only discovery route for preset names loaded in this process and for reranker provider identifiers the server can use. It does not return preset bodies, environment defaults, or secrets. Authentication follows [Authentication](#authentication) above; the auth context must include a tenant (otherwise `401`). In production, send `Authorization: Bearer …` as for other protected routes.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `preset_names` | string array | Sorted names of presets from `RETRIEVAL_PRESETS_PATH` / `RETRIEVAL_PRESETS`. Empty when no presets are loaded. |
+| `reranker_providers` | string array | Always includes `similarity`. Includes `cohere` when `COHERE_API_KEY` is set on the server. |
+
+Example when presets exist and Cohere is configured:
+
+```json
+{
+  "preset_names": ["eval_hybrid", "legal_dense"],
+  "reranker_providers": ["similarity", "cohere"]
+}
+```
+
+With no presets configured, `preset_names` is `[]` and `reranker_providers` is still at least `["similarity"]`. Use this route to populate UIs (for example the demo drawer); naming a preset that does not appear here still yields `preset_not_found` on chat routes as above.
+
 ## Ingestion status
 
 `GET /documents/{id}/status` and the status SSE stream report pipeline state. Typical values include `uploaded`, `queued`, `extracting`, `chunking`, `embedding`, `storing`, `retrying`, `completed`, and `failed`. `retrying` is not terminal: status clients should keep reading, and `ingestion.failed` is not sent, until retries are exhausted or the error is not retryable. Terminal success sends `ingestion.completed` only when webhooks are enabled. Both payloads include `file_name` from the document row when it is set. During a replacement that name stays the previous file until cutover, then becomes the new file's name.
@@ -213,7 +234,7 @@ After history resolution and transformation, one primary retrieval query is the 
 
 `RETRIEVAL_MAX_CONCURRENCY`, embedding model selection, provider API keys, and queue settings stay process-level. `MAX_CONTEXT_CHARS` is not request-configurable; debug and eval snapshots still record the resolved process value.
 
-There is no public HTTP retrieval endpoint. Chat still generates the answer. Eval and other internal callers use `retrieve_for_documents`.
+There is no public HTTP endpoint that runs retrieval over documents; `GET /retrieval/presets` only lists names and reranker identifiers. Chat still generates the answer. Eval and other internal callers use `retrieve_for_documents`.
 
 ## Interactive schema
 
