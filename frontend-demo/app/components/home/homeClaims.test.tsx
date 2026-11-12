@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
+import Developers from "./Developers";
 import Features from "./Features";
 import Hero from "./Hero";
 import WhatIs from "./WhatIs";
@@ -36,11 +37,17 @@ function collectHomeText(...containers: HTMLElement[]): string {
 
 describe("homepage claims", () => {
   it("does not include misleading forbidden phrases in home sections", () => {
+    const { container: developersRoot } = render(<Developers />);
     const { container: featuresRoot } = render(<Features />);
     const { container: heroRoot } = render(<Hero />);
     const { container: whatIsRoot } = render(<WhatIs />);
 
-    const text = collectHomeText(featuresRoot, heroRoot, whatIsRoot);
+    const text = collectHomeText(
+      developersRoot,
+      featuresRoot,
+      heroRoot,
+      whatIsRoot
+    );
 
     for (const pattern of FORBIDDEN_PATTERNS) {
       expect(text).not.toMatch(pattern);
