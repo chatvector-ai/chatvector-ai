@@ -46,12 +46,12 @@ export default function WhatIs() {
     {
       num: "03",
       title: "Retrieve",
-      desc: "Hybrid vector + full-text search with optional reranking.",
+      desc: "Vector retrieval by default; optional hybrid search and reranking when enabled.",
     },
     {
       num: "04",
       title: "Generate",
-      desc: "LLM answer grounded in retrieved context. Cited.",
+      desc: "LLM answer grounded in retrieved context with source citations.",
     },
   ];
   return (
@@ -64,22 +64,24 @@ export default function WhatIs() {
           and open source.
         </h2>
         <p className="max-w-[560px] text-lg font-light leading-relaxed text-muted">
-          ChatVector handles the entire retrieval pipeline — from raw documents
-          to grounded LLM responses — so you can focus on building, not
-          plumbing.
+          ChatVector is a backend-first RAG engine — the HTTP API and Python and
+          TypeScript SDKs are the product. The demo app is a reference client
+          for trying uploads and chat locally.
         </p>
 
         <div className="mt-12 grid grid-cols-1 items-center gap-12 md:grid-cols-2">
           <div>
             <p className="mb-5 text-lg leading-relaxed text-muted">
               Most RAG implementations are fragile, slow, or locked into a
-              vendor. ChatVector is different — a deployable service you host
-              yourself, with a clean HTTP API and no cloud dependency.
+              vendor. ChatVector is a self-hostable engine with vector retrieval
+              by default — hybrid search and reranking stay optional until you
+              enable them.
             </p>
             <p className="text-lg leading-relaxed text-muted">
               Spin up the Docker container, point the SDK at it, and start
-              querying your documents in minutes. Built on FastAPI and pgvector.
-              Runs anywhere Docker runs.
+              querying your documents in minutes. Gemini is the recommended LLM
+              default; OpenAI and Ollama are supported. Built on FastAPI and
+              pgvector. Runs anywhere Docker runs.
             </p>
           </div>
           <div className="rounded-xl border border-border bg-surface p-6">

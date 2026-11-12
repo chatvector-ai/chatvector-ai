@@ -14,7 +14,7 @@ const FEATURES = [
     color: "var(--blue)",
     bg: "color-mix(in srgb, var(--blue) 10%, transparent)",
     title: "Semantic retrieval",
-    desc: "Hybrid vector + PostgreSQL full-text search with optional reranking for accurate hits.",
+    desc: "Vector retrieval by default. Optional hybrid search and reranking when you turn them on.",
     tag: "retrieval",
   },
   {
@@ -22,7 +22,7 @@ const FEATURES = [
     color: "rgb(168, 85, 247)",
     bg: "rgba(168,85,247,0.1)",
     title: "LLM-powered answers",
-    desc: "Powered by Google Gemini. LLM answers grounded in your document context — not hallucinated from training data.",
+    desc: "Pluggable LLM providers — Gemini is the recommended default; OpenAI and Ollama are supported. Answers use retrieved document context.",
     tag: "generation",
   },
   {
@@ -30,7 +30,7 @@ const FEATURES = [
     color: "rgb(251, 191, 36)",
     bg: "rgba(251,191,36,0.1)",
     title: "Open source, self-hosted",
-    desc: "MIT licensed. No cloud dependency. Run on your laptop or your infra.",
+    desc: "MIT licensed, self-hostable RAG engine. Run on your laptop or your infra; you choose the LLM provider.",
     tag: "open-source",
   },
   {
@@ -38,7 +38,7 @@ const FEATURES = [
     color: "var(--accent-text)",
     bg: "color-mix(in srgb, var(--accent) 10%, transparent)",
     title: "Cited responses",
-    desc: "Every answer links back to source chunks. No hallucinations, full traceability.",
+    desc: "Answers link back to source chunks with citations. Grounded in your documents — verify before you rely on them.",
     tag: "trust",
   },
   {
