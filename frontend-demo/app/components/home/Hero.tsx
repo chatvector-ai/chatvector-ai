@@ -62,7 +62,7 @@ function HeroCodeBlock() {
   {
     parts: [
       { c: SYNTAX.plain, t: "print(answer.answer)  " },
-      { c: SYNTAX.cm, t: "# Cited, accurate" },
+      { c: SYNTAX.cm, t: "# Grounded, with citations" },
     ],
   },
 ];
@@ -128,9 +128,9 @@ export default function Hero() {
       </h1>
 
       <p className="relative z-[1] mx-auto mt-6 max-w-[540px] text-xl font-light leading-relaxed text-muted">
-        ChatVector is a high-performance retrieval-augmented generation engine —
-        ingest any document, retrieve semantically, and get LLM-powered answers
-        in minutes.
+        Backend-first RAG engine — ingest PDF, TXT, Markdown, HTML, and DOCX,
+        retrieve with vector search by default, and get cited LLM answers via the
+        HTTP API. Try the demo as a reference client.
       </p>
 
       <div className="relative z-[1] mt-10 flex flex-wrap justify-center gap-4">
