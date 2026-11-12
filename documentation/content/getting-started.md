@@ -45,7 +45,8 @@ Inside the API container, `localhost` is the container, not your machine — `ht
 Defaults (when unset): **`llama3`** for chat and **`nomic-embed-text`** for embeddings. On the host:
 
 ```bash
-ollama pull llama3 nomic-embed-text
+ollama pull llama3
+ollama pull nomic-embed-text
 ```
 
 You can instead set `LLM_MODEL` and `EMBEDDING_MODEL` to installed models.

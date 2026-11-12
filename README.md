@@ -221,7 +221,8 @@ Inside the container, `localhost` is the container itself, not your machine — 
 Default models when `LLM_MODEL` and `EMBEDDING_MODEL` are unset: **`llama3`** (generation) and **`nomic-embed-text`** (embeddings). Pull them on the host before ingesting:
 
 ```bash
-ollama pull llama3 nomic-embed-text
+ollama pull llama3
+ollama pull nomic-embed-text
 ```
 
 Or set `LLM_MODEL` and `EMBEDDING_MODEL` to models you already have installed.

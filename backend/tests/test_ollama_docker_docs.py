@@ -15,9 +15,18 @@ _REQUIRED_SNIPPETS = (
 )
 
 
+_INVALID_OLLAMA_PULL = "ollama pull llama3 nomic-embed-text"
+
+
 def _assert_ollama_docker_docs(text: str) -> None:
     for snippet in _REQUIRED_SNIPPETS:
         assert snippet in text, f"missing required Ollama Docker doc snippet: {snippet!r}"
+    assert _INVALID_OLLAMA_PULL not in text, (
+        "Ollama pull accepts one model per command; use separate "
+        "`ollama pull llama3` and `ollama pull nomic-embed-text` lines"
+    )
+    assert "ollama pull llama3" in text
+    assert "ollama pull nomic-embed-text" in text
 
 
 def test_readme_documents_ollama_for_dockerized_api():
