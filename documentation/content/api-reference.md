@@ -133,7 +133,11 @@ The filter applies at document level, after the session or tenant scope is resol
 
 ### Named presets
 
-`retrieval.preset` names a config object loaded at process startup from `RETRIEVAL_PRESETS_PATH` and/or `RETRIEVAL_PRESETS`. A preset is an alias for the same retrieval fields as a request override, including query-transformation settings. Precedence is explicit request field, then the nested `retrieval` object, then the preset, then the process environment. There is no database or admin UI for presets.
+`retrieval.preset` names a config object loaded at process startup from `RETRIEVAL_PRESETS_PATH` and/or `RETRIEVAL_PRESETS`. A preset is an alias for the same retrieval fields as a request override, including query-transformation settings. There is no database or admin UI for presets.
+
+Set `RETRIEVAL_PRESETS_PATH` to a JSON file whose top-level object maps preset names to override objects, or set `RETRIEVAL_PRESETS` to the same JSON inline. When both are set, file entries load first and `RETRIEVAL_PRESETS` merges afterward (an inline entry with the same name replaces the file entry). Presets load once at API startup; changing either variable requires an API restart. The repository ships `backend/retrieval_presets.example.json` as an illustrative sample (not enabled by default and not mounted by Compose). With Docker Compose, the API container mounts the backend tree at `/app`, so a path like `/app/retrieval_presets.example.json` points at that sample when you enable it.
+
+For each retrieval field, resolution order is process default (environment), then the named preset, then explicit request overrides. Within a request, a top-level field wins over the nested `retrieval` object.
 
 Unknown preset names return 400 `preset_not_found` on `/chat`, `/chat/stream`, and `/chat/batch` before a stream starts. Invalid preset values fail at startup. An invalid `RERANKER_PROVIDER` environment name also fails at startup; a live Cohere call that times out or errors still falls back to pre-rerank order.
 

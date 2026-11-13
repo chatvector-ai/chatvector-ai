@@ -15,6 +15,7 @@ from routes.chat import router as chat_router
 from services.retrieval_config import (
     InvalidRetrievalConfigError,
     RetrievalProcessDefaults,
+    merge_retrieval_field_layers,
     resolve_retrieval_config,
 )
 from services.retrieval_presets import (
@@ -29,6 +30,7 @@ from services.retrieval_presets import (
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 EVAL_HYBRID_PRESETS_PATH = FIXTURES_DIR / "retrieval_presets_eval_hybrid.json"
+EXAMPLE_PRESETS_PATH = Path(__file__).resolve().parent.parent / "retrieval_presets.example.json"
 
 
 @pytest.fixture(autouse=True)
@@ -45,6 +47,27 @@ def test_load_fixture_preset_file():
     )
     assert presets["eval_hybrid"]["hybrid_enabled"] is True
     assert presets["eval_hybrid"]["reranking_enabled"] is True
+
+
+def test_repository_example_presets_file_loads_and_merges():
+    presets = load_retrieval_presets_from_settings(
+        presets_path=str(EXAMPLE_PRESETS_PATH),
+        presets_json=None,
+    )
+    assert set(presets) == {"eval_hybrid", "illustrative_rewrite"}
+
+    env = RetrievalProcessDefaults()
+    for name, body in presets.items():
+        merged = merge_retrieval_field_layers({"retrieval": {"preset": name}})
+        effective = resolve_retrieval_config(
+            merged,
+            env,
+            preset_fields=body,
+            resolved_preset=name,
+        )
+        for field, value in body.items():
+            assert getattr(effective, field) == value
+            assert effective.sources[field] == "preset"
 
 
 def test_invalid_preset_file_fails_with_clear_error(tmp_path):
