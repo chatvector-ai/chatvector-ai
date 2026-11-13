@@ -244,8 +244,20 @@ handle_setup_provider_configuration() {
   return 0
 }
 
-default_ollama_docker_base_url() {
-  printf '%s' "http://host.docker.internal:11434"
+default_ollama_base_url() {
+  printf '%s' "http://localhost:11434"
+}
+
+ollama_base_url_uses_loopback() {
+  local url="$1"
+  local host="${url#*://}"
+  host="${host%%/*}"
+  host="${host%%:*}"
+
+  case "${host}" in
+    localhost | 127.0.0.1) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 ollama_host_check_url() {
@@ -337,8 +349,14 @@ verify_ollama_docker_connectivity() {
 
   docker_url="$(read_env_value "${BACKEND_ENV}" "OLLAMA_BASE_URL")"
   if [[ -z "${docker_url}" ]]; then
-    docker_url="$(default_ollama_docker_base_url)"
+    docker_url="$(default_ollama_base_url)"
   fi
+
+  if ollama_base_url_uses_loopback "${docker_url}"; then
+    echo "Set OLLAMA_BASE_URL=http://host.docker.internal:11434 in backend/.env (API container cannot reach loopback ${docker_url})." >&2
+    return 1
+  fi
+
   host_url="$(ollama_host_check_url "${docker_url}")"
 
   if ! check_ollama_container_reachable "${docker_url}"; then
