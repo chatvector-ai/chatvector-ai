@@ -203,3 +203,89 @@ async def test_chat_stream_route_enabled():
         assert len(chunks) == 2
         assert chunks[0] == "event: token\ndata: \"Hello\"\n\n"
         assert chunks[1] == "event: done\ndata: [DONE]\n\n"
+
+
+def test_chat_route_returns_200_for_embedding_auth_failure():
+    """Route-level sync: embedding auth maps to HTTP 200 status=error, not 500."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from core.auth import require_auth
+    from main import global_exception_handler
+    from middleware.rate_limit import limiter
+    from routes.chat import router as chat_router
+    from services.chat_service import EMBEDDING_INVALID_API_KEY_MESSAGE
+    from services.providers.base import ProviderAuthError
+
+    limiter.reset()
+    app = FastAPI()
+    app.state.limiter = limiter
+    app.add_exception_handler(Exception, global_exception_handler)
+    app.dependency_overrides[require_auth] = lambda: AuthContext(tenant_id="dev")
+    app.include_router(chat_router)
+
+    payload = {"question": "q", "doc_id": _DOC_ID_1, "match_count": 5}
+    with (
+        TestClient(app, raise_server_exceptions=False) as client,
+        patch("routes.chat.db.get_document", new=AsyncMock(return_value=_FAKE_DOC)),
+        patch("routes.chat.get_or_create_session", new=AsyncMock(return_value=_FAKE_SESSION)),
+        patch("routes.chat.register_session_document", new=AsyncMock()),
+        patch("routes.chat.register_tenant_document"),
+        patch(
+            "services.chat_service._resolve_retrieval_doc_ids",
+            new=AsyncMock(return_value=[_DOC_ID_1]),
+        ),
+        patch(
+            "services.chat_service.get_embeddings",
+            new=AsyncMock(side_effect=ProviderAuthError("401 invalid")),
+        ),
+    ):
+        response = client.post("/chat", json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "error"
+    assert body["error"] == {
+        "code": "embedding_invalid_api_key",
+        "message": EMBEDDING_INVALID_API_KEY_MESSAGE,
+    }
+    limiter.reset()
+
+
+def test_chat_route_embedding_failure_returns_internal_error():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from core.auth import require_auth
+    from main import global_exception_handler
+    from middleware.rate_limit import limiter
+    from routes.chat import router as chat_router
+
+    limiter.reset()
+    app = FastAPI()
+    app.state.limiter = limiter
+    app.add_exception_handler(Exception, global_exception_handler)
+    app.dependency_overrides[require_auth] = lambda: AuthContext(tenant_id="dev")
+    app.include_router(chat_router)
+
+    payload = {"question": "q", "doc_id": _DOC_ID_1, "match_count": 5}
+    with (
+        TestClient(app, raise_server_exceptions=False) as client,
+        patch("routes.chat.db.get_document", new=AsyncMock(return_value=_FAKE_DOC)),
+        patch("routes.chat.get_or_create_session", new=AsyncMock(return_value=_FAKE_SESSION)),
+        patch("routes.chat.register_session_document", new=AsyncMock()),
+        patch("routes.chat.register_tenant_document"),
+        patch(
+            "services.chat_service._resolve_retrieval_doc_ids",
+            new=AsyncMock(return_value=[_DOC_ID_1]),
+        ),
+        patch(
+            "services.chat_service.get_embeddings",
+            new=AsyncMock(side_effect=RuntimeError("embed down")),
+        ),
+    ):
+        response = client.post("/chat", json=payload)
+
+    assert response.status_code == 500
+    assert response.json()["detail"]["code"] == "internal_error"
+    limiter.reset()
