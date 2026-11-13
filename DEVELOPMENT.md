@@ -1702,12 +1702,14 @@ embedding probes use `LLM_HEALTH_CHECK_TIMEOUT_SEC` and
 
 The reference demo runs `PROMPT_PERSONA=default` — the same persona as the
 backend code default (`backend/core/config.py`) and `backend/.env.example`.
-Docker Compose sets it explicitly on the `api` service, so the stock stack
-does not depend on a private `backend/.env`. A deployment may still override
-`PROMPT_PERSONA` with any value in `VALID_PERSONAS` (`default`, `concise`,
-`conversational`, `academic`, `technical`). `load_dotenv` does not override
-variables already in the process environment, so an explicit Compose or
-process value wins over a `backend/.env` line.
+`docker-compose.yml` pins `PROMPT_PERSONA: "default"` on the `api` service;
+that process value wins over any `PROMPT_PERSONA` line in `backend/.env`
+because `load_dotenv` does not override variables already in the environment.
+The stock stack therefore does not depend on a private `backend/.env` for
+persona. A deployment may still override `PROMPT_PERSONA` with any value in
+`VALID_PERSONAS` (`default`, `concise`, `conversational`, `academic`,
+`technical`) by changing Compose, the process environment, or on non-Compose
+runs.
 
 Audit 2 and Audit 3 ran `conversational` because a private environment
 overrode the default. That persona is warmer and more verbose than `default`
