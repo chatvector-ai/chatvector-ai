@@ -1,0 +1,13 @@
+{
+  "eval_hybrid": {
+    "hybrid_enabled": true,
+    "reranking_enabled": true,
+    "reranker_provider": "similarity"
+  },
+  "illustrative_rewrite": {
+    "query_transformation_enabled": true,
+    "query_transformation_strategy": "rewrite",
+    "match_count": 8,
+    "scope": "tenant"
+  }
+}
