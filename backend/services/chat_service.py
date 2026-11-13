@@ -35,9 +35,21 @@ from services.retrieval_service import (
     resolve_scoped_doc_ids,
 )
 from services.session_service import get_session
+from services.providers.base import ProviderAuthError
 from services.tenant_registry import get_tenant_document_ids
 
 logger = logging.getLogger(__name__)
+
+EMBEDDING_INVALID_API_KEY_MESSAGE = (
+    "The embedding API key is invalid or missing. Check your provider credentials."
+)
+
+
+def _embedding_invalid_api_key_error() -> dict:
+    return {
+        "code": "embedding_invalid_api_key",
+        "message": EMBEDDING_INVALID_API_KEY_MESSAGE,
+    }
 
 
 def _structured_error_from_llm_answer(answer: str) -> dict | None:
@@ -878,17 +890,37 @@ async def answer_question_for_document(
             session_context = SessionContext()
         session_context.chat_history = plan.generation_history
 
-    retrieval = await retrieve_for_documents(
-        question,
-        doc_ids,
-        tenant_id,
-        effective,
-        session_id=session_id,
-        history_for_transform=plan.transform_history,
-        session_context=session_context,
-        resolution_policy=plan.policy,
-        history_observation=plan.observation,
-    )
+    try:
+        retrieval = await retrieve_for_documents(
+            question,
+            doc_ids,
+            tenant_id,
+            effective,
+            session_id=session_id,
+            history_for_transform=plan.transform_history,
+            session_context=session_context,
+            resolution_policy=plan.policy,
+            history_observation=plan.observation,
+        )
+    except ProviderAuthError as e:
+        logger.error(
+            "Embedding API key rejected during chat for document %s: %s",
+            doc_id,
+            e,
+            extra={"error_type": type(e).__name__},
+        )
+        return {
+            "question": question,
+            "doc_id": doc_id,
+            "chunks": 0,
+            "answer": "",
+            "sources": [],
+            "latency_ms": 0,
+            "model": "",
+            "status": "error",
+            "session_id": session_id,
+            "error": _embedding_invalid_api_key_error(),
+        }
     matching_chunks = retrieval.chunks
     context = retrieval.context
     retrieval_debug = retrieval.to_debug_dict() if debug_retrieval else None
@@ -1114,6 +1146,20 @@ async def answer_question_stream_for_document(
                 message=str(e),
             ),
         )
+    except ProviderAuthError as e:
+        logger.error(
+            "Embedding API key rejected during chat stream for document %s: %s",
+            doc_id,
+            e,
+            extra={"error_type": type(e).__name__},
+        )
+        yield _format_sse_event(
+            "error",
+            _build_stream_error_payload(
+                code="embedding_invalid_api_key",
+                message=EMBEDDING_INVALID_API_KEY_MESSAGE,
+            ),
+        )
     except Exception as e:
         logger.error(f"Stream failed for document {doc_id}: {e}", exc_info=True)
         yield _format_sse_event(
@@ -1249,6 +1295,22 @@ async def answer_questions_for_documents_batch(
     flat_queries = [q for queries in transformed_query_lists for q in queries]
     try:
         flat_embeddings = await get_embeddings(flat_queries, tenant_id=tenant_id)
+    except ProviderAuthError as e:
+        logger.error("Batch embedding auth failed: %s", e, exc_info=True)
+        auth_error = _embedding_invalid_api_key_error()
+        return [
+            {
+                "status": "error",
+                "question": query["question"],
+                "doc_ids": query["doc_ids"],
+                "chunks": 0,
+                "error": auth_error,
+                "latency_ms": 0,
+                "model": "",
+                "session_id": query.get("session_id"),
+            }
+            for query in normalized_queries
+        ]
     except Exception as e:
         logger.error("Batch embedding call failed: %s", e, exc_info=True)
         embedding_message = "Failed to generate embeddings for batch request."
