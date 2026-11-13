@@ -151,6 +151,19 @@ describe("AdvancedRetrievalDrawer", () => {
     expect(options[0]).toHaveTextContent("None");
   });
 
+  it("names preset env vars in the empty state when no presets are loaded", () => {
+    render(<AdvancedRetrievalDrawer {...baseProps} open availablePresets={[]} />);
+
+    expect(screen.getByText(/No presets are loaded/i)).toBeInTheDocument();
+    expect(screen.getByText("RETRIEVAL_PRESETS_PATH")).toBeInTheDocument();
+    expect(screen.getByText("RETRIEVAL_PRESETS")).toBeInTheDocument();
+    expect(screen.getByText("backend/.env.example")).toBeInTheDocument();
+    expect(
+      screen.getByText("documentation/content/api-reference.md")
+    ).toBeInTheDocument();
+    expect(screen.getByText(/at API startup/i)).toBeInTheDocument();
+  });
+
   it("calls onPresetChange when a preset is selected", async () => {
     const onPresetChange = vi.fn();
     render(

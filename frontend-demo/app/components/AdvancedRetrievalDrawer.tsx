@@ -219,9 +219,18 @@ export default function AdvancedRetrievalDrawer({
                 <div className="mb-2 flex items-center gap-1.5">
                   <p className="font-medium text-foreground">Preset</p>
                   <InfoPopover label="Preset help">
-                    Names loaded at API startup. A preset fills omitted retrieval
-                    fields; explicit drawer values still override the preset on
-                    the request.
+                    Names loaded at API startup. Configure them with{" "}
+                    <code className="text-foreground/90">RETRIEVAL_PRESETS_PATH</code>
+                    {" and/or "}
+                    <code className="text-foreground/90">RETRIEVAL_PRESETS</code>
+                    {" — see "}
+                    <code className="text-foreground/90">backend/.env.example</code>
+                    {" and "}
+                    <code className="text-foreground/90">
+                      documentation/content/api-reference.md
+                    </code>
+                    . A preset fills omitted retrieval fields; explicit drawer
+                    values still override the preset on the request.
                   </InfoPopover>
                 </div>
                 <label className="block">
@@ -243,7 +252,19 @@ export default function AdvancedRetrievalDrawer({
                   </select>
                 </label>
                 {availablePresets.length === 0 && (
-                  <p className="mt-2 text-muted">No presets are loaded.</p>
+                  <p className="mt-2 text-muted">
+                    No presets are loaded — set{" "}
+                    <code className="text-foreground/90">RETRIEVAL_PRESETS_PATH</code>
+                    {" and/or "}
+                    <code className="text-foreground/90">RETRIEVAL_PRESETS</code>
+                    {" at API startup (see "}
+                    <code className="text-foreground/90">backend/.env.example</code>
+                    {" and "}
+                    <code className="text-foreground/90">
+                      documentation/content/api-reference.md
+                    </code>
+                    ).
+                  </p>
                 )}
               </section>
 
