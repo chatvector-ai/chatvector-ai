@@ -14,7 +14,7 @@ main() {
 
   if [[ "${QUICKSTART:-0}" == "1" ]]; then
     if ! handle_quickstart_provider_configuration; then
-      exit 0
+      exit 1
     fi
   else
     handle_setup_provider_configuration
