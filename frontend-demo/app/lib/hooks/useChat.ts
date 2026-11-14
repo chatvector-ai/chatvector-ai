@@ -25,6 +25,7 @@ import {
 } from "../documentStore";
 import type { DocumentScalarMetadata } from "../documentMetadata";
 import type { AdvancedRetrievalState } from "../advancedRetrieval";
+import { mapChatTurnError } from "../chatScopeErrors";
 
 const welcomeMessages: Message[] = [
   {
@@ -628,7 +629,10 @@ export function useChat(
                         ...m,
                         text: m.text + remaining,
                         isStreaming: false,
-                        error: { code: event.code, message: event.message },
+                        error: mapChatTurnError(
+                          { code: event.code, message: event.message },
+                          attachment?.fileName,
+                        ),
                       }
                     : m
                 )
@@ -640,7 +644,10 @@ export function useChat(
                     ? {
                         ...m,
                         isStreaming: false,
-                        error: { code: event.code, message: event.message },
+                        error: mapChatTurnError(
+                          { code: event.code, message: event.message },
+                          attachment?.fileName,
+                        ),
                       }
                     : m
                 )
@@ -652,7 +659,7 @@ export function useChat(
 
       streamingMsgIdRef.current = null;
     },
-    [enqueueToken]
+    [attachment?.fileName, enqueueToken]
   );
 
   const stopStreaming = useCallback(() => {
@@ -780,8 +787,13 @@ export function useChat(
               chunks: response.chunks,
               latency_ms: response.latency_ms,
               model: response.model,
-              ...(response.status === "error"
-                ? { error: response.error }
+              ...(response.status === "error" && response.error
+                ? {
+                    error: mapChatTurnError(
+                      response.error,
+                      attachment?.fileName,
+                    ),
+                  }
                 : {}),
             },
           ]);
