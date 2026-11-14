@@ -12,6 +12,7 @@ import {
 import type { ChatSession } from "../lib/hooks/useSessionManager";
 import type { AdvancedRetrievalState } from "../lib/advancedRetrieval";
 import type { RetrievalScope } from "../lib/retrievalSettings";
+import { buildChatRequestBody } from "../lib/buildChatBody";
 
 const mockCreateNewSession = vi.fn();
 const mockSwitchSession = vi.fn();
@@ -21,6 +22,7 @@ let mockAttachment: AttachmentState | null = null;
 let mockInitialScope: RetrievalScope | undefined = undefined;
 let mockSessions: ChatSession[] = [];
 let mockActiveSessionId = "11111111-aaaa-bbbb-cccc-000000000001";
+let capturedRetrievalState: AdvancedRetrievalState = { explicit: {} };
 
 vi.mock("../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/api")>();
@@ -87,12 +89,15 @@ vi.mock("../lib/hooks/useAdvancedRetrieval", () => ({
           }
           return { explicit };
         }),
+      resetExplicitOverrides: () => setState({ explicit: {} }),
     };
   },
 }));
 
 vi.mock("../lib/hooks/useChat", () => ({
-  useChat: () => ({
+  useChat: (_sessionId: unknown, retrievalState: AdvancedRetrievalState) => {
+    capturedRetrievalState = retrievalState;
+    return {
     messages: [],
     historyLoading: false,
     input: "",
@@ -121,7 +126,8 @@ vi.mock("../lib/hooks/useChat", () => ({
     handleUploadAccepted: vi.fn(),
     handleRemoveAttachment: vi.fn(),
     stopStreaming: vi.fn(),
-  }),
+  };
+  },
 }));
 
 describe("ChatPage preset discovery", () => {
@@ -353,6 +359,56 @@ describe("ChatPage session document list", () => {
 
     const detail = await screen.findByTestId("document-failure-detail");
     expect(detail).toHaveTextContent("embedding: boom");
+  });
+});
+
+describe("ChatPage new session retrieval reset", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    mockInitialScope = undefined;
+    mockAttachment = {
+      fileName: "notes.txt",
+      documentId: "doc-1",
+      statusEndpoint: "/documents/doc-1/status",
+      status: "ready",
+    };
+    mockActiveSessionId = "session-1";
+    mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
+    capturedRetrievalState = { explicit: {} };
+  });
+
+  it("omits explicit retrieval fields from the chat body after New session", async () => {
+    const user = userEvent.setup();
+    render(<ChatPage />);
+
+    await user.click(screen.getByTestId("advanced-retrieval-open"));
+    await user.click(screen.getByRole("radio", { name: /tenant/i }));
+
+    expect(capturedRetrievalState.explicit.scope).toBe("tenant");
+    expect(
+      buildChatRequestBody({
+        question: "What is the policy?",
+        docId: "doc-1",
+        sessionId: "session-1",
+        retrieval: capturedRetrievalState,
+      })
+    ).toMatchObject({ scope: "tenant" });
+
+    await user.click(screen.getByRole("button", { name: /^\+New Session$/ }));
+
+    expect(mockCreateNewSession).toHaveBeenCalledTimes(1);
+    expect(capturedRetrievalState.explicit).toEqual({});
+
+    const body = buildChatRequestBody({
+      question: "What is the policy?",
+      docId: "doc-1",
+      sessionId: "session-1",
+      retrieval: capturedRetrievalState,
+    });
+    expect(body).not.toHaveProperty("scope");
+    expect(body).not.toHaveProperty("hybrid_enabled");
+    expect(body).not.toHaveProperty("match_count");
   });
 });
 

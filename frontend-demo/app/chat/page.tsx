@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { PanelLeft } from "lucide-react";
 import UploadModal from "../components/UploadModal";
 import MessageList from "../components/chat/MessageList";
@@ -76,7 +76,13 @@ export default function ChatPage() {
     setGenerationHistoryWindow,
     setMetadataFilter,
     setPreset,
+    resetExplicitOverrides,
   } = useAdvancedRetrieval();
+
+  const handleCreateNewSession = useCallback(async () => {
+    resetExplicitOverrides();
+    await createNewSession();
+  }, [createNewSession, resetExplicitOverrides]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -257,7 +263,7 @@ export default function ChatPage() {
         id="chat-session-sidebar"
         sessions={sessions}
         activeSessionId={activeSessionId}
-        onCreateSession={createNewSession}
+        onCreateSession={handleCreateNewSession}
         onSwitchSession={switchSession}
         onDeleteSession={deleteSession}
         isCreating={isCreating}
