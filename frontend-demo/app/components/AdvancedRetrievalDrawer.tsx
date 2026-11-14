@@ -44,6 +44,7 @@ type Props = {
   metadataCorpus: MetadataCorpusDocument[];
   availablePresets: string[];
   availableRerankerProviders: RerankerProvider[];
+  activeDocumentFileName?: string;
   inspectMode?: boolean;
   onInspectModeChange?: (enabled: boolean) => void;
 };
@@ -83,9 +84,11 @@ export default function AdvancedRetrievalDrawer({
   metadataCorpus,
   availablePresets,
   availableRerankerProviders,
+  activeDocumentFileName,
   inspectMode = false,
   onInspectModeChange,
 }: Props) {
+  const activeDocumentName = activeDocumentFileName?.trim();
   const panelRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLButtonElement>(null);
   const [matchCountEditorOpen, setMatchCountEditorOpen] = useState(false);
@@ -273,8 +276,13 @@ export default function AdvancedRetrievalDrawer({
                   <p className="font-medium text-foreground">Metadata filter</p>
                   <InfoPopover label="Metadata filter help">
                     Exact match on document metadata keys present in your
-                    current documents. Omitting a filter leaves retrieval
-                    unchanged.
+                    current documents. Under session scope, the filter applies
+                    only to the active document
+                    {activeDocumentName
+                      ? ` (${activeDocumentName})`
+                      : null}
+                    ; if it does not match, the question returns an error.
+                    Omitting a filter leaves retrieval unchanged.
                   </InfoPopover>
                 </div>
                 {metadataKeys.length === 0 ? (
