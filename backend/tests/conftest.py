@@ -16,9 +16,12 @@ if str(BACKEND_DIR) not in sys.path:
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("GEN_AI_KEY", "test-genai-key")
 os.environ.setdefault("LOG_LEVEL", "DEBUG")
+
+_TEST_DB = os.getenv("CHATVECTOR_TEST_DATABASE", "chatvector_test").strip()
+os.environ.setdefault("CHATVECTOR_TEST_DATABASE", _TEST_DB)
 os.environ.setdefault(
     "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres",
+    f"postgresql+asyncpg://postgres:postgres@localhost:5432/{_TEST_DB}",
 )
 
 # Force logging setup BEFORE any app modules are imported.
@@ -35,7 +38,8 @@ if not env_file.exists():
                 "APP_ENV=test",
                 "GEN_AI_KEY=test-genai-key",
                 "LOG_LEVEL=DEBUG",
-                "DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/postgres",
+                f"DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/{_TEST_DB}",
+                f"CHATVECTOR_TEST_DATABASE={_TEST_DB}",
             ]
         )
         + "\n",
