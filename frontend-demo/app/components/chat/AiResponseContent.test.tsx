@@ -24,7 +24,7 @@ function executableMarkup(container: HTMLElement) {
 describe("AiResponseContent", () => {
   it("shows anchor_document_excluded_by_filter using the API message", () => {
     const message =
-      "The requested document is not in the retrieval scope after applying metadata_filter.";
+      "The requested document does not match metadata_filter. Under session scope, metadata_filter can only narrow the requested document.";
     render(
       <AiResponseContent
         error={{ code: "anchor_document_excluded_by_filter", message }}

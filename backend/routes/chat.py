@@ -281,6 +281,14 @@ async def chat(
     auth: AuthContext = Depends(require_auth),
     debug_retrieval: DebugRetrievalQuery = False,
 ):
+    """Answer a question with retrieval scoped to ``doc_id``.
+
+    ``metadata_filter`` narrows which in-scope documents participate in retrieval.
+    Under session scope it applies only to the requested document; it can narrow
+    retrieval within that document but cannot replace it. When the requested
+    document does not match the filter, the response is HTTP ``200`` with
+    ``status: \"error\"`` and code ``anchor_document_excluded_by_filter``.
+    """
     logger.info(f"Chat request received for document {payload.doc_id}")
 
     doc_id_str = str(payload.doc_id)

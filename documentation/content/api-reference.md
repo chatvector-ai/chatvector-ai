@@ -129,7 +129,7 @@ A strategy other than `none` enables transformation for that request even when `
 
 Nested objects, arrays as operands, `null`, an empty object, unknown operators, and any other shape are rejected with `422`. The filter is bounded by `DOCUMENT_METADATA_MAX_KEYS` and `DOCUMENT_METADATA_MAX_BYTES`. Array metadata such as tags is not supported in v1.
 
-The filter applies at document level, after the session or tenant scope is resolved and always within the authenticated tenant. It cannot widen tenant or document scope. `doc_id` stays required on `POST /chat` and `POST /chat/stream`. The anchor document must itself match the filter. Otherwise chat, stream, and batch return `anchor_document_excluded_by_filter` (an `error` event on the stream). Omitting `metadata_filter` leaves retrieval unchanged.
+The filter applies at document level, after the session or tenant scope is resolved and always within the authenticated tenant. It cannot widen tenant or document scope. `doc_id` stays required on `POST /chat` and `POST /chat/stream`. The requested (`doc_id`) document must itself match the filter. Under session scope, `metadata_filter` applies only to that requested document; it can narrow retrieval within it but cannot replace it with other session documents. Otherwise chat, stream, and batch return `anchor_document_excluded_by_filter` (an `error` event on the stream) with a message that the requested document does not match the filter and that, under session scope, the filter can only narrow the requested document. Omitting `metadata_filter` leaves retrieval unchanged.
 
 ### Named presets
 

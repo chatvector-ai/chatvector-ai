@@ -25,6 +25,7 @@ from routes.chat import (
 )
 from routes.chat import router as chat_router
 from services.chat_service import (
+    ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE,
     _resolve_retrieval_doc_ids,
     answer_question_for_document,
     answer_question_stream_for_document,
@@ -410,6 +411,7 @@ async def test_chat_anchor_outside_filtered_scope_returns_structured_error():
     assert result["status"] == "error"
     assert result["doc_id"] == "doc-1"
     assert result["error"]["code"] == "anchor_document_excluded_by_filter"
+    assert result["error"]["message"] == ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE
     find_similar.assert_not_awaited()
 
 
@@ -432,6 +434,7 @@ async def test_chat_filter_matching_nothing_returns_anchor_error():
         )
 
     assert result["error"]["code"] == "anchor_document_excluded_by_filter"
+    assert result["error"]["message"] == ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE
     find_similar.assert_not_awaited()
 
 
@@ -510,7 +513,9 @@ async def test_stream_anchor_outside_filtered_scope_emits_error_event():
 
     assert len(events) == 1
     assert events[0].startswith("event: error")
-    assert json.loads(events[0].split("data: ", 1)[1])["code"] == "anchor_document_excluded_by_filter"
+    stream_error = json.loads(events[0].split("data: ", 1)[1])
+    assert stream_error["code"] == "anchor_document_excluded_by_filter"
+    assert stream_error["message"] == ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE
     find_similar.assert_not_awaited()
 
 
@@ -549,6 +554,7 @@ async def test_batch_item_filter_narrows_documents_and_reports_empty_scope():
     assert results[0]["status"] == "ok"
     assert results[1]["status"] == "error"
     assert results[1]["error"]["code"] == "anchor_document_excluded_by_filter"
+    assert results[1]["error"]["message"] == ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE
     assert {call.kwargs["doc_id"] for call in find_similar.await_args_list} == {"doc-1", "doc-3"}
 
 
@@ -582,6 +588,7 @@ async def test_batch_anchor_exclusion_matches_sync_error_code():
         )
 
     assert sync["error"]["code"] == "anchor_document_excluded_by_filter"
+    assert sync["error"]["message"] == ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE
     assert batch[0]["error"]["code"] == sync["error"]["code"]
     assert batch[0]["error"]["message"] == sync["error"]["message"]
 
@@ -823,4 +830,5 @@ async def test_filter_excludes_non_matching_docs_from_scoped_retrieval(metadata_
     result, searched = await run(docs["hr"], {"metadata_filter": {"department": "legal"}})
     assert result["status"] == "error"
     assert result["error"]["code"] == "anchor_document_excluded_by_filter"
+    assert result["error"]["message"] == ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE
     assert searched == set()

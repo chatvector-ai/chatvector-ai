@@ -226,6 +226,12 @@ async def _resolve_retrieval_doc_ids(
     return doc_ids
 
 
+ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE = (
+    "The requested document does not match metadata_filter. "
+    "Under session scope, metadata_filter can only narrow the requested document."
+)
+
+
 def _scope_error(
     doc_ids: list[str],
     *,
@@ -240,7 +246,7 @@ def _scope_error(
     if effective.metadata_filter and not any(doc_id in doc_ids for doc_id in requested_doc_ids):
         return {
             "code": "anchor_document_excluded_by_filter",
-            "message": "The requested document is not in the retrieval scope after applying metadata_filter.",
+            "message": ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE,
         }
     if not doc_ids:
         return {
