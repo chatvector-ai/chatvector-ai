@@ -226,9 +226,6 @@ handle_quickstart_provider_configuration() {
   print_provider_edit_instructions
   echo "Non-interactive session: edit backend/.env, then run:"
   echo "  make quickstart"
-  echo "or:"
-  echo "  make setup"
-  echo "  make"
   return 1
 }
 
