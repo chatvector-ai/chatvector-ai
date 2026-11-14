@@ -508,3 +508,84 @@ describe("ChatPage session navigation", () => {
     expect(screen.queryByText("Configuration B")).not.toBeInTheDocument();
   });
 });
+
+describe("ChatPage document replacement labeled flow", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockInitialScope = undefined;
+    mockActiveSessionId = "session-1";
+    mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
+    mockAttachment = {
+      fileName: "notes.txt",
+      documentId: "doc-1",
+      statusEndpoint: "/documents/doc-1/status",
+      status: "ready",
+    };
+    vi.mocked(getSession).mockResolvedValue({
+      id: "session-1",
+      created_at: "2026-01-01T00:00:00Z",
+      last_active: "2026-01-01T00:00:00Z",
+      metadata: {},
+      document_ids: ["doc-1", "doc-2"],
+      display_label: "New session",
+    });
+    vi.mocked(listDocuments).mockResolvedValue({
+      tenant_id: "t",
+      documents: [
+        {
+          document_id: "doc-1",
+          file_name: "notes.txt",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+          metadata: {},
+        },
+        {
+          document_id: "doc-2",
+          file_name: "other.txt",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+          metadata: {},
+        },
+      ],
+    });
+  });
+
+  it("opens labeled replacement modal when clicking Replace from the document list row", async () => {
+    const user = userEvent.setup();
+    render(<ChatPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Replace other.txt" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Replace other.txt" }));
+
+    expect(
+      screen.getByRole("heading", { name: "Replace other.txt" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "other.txt will be replaced. Its content is re-indexed under the same document ID."
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("opens labeled replacement modal when clicking Replace from the attachment chip", async () => {
+    const user = userEvent.setup();
+    render(<ChatPage />);
+
+    const chipReplace = screen.getByRole("button", { name: "Replace notes.txt" });
+    await user.click(chipReplace);
+
+    expect(
+      screen.getByRole("heading", { name: "Replace notes.txt" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "notes.txt will be replaced. Its content is re-indexed under the same document ID."
+      )
+    ).toBeInTheDocument();
+  });
+});

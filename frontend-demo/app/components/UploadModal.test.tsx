@@ -339,4 +339,89 @@ describe("UploadModal", () => {
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
     expect(screen.queryByText(/Upload Successful/i)).not.toBeInTheDocument();
   });
+
+  it("labels replacement action with the target file name, explains in-place re-indexing, and labels the dropzone", () => {
+    render(
+      <UploadModal
+        onClose={vi.fn()}
+        sessionId="sess-1"
+        replaceDocumentId="doc-harbor"
+        replaceFileName="harbor.pdf"
+        onUploadAccepted={vi.fn()}
+        attachment={null}
+      />
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Replace harbor.pdf" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "harbor.pdf will be replaced. Its content is re-indexed under the same document ID."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Replace harbor.pdf" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Choose a new file to replace harbor.pdf")
+    ).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("heading", { name: "Upload document" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("PDF, TXT, Markdown, HTML, and DOCX")
+    ).not.toBeInTheDocument();
+  });
+
+  it("falls back to attachment fileName when replaceFileName is not explicitly passed", () => {
+    render(
+      <UploadModal
+        onClose={vi.fn()}
+        sessionId="sess-1"
+        onUploadAccepted={vi.fn()}
+        attachment={{
+          documentId: "doc-notes",
+          fileName: "notes.txt",
+          status: "ready",
+        }}
+      />
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Replace notes.txt" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "notes.txt will be replaced. Its content is re-indexed under the same document ID."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Replace notes.txt" })
+    ).toBeInTheDocument();
+  });
+
+  it("keeps original Upload document copy when not replacing", () => {
+    render(
+      <UploadModal
+        onClose={vi.fn()}
+        onUploadAccepted={vi.fn()}
+        attachment={null}
+      />
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Upload document" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("PDF, TXT, Markdown, HTML, and DOCX")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Upload document — drop a file or press Enter to browse",
+      })
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/will be replaced/i)).not.toBeInTheDocument();
+  });
 });

@@ -24,6 +24,7 @@ type Props = {
   handleSend: () => void;
   handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   handleRemoveAttachment: () => void;
+  onReplaceAttachment?: () => void;
   onUploadClick: () => void;
   uploadButtonRef?: RefObject<HTMLButtonElement | null>;
   stopStreaming: () => void;
@@ -44,12 +45,14 @@ export default function ChatInput({
   handleSend,
   handleKeyDown,
   handleRemoveAttachment,
+  onReplaceAttachment,
   onUploadClick,
   uploadButtonRef,
   stopStreaming,
   scopeIndicator = { kind: "default-session" },
   metadataFilterSummary = null,
 }: Props) {
+  const handleReplace = onReplaceAttachment ?? onUploadClick;
   const scopeMessage = (() => {
     switch (scopeIndicator.kind) {
       case "tenant":
@@ -99,6 +102,9 @@ export default function ChatInput({
             }
             processingTime={poll.processingTime}
             metadata={attachment.metadata}
+            onReplace={
+              attachment.status !== "processing" ? handleReplace : undefined
+            }
             onRemove={() => void handleRemoveAttachment()}
           />
         </div>
