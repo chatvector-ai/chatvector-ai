@@ -83,11 +83,19 @@ export function useProxyChat(options: UseProxyChatOptions): UseProxyChatResult {
             const result = await client.chat(payload, {
               signal: controller.signal,
             });
-            setAnswer(result.response.answer);
-            setSources(result.response.sources);
             if (result.sessionId && onSessionId) {
               onSessionId(result.sessionId);
             }
+            if (result.response.status === "error") {
+              const errorMessage =
+                result.response.error?.message ??
+                result.response.error?.code ??
+                "Chat request failed";
+              setError(errorMessage);
+              return;
+            }
+            setAnswer(result.response.answer);
+            setSources(result.response.sources);
           } else {
             throw cause;
           }
