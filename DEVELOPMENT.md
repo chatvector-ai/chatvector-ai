@@ -109,7 +109,7 @@ make down        # Stop containers
 make reset       # Stop containers and remove volumes
 make logs        # Follow API logs
 make db          # Open Postgres shell
-make tests       # Run tests via Docker (docker compose run --rm tests)
+make tests       # Run backend tests via Docker (isolated chatvector_test database)
 make prod-up     # Start production stack (standalone compose)
 make prod-down   # Stop production stack
 make prod-build  # Rebuild production stack
@@ -126,6 +126,12 @@ Direct `docker compose` usage still works if preferred.
 ---
 
 ## Database Initialization
+
+The API uses the default `postgres` database. Pytest uses a separate
+`chatvector_test` database on the same server so integration tests do not add
+documents to your dev data. `make tests` creates and migrates `chatvector_test`
+automatically; fresh Docker volumes also get it via
+`backend/db/init/999_create_test_database.sh`.
 
 The database initializes automatically with:
 
@@ -787,7 +793,7 @@ This project uses `pytest` and `pytest-asyncio`.
 ```bash
 make tests
 # or
-docker compose run --rm tests
+docker compose --profile test run --rm tests
 ```
 
 ### Running Locally
@@ -1388,7 +1394,7 @@ With Docker (same Redis URL and logical DB index as CI):
 ```bash
 make tests
 # or only the Redis integration suite:
-docker compose run --rm tests pytest -m redis_integration -v
+docker compose --profile test run --rm tests pytest -m redis_integration -v
 ```
 
 Without Docker (requires Postgres and Redis running locally):

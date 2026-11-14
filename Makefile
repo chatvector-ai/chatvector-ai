@@ -126,7 +126,7 @@ prod-build:
 	@echo "$(GREEN)Production containers rebuilt and started$(RESET)"
 
 tests:
-	$(DOCKER_COMPOSE) run --rm tests
+	$(DOCKER_COMPOSE) --profile test run --rm tests
 	@echo "$(GREEN)Tests complete$(RESET)"
 
 clean:

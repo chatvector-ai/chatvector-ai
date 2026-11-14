@@ -54,22 +54,19 @@ jobs:
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Apply database schema
+      - name: Prepare isolated test database
         env:
-          PGHOST: localhost
-          PGPORT: 5432
-          PGUSER: postgres
-          PGPASSWORD: postgres
-          PGDATABASE: postgres
+          DATABASE_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          CHATVECTOR_TEST_DATABASE: chatvector_test
+          PYTHONPATH: backend
         run: |
-          set -euo pipefail
-          for f in $(ls backend/db/init/*.sql | sort); do
-            psql -v ON_ERROR_STOP=1 -f "$f"
-          done
+          cd backend
+          python -m db.ensure_test_database
 
       - name: Run backend tests
         env:
-          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/postgres
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/chatvector_test
+          CHATVECTOR_TEST_DATABASE: chatvector_test
           APP_ENV: test
           GEN_AI_KEY: test-key-for-ci
           PYTHONPATH: backend

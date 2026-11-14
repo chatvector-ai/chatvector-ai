@@ -67,6 +67,8 @@ services:
       start_period: 30s
 
   tests:
+    profiles:
+      - test
     build:
       context: ./backend
     working_dir: /app
@@ -76,8 +78,9 @@ services:
       # Repo-root docs are outside the backend mount. Tests read them here.
       - .:/workspace:ro
     environment:
-      # 👇 Same fix here
-      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@db:5432/postgres"
+      CHATVECTOR_TEST_DATABASE: chatvector_test
+      DATABASE_ADMIN_URL: "postgresql://postgres:postgres@db:5432/postgres"
+      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@db:5432/chatvector_test"
       APP_ENV: "test"
       PYTHONPATH: /app
       # Logical DB 15 is isolated from the API (redis://…/0); tests flush this DB between cases
@@ -87,7 +90,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: ["pytest", "-v", "--asyncio-mode=auto"] # 👈 Added asyncio mode
+    command:
+      [
+        "sh",
+        "-c",
+        "python -m db.ensure_test_database && pytest -v --asyncio-mode=auto",
+      ]
 
 volumes:
   chatvector-db-data:
