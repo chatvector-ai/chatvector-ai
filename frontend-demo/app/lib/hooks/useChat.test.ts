@@ -393,6 +393,88 @@ describe("useChat", () => {
     });
   });
 
+  it("maps anchor_document_excluded_by_filter to a message that names the active document", async () => {
+    const backendMessage =
+      "The requested document is not in the retrieval scope after applying metadata_filter.";
+    mockSendMessageStream.mockImplementation(async function* () {
+      yield {
+        type: "error",
+        code: "anchor_document_excluded_by_filter",
+        message: backendMessage,
+      };
+    });
+
+    const { result } = renderHook(() =>
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
+    );
+
+    await waitFor(() => expect(result.current.historyLoading).toBe(false));
+
+    act(() => {
+      result.current.handleUploadAccepted({
+        fileName: "council-minutes.pdf",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+      });
+      result.current.setInput("What changed?");
+    });
+
+    await waitFor(() =>
+      expect(result.current.attachment?.status).toBe("ready"),
+    );
+
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    const aiMessage = result.current.messages.find(
+      (message) => message.sender === "ai" && message.error,
+    );
+    expect(aiMessage?.error?.code).toBe("anchor_document_excluded_by_filter");
+    expect(aiMessage?.error?.message).toContain("council-minutes.pdf");
+    expect(aiMessage?.error?.message).not.toBe(backendMessage);
+  });
+
+  it("keeps the backend anchor-document message when the filename is unknown", async () => {
+    const backendMessage =
+      "The requested document is not in the retrieval scope after applying metadata_filter.";
+    mockSendMessageStream.mockImplementation(async function* () {
+      yield {
+        type: "error",
+        code: "anchor_document_excluded_by_filter",
+        message: backendMessage,
+      };
+    });
+
+    const { result } = renderHook(() =>
+      useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
+    );
+
+    await waitFor(() => expect(result.current.historyLoading).toBe(false));
+
+    act(() => {
+      result.current.handleUploadAccepted({
+        fileName: "   ",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+      });
+      result.current.setInput("What changed?");
+    });
+
+    await waitFor(() =>
+      expect(result.current.attachment?.status).toBe("ready"),
+    );
+
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    const aiMessage = result.current.messages.find(
+      (message) => message.sender === "ai" && message.error,
+    );
+    expect(aiMessage?.error?.message).toBe(backendMessage);
+  });
+
   it("stores a stream complete message_id without changing the answer", async () => {
     mockSendMessageStream.mockImplementation(async function* () {
       yield { type: "token", text: "Ten days." };

@@ -303,6 +303,41 @@ describe("AdvancedRetrievalDrawer", () => {
     expect(onGeneration).not.toHaveBeenCalled();
   });
 
+  it("explains session-scope filter behavior without naming a document when none is active", async () => {
+    render(<AdvancedRetrievalDrawer {...baseProps} open />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Metadata filter help" }));
+
+    expect(
+      screen.getByText(/exact match on document metadata keys/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /under session scope, the filter applies only to the active document/i
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/active document \(/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/if it does not match, the question returns an error/i)
+    ).toBeInTheDocument();
+  });
+
+  it("names the active document in metadata filter help when one is attached", async () => {
+    render(
+      <AdvancedRetrievalDrawer
+        {...baseProps}
+        open
+        activeDocumentFileName="handbook.pdf"
+      />
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Metadata filter help" }));
+
+    expect(
+      screen.getByText(/active document \(handbook\.pdf\)/i)
+    ).toBeInTheDocument();
+  });
+
   it("does not select session or tenant scope when only a preset is active", () => {
     render(
       <AdvancedRetrievalDrawer

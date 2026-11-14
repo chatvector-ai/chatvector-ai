@@ -335,6 +335,7 @@ export default function ChatPage() {
               open={drawerOpen}
               onOpenChange={setDrawerOpen}
               state={retrievalState}
+              activeDocumentFileName={attachment?.fileName}
               onScopeChange={setScope}
               onMatchCountChange={setMatchCount}
               onHybridEnabledChange={setHybridEnabled}
