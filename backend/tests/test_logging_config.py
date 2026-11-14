@@ -78,6 +78,7 @@ def test_setup_logging_routes_to_production_files_when_app_env_is_development(
     logs/access.log. Confirms test routing is opt-in, not default."""
     from logging_config.logging_config import setup_logging
 
+    monkeypatch.delenv("CHATVECTOR_TEST_LOGGING", raising=False)
     monkeypatch.setenv("APP_ENV", "development")
     setup_logging()
 
@@ -92,6 +93,25 @@ def test_setup_logging_routes_to_production_files_when_app_env_is_development(
     )
     assert "test.log" not in root_files
     assert "test_access.log" not in access_files
+
+
+def test_setup_logging_routes_to_test_files_when_pytest_flag_set(
+    monkeypatch, reset_logging
+):
+    """CHATVECTOR_TEST_LOGGING keeps reload tests on test.log."""
+    from logging_config.logging_config import setup_logging
+
+    monkeypatch.setenv("CHATVECTOR_TEST_LOGGING", "1")
+    monkeypatch.setenv("APP_ENV", "development")
+    setup_logging()
+
+    root_files = _file_handler_paths(logging.getLogger())
+    access_files = _file_handler_paths(logging.getLogger("uvicorn.access"))
+
+    assert "test.log" in root_files
+    assert "test_access.log" in access_files
+    assert "app.log" not in root_files
+    assert "access.log" not in access_files
 
 
 def test_setup_logging_root_has_file_and_stream_handlers(monkeypatch, reset_logging):

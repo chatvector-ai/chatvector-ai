@@ -14,6 +14,9 @@ if str(BACKEND_DIR) not in sys.path:
 # (Docker) already injects APP_ENV=test via docker-compose.yml, so this
 # only changes the local-pytest path.
 os.environ.setdefault("APP_ENV", "test")
+# Pin log file routing to test.* for the whole pytest session, including tests
+# that reload main under development/production APP_ENV.
+os.environ["CHATVECTOR_TEST_LOGGING"] = "1"
 os.environ.setdefault("GEN_AI_KEY", "test-genai-key")
 os.environ.setdefault("LOG_LEVEL", "DEBUG")
 
@@ -24,10 +27,19 @@ os.environ.setdefault(
     f"postgresql+asyncpg://postgres:postgres@localhost:5432/{_TEST_DB}",
 )
 
+def _clear_test_log_files() -> None:
+    logs_dir = BACKEND_DIR / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("test.log", "test_access.log"):
+        (logs_dir / name).write_text("", encoding="utf-8")
+
+
 # Force logging setup BEFORE any app modules are imported.
 # This ensures all log output (including startup/shutdown) goes to test.log,
 # keeping app.log clean for development server traffic only.
 from logging_config.logging_config import setup_logging
+
+_clear_test_log_files()
 setup_logging()
 
 env_file = BACKEND_DIR / ".env"
@@ -57,20 +69,14 @@ def event_loop_policy():
 
 @pytest.fixture(scope="session", autouse=True)
 def clear_test_logs():
-    """Clear test log files at the start of each test session.
+    """Reset test log files at session start (after collection).
 
-    Prevents test output from accumulating across runs and keeps the
-    test log stream readable. Only clears logs/test.log and
-    logs/test_access.log — production log files are never touched.
+    Truncates logs/test.log and logs/test_access.log and rebinds file
+    handlers so output does not accumulate across pytest invocations.
+    Production log files are never touched.
     """
-    logs_dir = BACKEND_DIR / "logs"
-    test_log_files = [
-        logs_dir / "test.log",
-        logs_dir / "test_access.log",
-    ]
-    for log_file in test_log_files:
-        if log_file.exists():
-            log_file.write_text("", encoding="utf-8")
+    _clear_test_log_files()
+    setup_logging()
     yield
 
 

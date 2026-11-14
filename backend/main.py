@@ -325,7 +325,14 @@ async def global_exception_handler(request: Request, exc: Exception):
     
 
     request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
-    logger.error(f"Unhandled exception [req_id={request_id}] for {request.url.path}: {exc}", exc_info=True)
+    log_level = getattr(logging, config.LOG_LEVEL, logging.INFO)
+    logger.error(
+        "Unhandled exception [req_id=%s] for %s: %s",
+        request_id,
+        request.url.path,
+        exc,
+        exc_info=log_level <= logging.DEBUG,
+    )
     return JSONResponse(
         status_code=500,
         content={
