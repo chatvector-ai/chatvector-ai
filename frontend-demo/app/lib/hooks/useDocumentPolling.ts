@@ -66,6 +66,50 @@ function formatDuration(ms: number): string {
   const secs = Math.round(seconds % 60);
   return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
 }
+
+type IngestionJobTiming = {
+  durations_ms?: { total?: number };
+  started_at?: string;
+  completed_at?: string;
+};
+
+type ProcessingDurationPayload = {
+  job?: IngestionJobTiming | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+/** Prefer ingestion job timing from the status payload; fall back to row timestamps. */
+function resolveProcessingDurationMs(
+  payload: ProcessingDurationPayload
+): number | undefined {
+  const job = payload.job;
+  if (job && typeof job === "object") {
+    const total = job.durations_ms?.total;
+    if (typeof total === "number" && Number.isFinite(total) && total >= 0) {
+      return total;
+    }
+    const started = job.started_at
+      ? new Date(job.started_at).getTime()
+      : Number.NaN;
+    const completed = job.completed_at
+      ? new Date(job.completed_at).getTime()
+      : payload.updated_at
+        ? new Date(payload.updated_at).getTime()
+        : Number.NaN;
+    if (!Number.isNaN(started) && !Number.isNaN(completed) && completed > started) {
+      return completed - started;
+    }
+  }
+  if (payload.created_at && payload.updated_at) {
+    const created = new Date(payload.created_at).getTime();
+    const updated = new Date(payload.updated_at).getTime();
+    if (!Number.isNaN(created) && !Number.isNaN(updated) && updated > created) {
+      return updated - created;
+    }
+  }
+  return undefined;
+}
 function stagesBefore(currentStage: string): string[] {
   if (currentStage === "retrying") return [];
   const idx = PIPELINE_STAGES.indexOf(currentStage as never);
@@ -298,12 +342,10 @@ export function useDocumentPolling(
           const ui = mapApiStatusToUi(payload.status, payload.status_detail);
           setPolledUiStatus(ui);
 
-          // Compute processing duration when ingestion completes
-          if (ui === "ready" && payload.created_at && payload.updated_at) {
-            const created = new Date(payload.created_at).getTime();
-            const updated = new Date(payload.updated_at).getTime();
-            if (!isNaN(created) && !isNaN(updated) && updated > created) {
-              setProcessingTime(formatDuration(updated - created));
+          if (ui === "ready") {
+            const durationMs = resolveProcessingDurationMs(payload);
+            if (durationMs !== undefined) {
+              setProcessingTime(formatDuration(durationMs));
             }
           }
 
@@ -391,12 +433,10 @@ export function useDocumentPolling(
           const ui = mapApiStatusToUi(payload.status, payload.status_detail);
           setPolledUiStatus(ui);
 
-          // Compute processing duration when ingestion completes
-          if (ui === "ready" && payload.created_at && payload.updated_at) {
-            const created = new Date(payload.created_at).getTime();
-            const updated = new Date(payload.updated_at).getTime();
-            if (!isNaN(created) && !isNaN(updated) && updated > created) {
-              setProcessingTime(formatDuration(updated - created));
+          if (ui === "ready") {
+            const durationMs = resolveProcessingDurationMs(payload);
+            if (durationMs !== undefined) {
+              setProcessingTime(formatDuration(durationMs));
             }
           }
           

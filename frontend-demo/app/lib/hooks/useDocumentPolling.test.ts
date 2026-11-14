@@ -272,7 +272,12 @@ describe("useDocumentPolling", () => {
         status: "completed",
         file_name: "notes-v2.txt",
         created_at: "2026-01-01T00:00:00Z",
-        updated_at: "2026-01-01T00:00:02Z",
+        updated_at: "2026-01-01T00:03:28Z",
+        job: {
+          durations_ms: { total: 1500 },
+          started_at: "2026-01-01T00:03:26.5Z",
+          completed_at: "2026-01-01T00:03:28Z",
+        },
       });
 
     const { result } = renderHook(() =>
@@ -298,7 +303,45 @@ describe("useDocumentPolling", () => {
     expect(result.current.stage).toBe("completed");
     expect(result.current.fileName).toBe("notes-v2.txt");
     expect(result.current.statusDetail).toBeUndefined();
+    expect(result.current.processingTime).toBe("1.5s");
     expect(mockGetDocumentStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses job timing for completed documents and falls back to row timestamps", async () => {
+    vi.useFakeTimers();
+
+    mockGetDocumentStatus
+      .mockResolvedValueOnce({
+        status: "completed",
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:05:00Z",
+        job: { durations_ms: { total: 800 } },
+      })
+      .mockResolvedValueOnce({
+        status: "completed",
+        created_at: "2026-01-02T00:00:00Z",
+        updated_at: "2026-01-02T00:00:01.2Z",
+      });
+
+    const { result, rerender } = renderHook(
+      ({ docId }: { docId: string }) =>
+        useDocumentPolling(docId, `/documents/${docId}/status`, "processing"),
+      { initialProps: { docId: "doc-job" } },
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.processingTime).toBe("800ms");
+
+    rerender({ docId: "doc-fallback" });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.processingTime).toBe("1.2s");
   });
 
   it("keeps the SSE stream open during replacement_in_progress and surfaces replacement_failed", async () => {
