@@ -5,6 +5,7 @@ import {
   type AdvancedRetrievalExplicitFields,
   type AdvancedRetrievalState,
   loadAdvancedRetrievalState,
+  resetAdvancedRetrievalState,
   saveAdvancedRetrievalState,
 } from "../advancedRetrieval";
 import { clampMatchCount, type RetrievalScope } from "../retrievalSettings";
@@ -130,9 +131,14 @@ export function useAdvancedRetrieval() {
     });
   }, []);
 
+  const resetExplicitOverrides = useCallback(() => {
+    setState(resetAdvancedRetrievalState());
+  }, []);
+
   return {
     state,
     loaded,
+    resetExplicitOverrides,
     setScope,
     setMatchCount,
     setHybridEnabled,

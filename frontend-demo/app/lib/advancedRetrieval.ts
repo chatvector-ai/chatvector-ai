@@ -211,3 +211,9 @@ export function saveAdvancedRetrievalState(state: AdvancedRetrievalState): void 
     /* ignore */
   }
 }
+
+/** Clears explicit overrides in memory and sessionStorage (e.g. when starting a new chat). */
+export function resetAdvancedRetrievalState(): AdvancedRetrievalState {
+  saveAdvancedRetrievalState(EMPTY_ADVANCED_RETRIEVAL);
+  return EMPTY_ADVANCED_RETRIEVAL;
+}

@@ -2,11 +2,14 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   loadAdvancedRetrievalState,
   saveAdvancedRetrievalState,
+  resetAdvancedRetrievalState,
   effectiveScope,
   EMPTY_ADVANCED_RETRIEVAL,
   resolveScopeIndicator,
   selectedPresetName,
 } from "./advancedRetrieval";
+
+const STORAGE_KEY = "chatvector-advanced-retrieval-explicit";
 
 describe("advancedRetrieval storage", () => {
   beforeEach(() => {
@@ -51,5 +54,16 @@ describe("advancedRetrieval storage", () => {
     expect(
       resolveScopeIndicator({ explicit: { preset: "alpha" } }, "notes.txt")
     ).toEqual({ kind: "preset" });
+  });
+
+  it("resetAdvancedRetrievalState clears explicit fields and sessionStorage", () => {
+    saveAdvancedRetrievalState({
+      explicit: { scope: "tenant", hybridEnabled: true, matchCount: 12 },
+    });
+    expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull();
+
+    expect(resetAdvancedRetrievalState()).toEqual(EMPTY_ADVANCED_RETRIEVAL);
+    expect(loadAdvancedRetrievalState()).toEqual(EMPTY_ADVANCED_RETRIEVAL);
+    expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
   });
 });
