@@ -573,6 +573,14 @@ export type DocumentStatusPayload = {
   chunks?: { total: number; processed: number } | null;
   created_at?: string | null;
   updated_at?: string | null;
+  job?: {
+    durations_ms?: { total?: number };
+    started_at?: string;
+    completed_at?: string;
+    enqueued_at?: string;
+    attempt?: number;
+    failure_class?: string;
+  } | null;
   /**
    * Live queue position reported by the backend while the document is still
    * waiting in the ingestion queue (status === "queued"). Numbered 1 = next to
@@ -659,6 +667,11 @@ export async function getDocumentStatus(
   const queuePosition = parseQueuePosition(data?.queue_position);
   const fileName = parseStatusFileName(data?.file_name);
   const metadata = parseDocumentScalarMetadata(data?.metadata);
+  const jobRaw = data?.job;
+  const job =
+    jobRaw != null && typeof jobRaw === "object"
+      ? (jobRaw as DocumentStatusPayload["job"])
+      : undefined;
   return {
     status,
     ...(statusDetail !== undefined ? { status_detail: statusDetail } : {}),
@@ -670,6 +683,7 @@ export async function getDocumentStatus(
     ...(queuePosition !== undefined ? { queue_position: queuePosition } : {}),
     ...(fileName !== undefined ? { file_name: fileName } : {}),
     ...(metadata !== undefined ? { metadata } : {}),
+    ...(job !== undefined ? { job } : {}),
   };
 }
 
