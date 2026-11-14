@@ -56,6 +56,15 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(log_data)
 
 
+def _uses_test_log_files() -> bool:
+    """Return True when file handlers should write under logs/test*.log."""
+    app_env = os.environ.get("APP_ENV", "production").lower()
+    if app_env == "test":
+        return True
+    pytest_logging = os.environ.get("CHATVECTOR_TEST_LOGGING", "").strip().lower()
+    return pytest_logging in {"1", "true", "yes", "on"}
+
+
 def setup_logging(
     log_file: str | None = None,
     access_log_file: str | None = None,
@@ -67,17 +76,19 @@ def setup_logging(
     - No duplicate logs through uvicorn propagation
     - Supports JSON format when LOG_FORMAT=JSON is set
 
-    When APP_ENV=test, writes to logs/test.log and logs/test_access.log
-    instead of the production log files to keep test output separate from
-    live server activity.
+    When APP_ENV=test or CHATVECTOR_TEST_LOGGING is set (pytest conftest), writes
+    to logs/test.log and logs/test_access.log instead of the production log files
+    so reload tests that temporarily use development/production APP_ENV do not
+    pollute app.log.
     """
-    app_env = os.environ.get("APP_ENV", "production").lower()
-    is_test = app_env == "test"
+    route_test_logs = _uses_test_log_files()
 
     if log_file is None:
-        log_file = "logs/test.log" if is_test else "logs/app.log"
+        log_file = "logs/test.log" if route_test_logs else "logs/app.log"
     if access_log_file is None:
-        access_log_file = "logs/test_access.log" if is_test else "logs/access.log"
+        access_log_file = (
+            "logs/test_access.log" if route_test_logs else "logs/access.log"
+        )
 
     logging.captureWarnings(True)
 

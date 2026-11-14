@@ -1,6 +1,7 @@
 """OpenAPI / docs URLs depend on APP_ENV (see main.FastAPI configuration)."""
 
 import importlib
+import logging
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -92,3 +93,42 @@ def test_global_exception_handler_masks_errors(monkeypatch):
     assert data["detail"]["message"] == "An unexpected error occurred."
 
     assert "SENSITIVE_DB_PASSWORD_LEAK" not in response.text
+
+
+def test_global_exception_handler_omits_traceback_unless_log_level_debug(
+    monkeypatch,
+):
+    """At INFO, unhandled errors log one line — no stack dump in app.log."""
+    monkeypatch.setenv("LOG_LEVEL", "INFO")
+    main = _reload_app(monkeypatch, "development")
+
+    @main.app.get("/force-error-traceback-test")
+    def force_error():
+        raise RuntimeError("traceback-should-not-appear")
+
+    captured: list[logging.LogRecord] = []
+
+    class _CollectHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            captured.append(record)
+
+    main_logger = logging.getLogger("main")
+    collect = _CollectHandler()
+    main_logger.addHandler(collect)
+    try:
+        with patch(
+            "main._read_migration_ledger_with_retry",
+            new_callable=AsyncMock,
+            return_value=migration_filenames(),
+        ), patch(
+            "services.api_key_service.bootstrap_development_tenant",
+            new_callable=AsyncMock,
+        ), TestClient(main.app, raise_server_exceptions=False) as client:
+            response = client.get("/force-error-traceback-test")
+    finally:
+        main_logger.removeHandler(collect)
+
+    assert response.status_code == 500
+    unhandled = [r for r in captured if "Unhandled exception" in r.getMessage()]
+    assert unhandled, "expected Unhandled exception log from global handler"
+    assert not unhandled[0].exc_info
