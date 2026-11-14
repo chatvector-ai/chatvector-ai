@@ -240,6 +240,18 @@ After history resolution and transformation, one primary retrieval query is the 
 
 There is no public HTTP endpoint that runs retrieval over documents; `GET /retrieval/presets` only lists names and reranker identifiers. Chat still generates the answer. Eval and other internal callers use `retrieve_for_documents`.
 
+## Chat error codes
+
+`POST /chat`, `POST /chat/stream`, and `POST /chat/batch` can return HTTP `200` with `status: "error"` and a structured `error` object (`code`, `message`) for provider or scope failures. Sync and batch use that shape; the stream emits an SSE `error` event with the same `code` and `message`.
+
+| Code | When |
+|------|------|
+| `embedding_invalid_api_key` | Query embedding is rejected (invalid or missing embedding provider credentials). Same wording as ingestion failures. |
+| `embedding_failed` | Batch only: the shared batch embedding call failed for a reason other than auth. |
+| `stream_failed` | Stream only: an unexpected error after the stream has started (excluding preset/config errors and embedding auth). |
+
+Unhandled embedding errors on sync `/chat` still surface as HTTP `500` with `detail.code = "internal_error"`.
+
 ## Interactive schema
 
 <swagger-ui src="assets/openapi.json"/>

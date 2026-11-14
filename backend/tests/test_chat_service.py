@@ -186,6 +186,137 @@ async def test_answer_question_soft_llm_error_matches_batch_error_shape():
 
 
 @pytest.mark.asyncio
+async def test_sync_embedding_auth_returns_structured_error():
+    from services.chat_service import EMBEDDING_INVALID_API_KEY_MESSAGE
+    from services.providers.base import ProviderAuthError
+
+    with patch(
+        "services.chat_service.get_embeddings",
+        new=AsyncMock(side_effect=ProviderAuthError("401 invalid")),
+    ), patch(
+        "services.chat_service.generate_answer",
+        new=AsyncMock(),
+    ) as mock_generate:
+        result = await answer_question_for_document(
+            question="Q?", doc_id="doc-1", match_count=3, auth=TEST_AUTH
+        )
+
+    assert result["status"] == "error"
+    assert result["error"] == {
+        "code": "embedding_invalid_api_key",
+        "message": EMBEDDING_INVALID_API_KEY_MESSAGE,
+    }
+    mock_generate.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_sync_embedding_failure_propagates_for_global_handler():
+    with patch(
+        "services.chat_service.get_embeddings",
+        new=AsyncMock(side_effect=RuntimeError("embed down")),
+    ):
+        with pytest.raises(RuntimeError, match="embed down"):
+            await answer_question_for_document(
+                question="Q?", doc_id="doc-1", match_count=3, auth=TEST_AUTH
+            )
+
+
+@pytest.mark.asyncio
+async def test_stream_embedding_auth_emits_structured_error():
+    from services.chat_service import (
+        EMBEDDING_INVALID_API_KEY_MESSAGE,
+        answer_question_stream_for_document,
+    )
+    from services.providers.base import ProviderAuthError
+
+    with patch(
+        "services.chat_service.get_embeddings",
+        new=AsyncMock(side_effect=ProviderAuthError("401 invalid")),
+    ), patch(
+        "services.chat_service.generate_answer_stream",
+        new=AsyncMock(),
+    ) as mock_stream:
+        events = [
+            event
+            async for event in answer_question_stream_for_document(
+                "Q?", "doc-1", auth=TEST_AUTH
+            )
+        ]
+
+    assert len(events) == 1
+    event, data = _parse_sse_event(events[0])
+    assert event == "error"
+    assert data == {
+        "type": "error",
+        "code": "embedding_invalid_api_key",
+        "message": EMBEDDING_INVALID_API_KEY_MESSAGE,
+    }
+    mock_stream.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stream_embedding_failure_emits_stream_failed():
+    from services.chat_service import answer_question_stream_for_document
+
+    with patch(
+        "services.chat_service.get_embeddings",
+        new=AsyncMock(side_effect=RuntimeError("embed down")),
+    ):
+        events = [
+            event
+            async for event in answer_question_stream_for_document(
+                "Q?", "doc-1", auth=TEST_AUTH
+            )
+        ]
+
+    assert len(events) == 1
+    event, data = _parse_sse_event(events[0])
+    assert event == "error"
+    assert data["code"] == "stream_failed"
+    assert data["message"] == "An unexpected error occurred."
+
+
+@pytest.mark.asyncio
+async def test_batch_embedding_auth_returns_structured_errors():
+    from services.chat_service import EMBEDDING_INVALID_API_KEY_MESSAGE
+    from services.providers.base import ProviderAuthError
+
+    with (
+        patch(
+            "services.chat_service.validate_and_normalize_batch_queries",
+            return_value=[
+                {"question": "q1", "doc_ids": ["d1"], "match_count": 5, "session_id": "s1"},
+                {"question": "q2", "doc_ids": ["d2"], "match_count": 5, "session_id": "s1"},
+            ],
+        ),
+        patch(
+            "services.chat_service.get_embeddings",
+            new=AsyncMock(side_effect=ProviderAuthError("401 invalid")),
+        ),
+        patch(
+            "services.chat_service.transform_query",
+            new=AsyncMock(return_value=_mock_transform_result("q")),
+        ),
+        patch("db.get_session_history", new=AsyncMock(return_value=[])),
+    ):
+        results = await answer_questions_for_documents_batch(
+            [
+                {"question": "q1", "doc_ids": ["d1"], "session_id": "s1"},
+                {"question": "q2", "doc_ids": ["d2"], "session_id": "s1"},
+            ],
+            auth=TEST_AUTH,
+        )
+
+    assert len(results) == 2
+    for result in results:
+        assert result["status"] == "error"
+        assert result["error"] == {
+            "code": "embedding_invalid_api_key",
+            "message": EMBEDDING_INVALID_API_KEY_MESSAGE,
+        }
+
+
+@pytest.mark.asyncio
 async def test_answer_questions_for_documents_batch_processes_queries():
     queries = [
         {"question": "Q1", "doc_ids": ["doc-a", "doc-b"], "match_count": 3},
