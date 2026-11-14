@@ -153,6 +153,24 @@ export default function ChatPage() {
       ? attachment.documentId
       : null);
 
+  const resolvedReplaceFileName = useMemo(() => {
+    if (replaceDocumentIdFromList) {
+      return (
+        documentSummaries.find(
+          (d) => d.document_id === replaceDocumentIdFromList
+        )?.file_name ??
+        (attachment?.documentId === replaceDocumentIdFromList
+          ? attachment.fileName
+          : null) ??
+        null
+      );
+    }
+    if (attachment && attachment.status !== "processing") {
+      return attachment.fileName ?? null;
+    }
+    return null;
+  }, [replaceDocumentIdFromList, documentSummaries, attachment]);
+
   const handleReplaceDocument = (documentId: string) => {
     setReplaceDocumentIdFromList(documentId);
     setShowModal(true);
@@ -300,11 +318,13 @@ export default function ChatPage() {
             }}
             returnFocusRef={uploadButtonRef}
             replaceDocumentId={resolvedReplaceDocumentId}
+            replaceFileName={resolvedReplaceFileName}
             onUploadAccepted={handleUploadAccepted}
             attachment={
               attachment
                 ? {
                     documentId: attachment.documentId,
+                    fileName: attachment.fileName,
                     status: attachment.status,
                     stage: poll.stage,
                     chunks: poll.chunks,
