@@ -9,12 +9,22 @@ from fastapi.testclient import TestClient
 from routes.status import (
     HEALTH_ERROR_CODES,
     _embedding_health_check,
+    _llm_error_code_from_answer_text,
     _llm_health_check,
     _overall_status,
     _redis_health_check,
     _run_health_check_with_cache,
 )
-from services.providers.base import ProviderRateLimitError
+from services.answer_service import (
+    LLM_MSG_INVALID_API_KEY,
+    LLM_MSG_RATE_LIMIT,
+    LLM_MSG_TIMEOUT,
+)
+from services.providers.base import (
+    ProviderAuthError,
+    ProviderRateLimitError,
+    ProviderTimeoutError,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -76,6 +86,30 @@ async def test_embedding_health_check_error_uses_stable_code():
 
 
 @pytest.mark.asyncio
+async def test_embedding_health_check_maps_rejected_api_key():
+    with patch(
+        "services.embedding_service.probe_embedding_health",
+        new=AsyncMock(side_effect=ProviderAuthError("401 unauthorized")),
+    ):
+        result = await _embedding_health_check()
+
+    _assert_stable_error(result)
+    assert result["error"] == "api_key_invalid"
+
+
+@pytest.mark.asyncio
+async def test_embedding_health_check_timeout_unchanged():
+    with patch(
+        "services.embedding_service.probe_embedding_health",
+        new=AsyncMock(side_effect=ProviderTimeoutError("timed out")),
+    ):
+        result = await _embedding_health_check()
+
+    _assert_stable_error(result)
+    assert result["error"] == "timeout"
+
+
+@pytest.mark.asyncio
 async def test_embedding_health_check_single_attempt_on_rate_limit():
     call_count = 0
 
@@ -128,6 +162,40 @@ async def test_llm_health_check_error_when_probe_raises():
 
     _assert_stable_error(result)
     assert result["error"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_llm_health_check_maps_invalid_api_key_answer():
+    with patch(
+        "services.answer_service.probe_llm_health",
+        new=AsyncMock(return_value=(LLM_MSG_INVALID_API_KEY, 0, "")),
+    ):
+        result = await _llm_health_check()
+
+    _assert_stable_error(result)
+    assert result["error"] == "api_key_invalid"
+
+
+@pytest.mark.asyncio
+async def test_llm_health_check_rate_limit_and_timeout_unchanged():
+    with patch(
+        "services.answer_service.probe_llm_health",
+        new=AsyncMock(return_value=(LLM_MSG_RATE_LIMIT, 0, "")),
+    ):
+        rate_limited = await _llm_health_check()
+
+    with patch(
+        "services.answer_service.probe_llm_health",
+        new=AsyncMock(return_value=(LLM_MSG_TIMEOUT, 0, "")),
+    ):
+        timed_out = await _llm_health_check()
+
+    assert rate_limited["error"] == "rate_limited"
+    assert timed_out["error"] == "timeout"
+
+
+def test_llm_error_code_from_answer_text_prefers_invalid_key_over_generic_error():
+    assert _llm_error_code_from_answer_text(LLM_MSG_INVALID_API_KEY) == "api_key_invalid"
 
 
 @pytest.mark.asyncio

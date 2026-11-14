@@ -34,6 +34,7 @@ HEALTH_ERROR_CODES = frozenset({
     "timeout",
     "rate_limited",
     "api_key_missing",
+    "api_key_invalid",
     "disconnected",
     "error",
 })
@@ -108,6 +109,7 @@ async def _database_connected_and_document_count(
 
 def _classify_provider_exception(exc: BaseException) -> str:
     from services.providers.base import (
+        ProviderAuthError,
         ProviderConnectionError,
         ProviderRateLimitError,
         ProviderTimeoutError,
@@ -115,6 +117,8 @@ def _classify_provider_exception(exc: BaseException) -> str:
 
     if isinstance(exc, ProviderRateLimitError):
         return "rate_limited"
+    if isinstance(exc, ProviderAuthError):
+        return "api_key_invalid"
     if isinstance(exc, (ProviderTimeoutError, ProviderConnectionError, asyncio.TimeoutError)):
         return "timeout"
     return "error"
@@ -260,6 +264,7 @@ async def _embedding_health_check() -> dict:
 def _llm_error_code_from_answer_text(text: str) -> str | None:
     """Map generate_answer error strings to short health-check codes."""
     from services.answer_service import (
+        LLM_MSG_INVALID_API_KEY,
         LLM_MSG_MISSING_API_KEY,
         LLM_MSG_RATE_LIMIT,
         LLM_MSG_TIMEOUT,
@@ -267,6 +272,8 @@ def _llm_error_code_from_answer_text(text: str) -> str | None:
 
     if text == LLM_MSG_MISSING_API_KEY:
         return "api_key_missing"
+    if text == LLM_MSG_INVALID_API_KEY:
+        return "api_key_invalid"
     if text == LLM_MSG_RATE_LIMIT:
         return "rate_limited"
     if text == LLM_MSG_TIMEOUT:

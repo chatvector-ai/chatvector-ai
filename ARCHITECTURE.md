@@ -550,7 +550,8 @@ Provider health probes use at most **one upstream attempt** per cache refresh
 Normal chat and embedding production paths retain the standard retry policy.
 
 Health error responses expose stable codes only (`timeout`, `rate_limited`,
-`api_key_missing`, `disconnected`, `error`) — never raw exception text or URLs.
+`api_key_missing`, `api_key_invalid`, `disconnected`, `error`) — never raw
+exception text or URLs.
 
 All checks run concurrently via `asyncio.gather`. Health checks never block
 startup or crash the service.
