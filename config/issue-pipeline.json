@@ -1,0 +1,13 @@
+{
+  "required_checks": [
+    "Backend Tests",
+    "Docker Build",
+    "Documentation Site",
+    "Frontend Validation",
+    "SDK Validation",
+    "TypeScript SDK (Node 22)",
+    "TypeScript SDK (Node 24)",
+    "Production Auth Smoke Tests",
+    "Production Compose E2E Smoke Test"
+  ]
+}
