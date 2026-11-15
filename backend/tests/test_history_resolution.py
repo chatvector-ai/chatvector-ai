@@ -944,11 +944,16 @@ _GENERIC_HISTORY = [
 
 # Standalone negatives: gate must skip (False) for all of these.
 _STANDALONE_NEGATIVE_PACK = (
-    # Required lookalikes from the issue implementation notes:
+    # Required lookalikes from the issue implementation notes (P6-W1-21):
     "What was the first launch date for Product Alpha?",
     "What other policies mention bereavement leave?",
     "Other than the holiday schedule, what is the notice window?",
     "In other words, what is the limit?",
+    # P6-W1-22 additions: Standalone negatives beginning with "No" or "Not"
+    "Not applicable — what does the glossary say about returns?",
+    "No, what is the policy regarding remote work?",
+    "No prior experience is required, but what are the recommended prerequisites?",
+    "Not all employees are eligible, so who approves exceptions?",
 )
 
 
@@ -1000,4 +1005,51 @@ def test_gate_does_not_match_bare_first_other_or_in_other_words():
         result = question_needs_history_resolution(question, _HISTORY)
         assert result[0] is False, (
             f"Gate incorrectly resolved standalone lookalike: {question!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# P6-W1-22: Negation and correction cues (`Not X — Y`, `No, not …`)
+# ---------------------------------------------------------------------------
+
+
+def test_gate_runs_for_negation_and_correction_cues():
+    """Short-utterance correction cues must trigger history resolution."""
+    corrections = (
+        "Not Alpha — Beta.",
+        "Not Alpha – Beta.",
+        "Not Alpha - Beta.",
+        "Not Alpha — Beta",
+        "Not the support tier — the enterprise tier.",
+        "Not Plan A — Plan B.",
+        "No, not the support tier.",
+        "No, not the support tier",
+        "No, not Alpha.",
+        "No not Alpha.",
+        "No, not Plan B.",
+        "No, not the enterprise agreement.",
+    )
+    for question in corrections:
+        result = question_needs_history_resolution(question, _HISTORY)
+        assert result == (True, None), (
+            f"Gate failed to resolve correction question: {question!r}"
+        )
+
+
+def test_gate_does_not_match_negation_in_standalone_sentences():
+    """Standalone sentences with negation or long initial 'Not'/'No' must be skipped."""
+    standalone = (
+        "Not applicable — what does the glossary say about returns?",
+        "No, what is the policy regarding remote work?",
+        "No prior experience is required, but what are the prerequisites?",
+        "Not all employees are eligible, so who approves exceptions?",
+        "Is there not an exception clause in section 3?",
+        "The contract does not specify a cancellation fee.",
+        "No, does the policy allow pets in the cabin?",
+        "Not pre-approved.",
+    )
+    for question in standalone:
+        result = question_needs_history_resolution(question, _HISTORY)
+        assert result[0] is False, (
+            f"Gate incorrectly resolved standalone question with negation: {question!r}"
         )

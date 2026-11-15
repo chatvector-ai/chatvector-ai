@@ -239,6 +239,8 @@ async def _resolve_to_standalone(question: str, history: list[dict]) -> str:
 #   policy"), "the latter", "the former", "going back", and "I meant".
 #   The substring "second" inside "secondary" is not a cue.  Bare "first",
 #   "other policies", "other than", and "in other words" are also not cues.
+# - negation and correction cues: short-utterance "Not <X> — <Y>" (em dash,
+#   en dash, spaced hyphen) and "No, not <…>".
 #
 # Topic-switch cues (conservative; ignored when a reference is also present):
 # new topic, switch/switching topic(s), change of subject, changing the
@@ -273,6 +275,10 @@ _ELLIPTICAL_RE = re.compile(
 # Definite other-noun: "the other policy", "the other plan" — requires a
 # definite article so bare forms like "other policies" or "other than" do not
 # trigger resolution.
+# Negation and correction cues: "Not <X> — <Y>" (em dash, en dash, spaced hyphen)
+# and "No, not <…>". Anchored at the start of the turn and bounded to short
+# utterances (at most 4 words per side of dash, or 5 words after "no, not")
+# so long standalone questions starting with "Not" or "No" do not trigger.
 _REFERENTIAL_RE = re.compile(
     r"\bwhich\s+ones?\b"
     r"|\bfirst\s+ones?\b"
@@ -284,7 +290,9 @@ _REFERENTIAL_RE = re.compile(
     r"|\bthe\s+latter\b"
     r"|\bthe\s+former\b"
     r"|\bgoing\s+back\b"
-    r"|\bi\s+meant\b",
+    r"|\bi\s+meant\b"
+    r"|^not\s+(?:[^\s—–-]|-(?!\s))+(?:\s+(?:[^\s—–-]|-(?!\s))+){0,3}(?:\s*[—–]\s*|\s+--?\s+)(?:[^\s—–-]|-(?!\s))+(?:\s+(?:[^\s—–-]|-(?!\s))+){0,3}[.!]*$"
+    r"|^no,?\s+not\s+(?:[^\s—–-]|-(?!\s))+(?:\s+(?:[^\s—–-]|-(?!\s))+){0,4}[.!]*$",
     re.IGNORECASE,
 )
 _TOPIC_SWITCH_RE = re.compile(
