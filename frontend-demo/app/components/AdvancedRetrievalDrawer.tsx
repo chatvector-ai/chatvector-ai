@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Settings2, X } from "lucide-react";
 import {
+  countExplicitOverrides,
   effectiveMatchCount,
   fieldInheritSource,
   inheritSourceLabel,
@@ -41,6 +42,7 @@ type Props = {
   onGenerationHistoryWindowChange: (value: number) => void;
   onMetadataFilterChange: (filter: DocumentScalarMetadata | undefined) => void;
   onPresetChange: (preset: string | undefined) => void;
+  onResetExplicitOverrides: () => void;
   metadataCorpus: MetadataCorpusDocument[];
   availablePresets: string[];
   availableRerankerProviders: RerankerProvider[];
@@ -81,6 +83,7 @@ export default function AdvancedRetrievalDrawer({
   onGenerationHistoryWindowChange,
   onMetadataFilterChange,
   onPresetChange,
+  onResetExplicitOverrides,
   metadataCorpus,
   availablePresets,
   availableRerankerProviders,
@@ -104,6 +107,7 @@ export default function AdvancedRetrievalDrawer({
     number | null
   >(null);
   const activePreset = selectedPresetName(state);
+  const overrideCount = countExplicitOverrides(state);
   const scopeInherit = fieldInheritSource(
     state,
     state.explicit.scope !== undefined
@@ -181,6 +185,14 @@ export default function AdvancedRetrievalDrawer({
       >
         <Settings2 size={14} aria-hidden />
         Advanced retrieval
+        {overrideCount > 0 && (
+          <span
+            data-testid="override-count-badge"
+            className="ml-0.5 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold leading-none text-accent-foreground"
+          >
+            {overrideCount}
+          </span>
+        )}
       </button>
 
       {open && (
@@ -201,9 +213,21 @@ export default function AdvancedRetrievalDrawer({
             className="absolute inset-y-0 right-0 z-40 flex w-full max-w-md flex-col border-l border-border bg-surface shadow-xl"
           >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <h2 className="text-sm font-semibold text-foreground">
-                Advanced retrieval
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-foreground">
+                  Advanced retrieval
+                </h2>
+                {overrideCount > 0 && (
+                  <button
+                    type="button"
+                    data-testid="reset-to-defaults"
+                    onClick={onResetExplicitOverrides}
+                    className="rounded-md px-2 py-0.5 text-xs font-medium text-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  >
+                    Reset to defaults
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
                 aria-label="Close advanced retrieval"

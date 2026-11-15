@@ -172,6 +172,30 @@ export function hasActiveMetadataFilter(
   return filter !== undefined && Object.keys(filter).length > 0;
 }
 
+/**
+ * Counts the number of explicit override fields that deviate from defaults.
+ * Does not count the debug checkbox (`inspectMode`).
+ * `historyAwareRetrieval` counts only when explicitly set to `true` or `false`
+ * (i.e. not `undefined` / Default).
+ */
+export function countExplicitOverrides(state: AdvancedRetrievalState): number {
+  const e = state.explicit;
+  let count = 0;
+  if (e.scope !== undefined) count++;
+  if (e.matchCount !== undefined) count++;
+  if (e.hybridEnabled !== undefined) count++;
+  if (e.rerankingEnabled !== undefined) count++;
+  if (e.rerankerProvider !== undefined) count++;
+  if (e.queryTransformationEnabled !== undefined) count++;
+  if (e.queryTransformationStrategy !== undefined) count++;
+  if (e.historyAwareRetrieval !== undefined) count++;
+  if (e.retrievalHistoryWindow !== undefined) count++;
+  if (e.generationHistoryWindow !== undefined) count++;
+  if (e.metadataFilter !== undefined && Object.keys(e.metadataFilter).length > 0) count++;
+  if (e.preset !== undefined) count++;
+  return count;
+}
+
 export function loadAdvancedRetrievalState(): AdvancedRetrievalState {
   if (typeof sessionStorage === "undefined") {
     return EMPTY_ADVANCED_RETRIEVAL;

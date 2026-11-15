@@ -354,6 +354,7 @@ export default function ChatPage() {
               onGenerationHistoryWindowChange={setGenerationHistoryWindow}
               onMetadataFilterChange={setMetadataFilter}
               onPresetChange={setPreset}
+              onResetExplicitOverrides={resetExplicitOverrides}
               metadataCorpus={metadataCorpus}
               availablePresets={discovery.presets}
               availableRerankerProviders={discovery.reranker_providers}
