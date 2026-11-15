@@ -926,3 +926,130 @@ async def test_chat_resolver_exception_keeps_original_question(monkeypatch):
     assert captured["texts"] == [_PRONOUN]
     assert result["retrieval_debug"]["history_resolution_fallback_reason"] == "llm_failure"
     assert "history_resolved_query" not in result["retrieval_debug"]
+
+
+# ---------------------------------------------------------------------------
+# P6-W1-21: Standalone-negative pack
+#
+# raw_traces.json was not found at the expected path, so the pack consists of
+# the targeted lookalikes mandated in the issue implementation notes.  Each
+# turn has a non-empty prior history and must be classified as standalone
+# (gate returns False).  None of them should trigger a resolution call.
+# ---------------------------------------------------------------------------
+
+_GENERIC_HISTORY = [
+    {"role": "user", "content": "What is the bereavement leave policy?"},
+    {"role": "assistant", "content": "Employees may take up to five days of bereavement leave."},
+]
+
+# Standalone negatives: gate must skip (False) for all of these.
+_STANDALONE_NEGATIVE_PACK = (
+    # Required lookalikes from the issue implementation notes (P6-W1-21):
+    "What was the first launch date for Product Alpha?",
+    "What other policies mention bereavement leave?",
+    "Other than the holiday schedule, what is the notice window?",
+    "In other words, what is the limit?",
+    # P6-W1-22 additions: Standalone negatives beginning with "No" or "Not"
+    "Not applicable — what does the glossary say about returns?",
+    "No, what is the policy regarding remote work?",
+    "No prior experience is required, but what are the recommended prerequisites?",
+    "Not all employees are eligible, so who approves exceptions?",
+)
+
+
+def test_standalone_negative_pack_gate_skips_all():
+    """Gate must not resolve any turn in the standalone-negative pack.
+
+    These are targeted lookalikes that contain bare 'first', 'other policies',
+    'other than', or 'in other words' — none of which are referential cues.
+    False runs must remain 0 on this set both before and after the regex change.
+    """
+    for question in _STANDALONE_NEGATIVE_PACK:
+        result = question_needs_history_resolution(question, _GENERIC_HISTORY)
+        assert result[0] is False, (
+            f"Gate incorrectly resolved standalone question: {question!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# P6-W1-21: Positive cue tests — ordinals and definite-article 'other <noun>'
+# After the regex change these must all trigger resolution (True, None).
+# ---------------------------------------------------------------------------
+
+
+def test_gate_runs_for_ordinal_and_other_noun_cues():
+    """New referential cues: 'the first one', ordinals, and 'the other <noun>'."""
+    referential = (
+        "What does the first one say about liability?",
+        "Can you show me the third one?",
+        "What about the last one?",
+        "What does the other policy cover?",
+        "Tell me about the other plan.",
+    )
+    for question in referential:
+        result = question_needs_history_resolution(question, _HISTORY)
+        assert result == (True, None), (
+            f"Gate failed to resolve referential question: {question!r}"
+        )
+
+
+def test_gate_does_not_match_bare_first_other_or_in_other_words():
+    """Bare 'first', 'other policies', 'other than', 'in other words' are not cues."""
+    standalone = (
+        "What was the first launch date for Product Alpha?",
+        "What other policies mention bereavement leave?",
+        "Other than the holiday schedule, what is the notice window?",
+        "In other words, what is the limit?",
+    )
+    for question in standalone:
+        result = question_needs_history_resolution(question, _HISTORY)
+        assert result[0] is False, (
+            f"Gate incorrectly resolved standalone lookalike: {question!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# P6-W1-22: Negation and correction cues (`Not X — Y`, `No, not …`)
+# ---------------------------------------------------------------------------
+
+
+def test_gate_runs_for_negation_and_correction_cues():
+    """Short-utterance correction cues must trigger history resolution."""
+    corrections = (
+        "Not Alpha — Beta.",
+        "Not Alpha – Beta.",
+        "Not Alpha - Beta.",
+        "Not Alpha — Beta",
+        "Not the support tier — the enterprise tier.",
+        "Not Plan A — Plan B.",
+        "No, not the support tier.",
+        "No, not the support tier",
+        "No, not Alpha.",
+        "No not Alpha.",
+        "No, not Plan B.",
+        "No, not the enterprise agreement.",
+    )
+    for question in corrections:
+        result = question_needs_history_resolution(question, _HISTORY)
+        assert result == (True, None), (
+            f"Gate failed to resolve correction question: {question!r}"
+        )
+
+
+def test_gate_does_not_match_negation_in_standalone_sentences():
+    """Standalone sentences with negation or long initial 'Not'/'No' must be skipped."""
+    standalone = (
+        "Not applicable — what does the glossary say about returns?",
+        "No, what is the policy regarding remote work?",
+        "No prior experience is required, but what are the prerequisites?",
+        "Not all employees are eligible, so who approves exceptions?",
+        "Is there not an exception clause in section 3?",
+        "The contract does not specify a cancellation fee.",
+        "No, does the policy allow pets in the cabin?",
+        "Not pre-approved.",
+    )
+    for question in standalone:
+        result = question_needs_history_resolution(question, _HISTORY)
+        assert result[0] is False, (
+            f"Gate incorrectly resolved standalone question with negation: {question!r}"
+        )
