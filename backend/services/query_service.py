@@ -234,9 +234,11 @@ async def _resolve_to_standalone(question: str, history: list[dict]) -> str:
 # - elliptical patterns: "what about …", "how about …", "and the …",
 #   "and what …", "and how …", "what else …", "tell me more …",
 #   "more about …", and "how much was that"
-# - one-anaphora and discourse cues: "which one", "second one", "other one",
-#   "the latter", "the former", "going back", and "I meant".
-#   The substring "second" inside "secondary" is not a cue.
+# - one-anaphora and discourse cues: "which one", "first one", "second one",
+#   "third one", "last one", "other one", "the other <noun>" (e.g. "the other
+#   policy"), "the latter", "the former", "going back", and "I meant".
+#   The substring "second" inside "secondary" is not a cue.  Bare "first",
+#   "other policies", "other than", and "in other words" are also not cues.
 #
 # Topic-switch cues (conservative; ignored when a reference is also present):
 # new topic, switch/switching topic(s), change of subject, changing the
@@ -265,10 +267,20 @@ _ELLIPTICAL_RE = re.compile(
 )
 # Referential follow-ups that are not pronouns, demonstratives, or ellipsis.
 # Word boundaries keep "secondary" from matching "second".
+# Ordinal cues: "the first one", "the third one", "the last one" (definite
+# article or "one(s)" anchor prevents matching bare "first" / "last" in
+# standalone questions such as "What was the first launch date for …?").
+# Definite other-noun: "the other policy", "the other plan" — requires a
+# definite article so bare forms like "other policies" or "other than" do not
+# trigger resolution.
 _REFERENTIAL_RE = re.compile(
     r"\bwhich\s+ones?\b"
+    r"|\bfirst\s+ones?\b"
     r"|\bsecond\s+ones?\b"
+    r"|\bthird\s+ones?\b"
+    r"|\blast\s+ones?\b"
     r"|\bother\s+ones?\b"
+    r"|\bthe\s+other\s+\w+\b"
     r"|\bthe\s+latter\b"
     r"|\bthe\s+former\b"
     r"|\bgoing\s+back\b"
