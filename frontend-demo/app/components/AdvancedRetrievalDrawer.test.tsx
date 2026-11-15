@@ -25,6 +25,7 @@ const baseProps = {
   onGenerationHistoryWindowChange: vi.fn(),
   onMetadataFilterChange: vi.fn(),
   onPresetChange: vi.fn(),
+  onResetExplicitOverrides: vi.fn(),
   metadataCorpus: [],
   availablePresets: [],
   availableRerankerProviders: ["similarity"] satisfies RerankerProvider[],
@@ -355,5 +356,78 @@ describe("AdvancedRetrievalDrawer", () => {
     expect(screen.getByTestId("scope-inherit-label")).toHaveTextContent(
       /Follows selected preset/
     );
+  });
+
+  it("hides override count badge and Reset button when no overrides are set", () => {
+    render(
+      <AdvancedRetrievalDrawer
+        {...baseProps}
+        open
+        onResetExplicitOverrides={vi.fn()}
+        state={{ explicit: {} }}
+      />
+    );
+
+    expect(screen.queryByTestId("override-count-badge")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("reset-to-defaults")).not.toBeInTheDocument();
+  });
+
+  it("shows override count badge and Reset button when overrides are active", () => {
+    render(
+      <AdvancedRetrievalDrawer
+        {...baseProps}
+        open
+        onResetExplicitOverrides={vi.fn()}
+        state={{ explicit: { hybridEnabled: true, matchCount: 10 } }}
+      />
+    );
+
+    const badge = screen.getByTestId("override-count-badge");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent("2");
+    expect(screen.getByTestId("reset-to-defaults")).toBeInTheDocument();
+  });
+
+  it("calls onResetExplicitOverrides when Reset to defaults is clicked", async () => {
+    const onResetExplicitOverrides = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <AdvancedRetrievalDrawer
+        {...baseProps}
+        open
+        onResetExplicitOverrides={onResetExplicitOverrides}
+        state={{ explicit: { scope: "tenant" } }}
+      />
+    );
+
+    await user.click(screen.getByTestId("reset-to-defaults"));
+    expect(onResetExplicitOverrides).toHaveBeenCalledOnce();
+  });
+
+  it("trigger button shows no badge when no overrides are active", () => {
+    render(
+      <AdvancedRetrievalDrawer
+        {...baseProps}
+        onResetExplicitOverrides={vi.fn()}
+        state={{ explicit: {} }}
+      />
+    );
+
+    expect(screen.queryByTestId("override-count-badge")).not.toBeInTheDocument();
+  });
+
+  it("trigger button shows badge count when overrides are active", () => {
+    render(
+      <AdvancedRetrievalDrawer
+        {...baseProps}
+        onResetExplicitOverrides={vi.fn()}
+        state={{ explicit: { hybridEnabled: false, rerankingEnabled: true, scope: "tenant" } }}
+      />
+    );
+
+    const badge = screen.getByTestId("override-count-badge");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent("3");
   });
 });

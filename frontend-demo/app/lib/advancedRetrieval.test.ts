@@ -7,6 +7,7 @@ import {
   EMPTY_ADVANCED_RETRIEVAL,
   resolveScopeIndicator,
   selectedPresetName,
+  countExplicitOverrides,
 } from "./advancedRetrieval";
 
 const STORAGE_KEY = "chatvector-advanced-retrieval-explicit";
@@ -65,5 +66,59 @@ describe("advancedRetrieval storage", () => {
     expect(resetAdvancedRetrievalState()).toEqual(EMPTY_ADVANCED_RETRIEVAL);
     expect(loadAdvancedRetrievalState()).toEqual(EMPTY_ADVANCED_RETRIEVAL);
     expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+});
+
+describe("countExplicitOverrides", () => {
+  it("returns 0 for empty explicit fields", () => {
+    expect(countExplicitOverrides(EMPTY_ADVANCED_RETRIEVAL)).toBe(0);
+  });
+
+  it("counts each set field individually", () => {
+    expect(
+      countExplicitOverrides({ explicit: { scope: "tenant" } })
+    ).toBe(1);
+    expect(
+      countExplicitOverrides({ explicit: { hybridEnabled: true, rerankingEnabled: false } })
+    ).toBe(2);
+    expect(
+      countExplicitOverrides({
+        explicit: {
+          scope: "tenant",
+          matchCount: 10,
+          hybridEnabled: true,
+          rerankingEnabled: false,
+          rerankerProvider: "cohere",
+          queryTransformationEnabled: true,
+          queryTransformationStrategy: "rewrite",
+          historyAwareRetrieval: false,
+          retrievalHistoryWindow: 3,
+          generationHistoryWindow: 5,
+          metadataFilter: { type: "invoice" },
+          preset: "alpha",
+        },
+      })
+    ).toBe(12);
+  });
+
+  it("does not count historyAwareRetrieval when it is undefined (Default)", () => {
+    expect(
+      countExplicitOverrides({ explicit: { hybridEnabled: true } })
+    ).toBe(1);
+  });
+
+  it("counts historyAwareRetrieval when explicitly set to true or false", () => {
+    expect(
+      countExplicitOverrides({ explicit: { historyAwareRetrieval: true } })
+    ).toBe(1);
+    expect(
+      countExplicitOverrides({ explicit: { historyAwareRetrieval: false } })
+    ).toBe(1);
+  });
+
+  it("does not count an empty metadataFilter object", () => {
+    expect(
+      countExplicitOverrides({ explicit: { metadataFilter: {} } })
+    ).toBe(0);
   });
 });
