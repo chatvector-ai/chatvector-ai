@@ -926,3 +926,78 @@ async def test_chat_resolver_exception_keeps_original_question(monkeypatch):
     assert captured["texts"] == [_PRONOUN]
     assert result["retrieval_debug"]["history_resolution_fallback_reason"] == "llm_failure"
     assert "history_resolved_query" not in result["retrieval_debug"]
+
+
+# ---------------------------------------------------------------------------
+# P6-W1-21: Standalone-negative pack
+#
+# raw_traces.json was not found at the expected path, so the pack consists of
+# the targeted lookalikes mandated in the issue implementation notes.  Each
+# turn has a non-empty prior history and must be classified as standalone
+# (gate returns False).  None of them should trigger a resolution call.
+# ---------------------------------------------------------------------------
+
+_GENERIC_HISTORY = [
+    {"role": "user", "content": "What is the bereavement leave policy?"},
+    {"role": "assistant", "content": "Employees may take up to five days of bereavement leave."},
+]
+
+# Standalone negatives: gate must skip (False) for all of these.
+_STANDALONE_NEGATIVE_PACK = (
+    # Required lookalikes from the issue implementation notes:
+    "What was the first launch date for Product Alpha?",
+    "What other policies mention bereavement leave?",
+    "Other than the holiday schedule, what is the notice window?",
+    "In other words, what is the limit?",
+)
+
+
+def test_standalone_negative_pack_gate_skips_all():
+    """Gate must not resolve any turn in the standalone-negative pack.
+
+    These are targeted lookalikes that contain bare 'first', 'other policies',
+    'other than', or 'in other words' — none of which are referential cues.
+    False runs must remain 0 on this set both before and after the regex change.
+    """
+    for question in _STANDALONE_NEGATIVE_PACK:
+        result = question_needs_history_resolution(question, _GENERIC_HISTORY)
+        assert result[0] is False, (
+            f"Gate incorrectly resolved standalone question: {question!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# P6-W1-21: Positive cue tests — ordinals and definite-article 'other <noun>'
+# After the regex change these must all trigger resolution (True, None).
+# ---------------------------------------------------------------------------
+
+
+def test_gate_runs_for_ordinal_and_other_noun_cues():
+    """New referential cues: 'the first one', ordinals, and 'the other <noun>'."""
+    referential = (
+        "What does the first one say about liability?",
+        "Can you show me the third one?",
+        "What about the last one?",
+        "What does the other policy cover?",
+        "Tell me about the other plan.",
+    )
+    for question in referential:
+        result = question_needs_history_resolution(question, _HISTORY)
+        assert result == (True, None), (
+            f"Gate failed to resolve referential question: {question!r}"
+        )
+
+
+def test_gate_does_not_match_bare_first_other_or_in_other_words():
+    """Bare 'first', 'other policies', 'other than', 'in other words' are not cues."""
+    standalone = (
+        "What was the first launch date for Product Alpha?",
+        "What other policies mention bereavement leave?",
+        "Other than the holiday schedule, what is the notice window?",
+        "In other words, what is the limit?",
+    )
+    for question in standalone:
+        result = question_needs_history_resolution(question, _HISTORY)
+        assert result[0] is False, (
+            f"Gate incorrectly resolved standalone lookalike: {question!r}"
+        )
