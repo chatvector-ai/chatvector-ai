@@ -1037,6 +1037,49 @@ export function useChat(
     }
   };
 
+  const selectActiveDocument = useCallback(
+    async (
+      documentId: string,
+      fallbackFileName?: string,
+      fallbackMetadata?: DocumentScalarMetadata
+    ) => {
+      if (!documentId) return;
+      setActiveDocumentId(documentId);
+      if (sessionId) {
+        setStoredActiveDocumentId(sessionId, documentId);
+      }
+      setRemoveError(null);
+      setAttachment((curr) => {
+        const fileName =
+          fallbackFileName ||
+          (curr?.documentId === documentId ? curr.fileName : undefined) ||
+          getUploadedDocument(documentId)?.fileName ||
+          `Document ${documentId.slice(0, 8)}`;
+        return {
+          documentId,
+          fileName,
+          statusEndpoint: documentStatusEndpoint(documentId),
+          status: "ready",
+          ...(fallbackMetadata ? { metadata: fallbackMetadata } : {}),
+        };
+      });
+
+      try {
+        const restored = await restoreSessionAttachment(documentId);
+        if (restored.attachment) {
+          setAttachment(restored.attachment);
+          setSessionNotice(null);
+          if (restored.replacementError) {
+            setRemoveError(restored.replacementError);
+          }
+        }
+      } catch {
+        // Keep optimistic ready attachment
+      }
+    },
+    [sessionId]
+  );
+
   const sendDisabled =
     inflight || !input.trim() || attachment?.status === "processing";
 
@@ -1058,6 +1101,7 @@ export function useChat(
     handleKeyDown,
     handleUploadAccepted,
     handleRemoveAttachment,
+    selectActiveDocument,
     stopStreaming,
   };
 }

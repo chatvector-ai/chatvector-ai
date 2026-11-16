@@ -107,6 +107,7 @@ export default function ChatPage() {
     handleKeyDown,
     handleUploadAccepted,
     handleRemoveAttachment,
+    selectActiveDocument,
     stopStreaming,
   } = useChat(
     activeSessionId,
@@ -175,6 +176,15 @@ export default function ChatPage() {
   const handleReplaceDocument = (documentId: string) => {
     setReplaceDocumentIdFromList(documentId);
     setShowModal(true);
+  };
+
+  const handleMakeActive = (documentId: string) => {
+    const summary = documentSummaries.find((d) => d.document_id === documentId);
+    void selectActiveDocument(
+      documentId,
+      summary?.file_name,
+      summary?.metadata,
+    );
   };
 
   const handleDeleteListedDocument = async (documentId: string) => {
@@ -363,6 +373,8 @@ export default function ChatPage() {
             documentSummaries={documentSummaries}
             retrievalState={retrievalState}
             attachment={attachment}
+            activeDocumentId={activeDocumentId}
+            onMakeActive={handleMakeActive}
             onReplace={handleReplaceDocument}
             onDelete={(id) => void handleDeleteListedDocument(id)}
             actionsDisabled={inflight || streaming}

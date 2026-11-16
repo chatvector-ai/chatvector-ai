@@ -2080,5 +2080,55 @@ describe("useChat", () => {
         ),
       ).toBe(true);
     });
+
+    it("selectActiveDocument switches the active document, persists in sessionStorage, and sends its doc_id", async () => {
+      mockGetSession.mockResolvedValue(
+        sessionPayload("session-a", ["doc-1", "doc-2"]),
+      );
+      mockGetDocumentStatus.mockImplementation(async (url: string) => {
+        if (url.includes("doc-1")) {
+          return { status: "completed", file_name: "doc-1.pdf" };
+        }
+        return { status: "completed", file_name: "doc-2.pdf" };
+      });
+      mockSendMessageStream.mockImplementation(async function* () {
+        yield { type: "token", text: "Response for doc 2" };
+        yield { type: "done" };
+      });
+
+      const { result } = renderHook(() =>
+        useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
+      );
+
+      await waitFor(() =>
+        expect(result.current.attachment?.documentId).toBe("doc-2"),
+      );
+      expect(result.current.activeDocumentId).toBe("doc-2");
+
+      // Switch active document to doc-1 via selectActiveDocument
+      await act(async () => {
+        await result.current.selectActiveDocument("doc-1", "doc-1.pdf");
+      });
+
+      expect(result.current.activeDocumentId).toBe("doc-1");
+      expect(result.current.attachment?.documentId).toBe("doc-1");
+      expect(result.current.attachment?.fileName).toBe("doc-1.pdf");
+      expect(mockActiveDocStore.get("session-a")).toBe("doc-1");
+
+      act(() => {
+        result.current.setInput("Question for doc 1");
+      });
+
+      await act(async () => {
+        await result.current.handleSend();
+      });
+
+      expect(mockSendMessageStream).toHaveBeenCalledWith(
+        "Question for doc 1",
+        "doc-1",
+        expect.anything(),
+        expect.anything(),
+      );
+    });
   });
 });

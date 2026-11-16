@@ -17,6 +17,7 @@ import { buildChatRequestBody } from "../lib/buildChatBody";
 const mockCreateNewSession = vi.fn();
 const mockSwitchSession = vi.fn();
 const mockDeleteSession = vi.fn();
+const mockSelectActiveDocument = vi.fn();
 
 let mockAttachment: AttachmentState | null = null;
 let mockActiveDocumentId: string | null | undefined = undefined;
@@ -130,6 +131,8 @@ vi.mock("../lib/hooks/useChat", () => ({
     handleBeforeUpload: vi.fn(),
     handleUploadAccepted: vi.fn(),
     handleRemoveAttachment: vi.fn(),
+    selectActiveDocument: (...args: unknown[]) =>
+      mockSelectActiveDocument(...args),
     stopStreaming: vi.fn(),
   };
   },
@@ -384,6 +387,106 @@ describe("ChatPage session document list", () => {
 
     const detail = await screen.findByTestId("document-failure-detail");
     expect(detail).toHaveTextContent("embedding: boom");
+  });
+
+  it("allows selecting a non-active ready document with 'Make active' and updates active state", async () => {
+    vi.mocked(listDocuments).mockResolvedValue({
+      tenant_id: "t",
+      documents: [
+        {
+          document_id: "doc-1",
+          file_name: "notes.txt",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+        },
+        {
+          document_id: "doc-2",
+          file_name: "other.pdf",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+        },
+      ],
+    });
+
+    render(<ChatPage />);
+
+    await screen.findByTestId("session-document-list");
+
+    const row1 = screen.getByTestId("document-list-row-doc-1");
+    const row2 = screen.getByTestId("document-list-row-doc-2");
+
+    expect(
+      within(row1).queryByRole("button", { name: /make.*active/i }),
+    ).not.toBeInTheDocument();
+
+    const makeActiveButton = within(row2).getByRole("button", {
+      name: "Make other.pdf active",
+    });
+    expect(makeActiveButton).toBeInTheDocument();
+    expect(makeActiveButton).toBeEnabled();
+
+    await userEvent.click(makeActiveButton);
+
+    expect(mockSelectActiveDocument).toHaveBeenCalledWith(
+      "doc-2",
+      "other.pdf",
+      undefined,
+    );
+  });
+
+  it("sends the newly activated doc_id in the chat request body after Make active", async () => {
+    vi.mocked(listDocuments).mockResolvedValue({
+      tenant_id: "t",
+      documents: [
+        {
+          document_id: "doc-1",
+          file_name: "notes.txt",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+        },
+        {
+          document_id: "doc-2",
+          file_name: "other.pdf",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+        },
+      ],
+    });
+
+    mockSelectActiveDocument.mockImplementation(
+      (documentId: string, fileName?: string) => {
+        mockActiveDocumentId = documentId;
+        mockAttachment = {
+          documentId,
+          fileName: fileName ?? "other.pdf",
+          statusEndpoint: `/documents/${documentId}/status`,
+          status: "ready",
+        };
+      },
+    );
+
+    const { rerender } = render(<ChatPage />);
+
+    await screen.findByTestId("session-document-list");
+    const row2 = screen.getByTestId("document-list-row-doc-2");
+    await userEvent.click(
+      within(row2).getByRole("button", { name: "Make other.pdf active" }),
+    );
+
+    rerender(<ChatPage />);
+
+    const body = buildChatRequestBody({
+      question: "What does other say?",
+      docId: mockActiveDocumentId ?? "doc-1",
+      retrieval: capturedRetrievalState,
+    });
+
+    expect(body.doc_id).toBe("doc-2");
+    expect(body.question).toBe("What does other say?");
   });
 });
 

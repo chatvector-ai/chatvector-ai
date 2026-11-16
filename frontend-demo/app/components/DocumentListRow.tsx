@@ -13,6 +13,8 @@ type Props = {
   failureDetail: string | null;
   metadata?: DocumentScalarMetadata;
   inActiveScope?: ActiveScopeMembership;
+  isActive?: boolean;
+  onMakeActive?: () => void;
   onReplace?: () => void;
   onDelete?: () => void;
   disabled?: boolean;
@@ -28,13 +30,17 @@ export default function DocumentListRow({
   failureDetail,
   metadata,
   inActiveScope,
+  isActive: _isActive,
+  onMakeActive,
   onReplace,
   onDelete,
   disabled = false,
   leading,
   unavailable = false,
 }: Props) {
-  const showActions = onReplace != null || onDelete != null;
+  const isReady = status === "completed" || status === "ready";
+  const showActions =
+    onMakeActive != null || onReplace != null || onDelete != null;
 
   return (
     <div
@@ -96,6 +102,18 @@ export default function DocumentListRow({
         </div>
         {showActions && !unavailable && (
           <div className="flex shrink-0 items-center gap-1">
+            {onMakeActive && (
+              <button
+                type="button"
+                disabled={disabled || !isReady}
+                onClick={onMakeActive}
+                className="rounded-md border border-border px-2 py-1 text-xs font-medium text-muted transition hover:bg-background hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={`Make ${fileName} active`}
+                title="Make active"
+              >
+                Make active
+              </button>
+            )}
             {onReplace && (
               <button
                 type="button"

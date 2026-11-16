@@ -18,6 +18,8 @@ type Props = {
   documentSummaries: DocumentSummary[];
   retrievalState: AdvancedRetrievalState;
   attachment: AttachmentState | null;
+  activeDocumentId?: string | null;
+  onMakeActive?: (documentId: string) => void;
   onReplace: (documentId: string) => void;
   onDelete: (documentId: string) => void;
   actionsDisabled?: boolean;
@@ -28,6 +30,8 @@ export default function SessionDocumentList({
   documentSummaries,
   retrievalState,
   attachment,
+  activeDocumentId,
+  onMakeActive,
   onReplace,
   onDelete,
   actionsDisabled = false,
@@ -39,7 +43,7 @@ export default function SessionDocumentList({
 
   const scope = effectiveScope(retrievalState);
   const scopeIsExplicit = isRetrievalScopeMembershipDefinite(retrievalState);
-  const selectedDocumentId = attachment?.documentId ?? null;
+  const selectedDocumentId = activeDocumentId ?? attachment?.documentId ?? null;
 
   return (
     <div className="px-4 pb-2" data-testid="session-document-list">
@@ -72,6 +76,12 @@ export default function SessionDocumentList({
             status: summary.status,
           });
 
+          const isActive = summary.document_id === selectedDocumentId;
+          const onRowMakeActive =
+            !isActive && onMakeActive
+              ? () => onMakeActive(summary.document_id)
+              : undefined;
+
           return (
             <li key={summary.document_id}>
               <DocumentListRow
@@ -85,6 +95,8 @@ export default function SessionDocumentList({
                 )}
                 metadata={summary.metadata}
                 inActiveScope={inActiveScope}
+                isActive={isActive}
+                onMakeActive={onRowMakeActive}
                 onReplace={
                   processing ? undefined : () => onReplace(summary.document_id)
                 }
