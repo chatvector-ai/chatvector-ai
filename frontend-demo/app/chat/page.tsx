@@ -47,8 +47,9 @@ export default function ChatPage() {
   const documentMap = useMemo(() => {
     const map: Record<string, string> = {};
     for (const doc of documentSummaries) {
-      if (doc.id && doc.file_name) {
-        map[doc.id] = doc.file_name;
+      const id = doc.document_id || (doc as unknown as { id?: string }).id;
+      if (id && doc.file_name) {
+        map[id] = doc.file_name;
       }
     }
     return map;

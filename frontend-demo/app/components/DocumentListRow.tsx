@@ -30,7 +30,6 @@ export default function DocumentListRow({
   failureDetail,
   metadata,
   inActiveScope,
-  isActive: _isActive,
   onMakeActive,
   onReplace,
   onDelete,

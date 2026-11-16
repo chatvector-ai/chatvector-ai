@@ -192,16 +192,16 @@ describe("AdvancedRetrievalDrawer", () => {
     );
 
     expect(screen.getByTestId("hybrid-inherit-label")).toHaveTextContent(
-      /Explicit override/
+      /Explicit request/
     );
     expect(screen.getByTestId("reranking-inherit-label")).toHaveTextContent(
-      /Process default/
+      /Default from env/
     );
     expect(screen.getByTestId("query-transformation-inherit-label")).toHaveTextContent(
-      /Process default/
+      /Default from env/
     );
     expect(screen.getByTestId("history-aware-inherit-label")).toHaveTextContent(
-      /Process default/
+      /Default from env/
     );
   });
 
@@ -250,7 +250,7 @@ describe("AdvancedRetrievalDrawer", () => {
     render(<AdvancedRetrievalDrawer {...baseProps} open />);
 
     const label = screen.getByTestId("match-count-inherit-label");
-    expect(label).toHaveTextContent(/process default/i);
+    expect(label).toHaveTextContent(/default from env/i);
     expect(label.textContent).not.toMatch(/\(\s*\d+\s*\)/);
   });
 
@@ -359,7 +359,7 @@ describe("AdvancedRetrievalDrawer", () => {
     ).not.toBeChecked();
     expect(screen.getByRole("radio", { name: /tenant/i })).not.toBeChecked();
     expect(screen.getByTestId("scope-inherit-label")).toHaveTextContent(
-      /Follows selected preset/
+      /Preset \(alpha\)/
     );
   });
 
@@ -550,12 +550,153 @@ describe("AdvancedRetrievalDrawer", () => {
     expect(within(radiogroup).getByRole("radio", { name: "On" })).toBeChecked();
     expect(within(radiogroup).getByRole("radio", { name: "Default · Off" })).not.toBeChecked();
     expect(screen.getByTestId("history-aware-inherit-label")).toHaveTextContent(
-      /Explicit override/
+      /Explicit request/
     );
 
     const inputs = screen.getAllByRole("spinbutton");
     const values = inputs.map((input) => (input as HTMLInputElement).value);
     expect(values).toContain("7");
     expect(values).toContain("12");
+  });
+
+  it("shows inherited values across all remaining controls when discovery defaults are provided", () => {
+    render(
+      <AdvancedRetrievalDrawer
+        {...baseProps}
+        open
+        defaults={{
+          scope: "tenant",
+          match_count: 8,
+          hybrid_enabled: true,
+          reranking_enabled: false,
+          reranker_provider: "cohere",
+          query_transformation_enabled: true,
+          query_transformation_strategy: "rewrite",
+        }}
+      />
+    );
+
+    expect(screen.getByTestId("scope-inherit-label")).toHaveTextContent(
+      "Default from env · tenant"
+    );
+    expect(screen.getByTestId("match-count-inherit-label")).toHaveTextContent(
+      "Default from env"
+    );
+    expect(screen.getByTestId("match-count-default-note")).toHaveTextContent(
+      "Default: 8"
+    );
+    expect(screen.getByTestId("hybrid-inherit-label")).toHaveTextContent(
+      "Default from env · On"
+    );
+    expect(screen.getByTestId("reranking-inherit-label")).toHaveTextContent(
+      "Default from env · Off"
+    );
+    expect(
+      screen.getByTestId("reranker-provider-inherit-label")
+    ).toHaveTextContent("Default from env · cohere");
+    expect(
+      screen.getByTestId("query-transformation-inherit-label")
+    ).toHaveTextContent("Default from env · On");
+    expect(
+      screen.getByTestId("query-transformation-strategy-inherit-label")
+    ).toHaveTextContent("Default from env · rewrite");
+  });
+
+  it("shows neutral 'Default' / 'Default from env' without literal numbers when defaults are absent", () => {
+    render(<AdvancedRetrievalDrawer {...baseProps} open defaults={undefined} />);
+
+    expect(screen.getByTestId("scope-inherit-label")).toHaveTextContent(
+      "Default from env"
+    );
+    expect(screen.getByTestId("scope-inherit-label")).not.toHaveTextContent(
+      /session/i
+    );
+    expect(
+      screen.queryByTestId("match-count-default-note")
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("hybrid-inherit-label")).toHaveTextContent(
+      "Default from env"
+    );
+    expect(screen.getByTestId("hybrid-inherit-label")).not.toHaveTextContent(
+      /· On|· Off/
+    );
+    expect(screen.getByTestId("reranking-inherit-label")).toHaveTextContent(
+      "Default from env"
+    );
+    expect(screen.getByTestId("reranking-inherit-label")).not.toHaveTextContent(
+      /· On|· Off/
+    );
+    expect(
+      screen.getByTestId("reranker-provider-inherit-label")
+    ).toHaveTextContent("Default from env");
+    expect(
+      screen.getByTestId("query-transformation-inherit-label")
+    ).toHaveTextContent("Default from env");
+    expect(
+      screen.getByTestId("query-transformation-strategy-inherit-label")
+    ).toHaveTextContent("Default from env");
+  });
+
+  it("renders 'Preset (alpha)' for controls when a preset is active", () => {
+    render(
+      <AdvancedRetrievalDrawer
+        {...baseProps}
+        open
+        state={{ explicit: { preset: "alpha" } }}
+        availablePresets={["alpha"]}
+        defaults={{
+          scope: "tenant",
+          hybrid_enabled: false,
+          reranking_enabled: true,
+          query_transformation_enabled: false,
+        }}
+      />
+    );
+
+    expect(screen.getByTestId("scope-inherit-label")).toHaveTextContent(
+      "Preset (alpha) · tenant"
+    );
+    expect(screen.getByTestId("hybrid-inherit-label")).toHaveTextContent(
+      "Preset (alpha) · Off"
+    );
+    expect(screen.getByTestId("reranking-inherit-label")).toHaveTextContent(
+      "Preset (alpha) · On"
+    );
+    expect(
+      screen.getByTestId("query-transformation-inherit-label")
+    ).toHaveTextContent("Preset (alpha) · Off");
+  });
+
+  it("default-path regression: the default screen is still collapsed with no new always-visible controls", () => {
+    render(
+      <AdvancedRetrievalDrawer
+        {...baseProps}
+        open
+        defaults={{
+          scope: "session",
+          match_count: 5,
+          hybrid_enabled: true,
+          reranking_enabled: false,
+          reranker_provider: "similarity",
+          query_transformation_enabled: false,
+          query_transformation_strategy: "rewrite",
+          history_aware_retrieval: true,
+          retrieval_history_window: 5,
+          generation_history_window: 10,
+        }}
+      />
+    );
+
+    // Number input editors for match count and history windows are collapsed
+    expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /set match count explicitly/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /set retrieval history window/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /set generation history window/i })
+    ).toBeInTheDocument();
   });
 });

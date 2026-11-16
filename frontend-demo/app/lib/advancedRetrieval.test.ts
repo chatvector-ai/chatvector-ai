@@ -4,6 +4,9 @@ import {
   saveAdvancedRetrievalState,
   resetAdvancedRetrievalState,
   effectiveScope,
+  effectiveMatchCount,
+  fieldInheritSource,
+  inheritSourceLabel,
   EMPTY_ADVANCED_RETRIEVAL,
   resolveScopeIndicator,
   selectedPresetName,
@@ -44,6 +47,24 @@ describe("advancedRetrieval storage", () => {
     ).toBe("tenant");
   });
 
+  it("effectiveScope uses supplied discovery defaults when explicit is unset", () => {
+    expect(
+      effectiveScope(EMPTY_ADVANCED_RETRIEVAL, { scope: "tenant" })
+    ).toBe("tenant");
+    expect(
+      effectiveScope({ explicit: { scope: "session" } }, { scope: "tenant" })
+    ).toBe("session");
+  });
+
+  it("effectiveMatchCount uses supplied discovery defaults when explicit is unset", () => {
+    expect(
+      effectiveMatchCount(EMPTY_ADVANCED_RETRIEVAL, { match_count: 12 })
+    ).toBe(12);
+    expect(
+      effectiveMatchCount({ explicit: { matchCount: 3 } }, { match_count: 12 })
+    ).toBe(3);
+  });
+
   it("persists an explicitly chosen preset", () => {
     saveAdvancedRetrievalState({ explicit: { preset: "alpha" } });
     expect(loadAdvancedRetrievalState().explicit.preset).toBe("alpha");
@@ -65,5 +86,19 @@ describe("advancedRetrieval storage", () => {
     expect(resetAdvancedRetrievalState()).toEqual(EMPTY_ADVANCED_RETRIEVAL);
     expect(loadAdvancedRetrievalState()).toEqual(EMPTY_ADVANCED_RETRIEVAL);
     expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it("adopts inspector source vocabulary via inheritSourceLabel", () => {
+    expect(inheritSourceLabel("explicit")).toBe("Explicit request");
+    expect(inheritSourceLabel("preset")).toBe("Preset");
+    expect(inheritSourceLabel("default-from-env")).toBe("Default from env");
+    expect(inheritSourceLabel("env")).toBe("Default from env");
+    expect(inheritSourceLabel("process-default")).toBe("Default from env");
+  });
+
+  it("fieldInheritSource resolves explicit, preset, or default-from-env", () => {
+    expect(fieldInheritSource({ explicit: { hybridEnabled: true } }, true)).toBe("explicit");
+    expect(fieldInheritSource({ explicit: { preset: "alpha" } }, false)).toBe("preset");
+    expect(fieldInheritSource(EMPTY_ADVANCED_RETRIEVAL, false)).toBe("default-from-env");
   });
 });

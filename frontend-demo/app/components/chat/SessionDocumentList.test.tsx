@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import SessionDocumentList from "./SessionDocumentList";
 import type { AdvancedRetrievalState } from "../../lib/advancedRetrieval";
 import type { DocumentSummary } from "../../lib/api";

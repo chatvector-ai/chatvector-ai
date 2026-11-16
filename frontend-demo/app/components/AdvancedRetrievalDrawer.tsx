@@ -393,9 +393,11 @@ export default function AdvancedRetrievalDrawer({
                 </div>
                 <p className="mb-2 text-muted" data-testid="scope-inherit-label">
                   {inheritSourceLabel(scopeInherit)}
-                  {scopeInherit === "process-default" ? " (session)" : null}
                   {scopeInherit === "preset" && activePreset
                     ? ` (${activePreset})`
+                    : null}
+                  {scopeInherit !== "explicit" && defaults?.scope != null
+                    ? ` · ${defaults.scope}`
                     : null}
                 </p>
                 <div
@@ -442,6 +444,9 @@ export default function AdvancedRetrievalDrawer({
                 </div>
                 <p className="mb-2 text-muted" data-testid="match-count-inherit-label">
                   {inheritSourceLabel(matchCountInherit)}
+                  {matchCountInherit === "preset" && activePreset
+                    ? ` (${activePreset})`
+                    : null}
                 </p>
                 {matchCountEditorVisible ? (
                   <div className="flex items-center gap-3">
@@ -486,17 +491,24 @@ export default function AdvancedRetrievalDrawer({
                     />
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    data-testid="match-count-set-explicit"
-                    onClick={() => {
-                      setMatchCountDraft(null);
-                      setMatchCountEditorOpen(true);
-                    }}
-                    className="text-accent hover:underline"
-                  >
-                    Set match count explicitly
-                  </button>
+                  <>
+                    {defaults?.match_count !== undefined ? (
+                      <p className="mb-1 text-muted" data-testid="match-count-default-note">
+                        Default: {defaults.match_count}
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      data-testid="match-count-set-explicit"
+                      onClick={() => {
+                        setMatchCountDraft(null);
+                        setMatchCountEditorOpen(true);
+                      }}
+                      className="text-accent hover:underline"
+                    >
+                      Set match count explicitly
+                    </button>
+                  </>
                 )}
               </section>
 
@@ -507,6 +519,14 @@ export default function AdvancedRetrievalDrawer({
                     data-testid="hybrid-inherit-label"
                   >
                     {inheritSourceLabel(hybridInherit)}
+                    {hybridInherit === "preset" && activePreset
+                      ? ` (${activePreset})`
+                      : null}
+                    {hybridInherit !== "explicit" && (
+                      defaults?.hybrid_enabled !== undefined
+                        ? ` · ${defaults.hybrid_enabled ? "On" : "Off"}`
+                        : ""
+                    )}
                   </p>
                   <label className="flex cursor-pointer items-center gap-2">
                     <input
@@ -524,6 +544,14 @@ export default function AdvancedRetrievalDrawer({
                     data-testid="reranking-inherit-label"
                   >
                     {inheritSourceLabel(rerankingInherit)}
+                    {rerankingInherit === "preset" && activePreset
+                      ? ` (${activePreset})`
+                      : null}
+                    {rerankingInherit !== "explicit" && (
+                      defaults?.reranking_enabled !== undefined
+                        ? ` · ${defaults.reranking_enabled ? "On" : "Off"}`
+                        : ""
+                    )}
                   </p>
                   <label className="flex cursor-pointer items-center gap-2">
                     <input
@@ -538,13 +566,19 @@ export default function AdvancedRetrievalDrawer({
                 <div>
                   <p className="mb-2 font-medium text-foreground">Reranker provider</p>
                   {state.explicit.rerankerProvider === undefined ? (
-                    <p className="mb-2 text-muted">
+                    <p className="mb-2 text-muted" data-testid="reranker-provider-inherit-label">
                       {inheritSourceLabel(
                         fieldInheritSource(
                           state,
                           state.explicit.rerankerProvider !== undefined
                         )
                       )}
+                      {activePreset && selectedPresetName(state)
+                        ? ` (${activePreset})`
+                        : null}
+                      {defaults?.reranker_provider != null
+                        ? ` · ${defaults.reranker_provider}`
+                        : ""}
                     </p>
                   ) : null}
                   <div
@@ -584,6 +618,14 @@ export default function AdvancedRetrievalDrawer({
                     data-testid="query-transformation-inherit-label"
                   >
                     {inheritSourceLabel(queryTransformationInherit)}
+                    {queryTransformationInherit === "preset" && activePreset
+                      ? ` (${activePreset})`
+                      : null}
+                    {queryTransformationInherit !== "explicit" && (
+                      defaults?.query_transformation_enabled !== undefined
+                        ? ` · ${defaults.query_transformation_enabled ? "On" : "Off"}`
+                        : ""
+                    )}
                   </p>
                   <label className="flex cursor-pointer items-center gap-2">
                     <input
@@ -604,13 +646,19 @@ export default function AdvancedRetrievalDrawer({
                     Transform strategy
                   </span>
                   {state.explicit.queryTransformationStrategy === undefined ? (
-                    <p className="mb-1 text-muted">
+                    <p className="mb-1 text-muted" data-testid="query-transformation-strategy-inherit-label">
                       {inheritSourceLabel(
                         fieldInheritSource(
                           state,
                           state.explicit.queryTransformationStrategy !== undefined
                         )
                       )}
+                      {activePreset && selectedPresetName(state)
+                        ? ` (${activePreset})`
+                        : null}
+                      {defaults?.query_transformation_strategy != null
+                        ? ` · ${defaults.query_transformation_strategy}`
+                        : ""}
                     </p>
                   ) : null}
                   <select
@@ -644,6 +692,9 @@ export default function AdvancedRetrievalDrawer({
                     data-testid="history-aware-inherit-label"
                   >
                     {inheritSourceLabel(historyAwareInherit)}
+                    {historyAwareInherit === "preset" && activePreset
+                      ? ` (${activePreset})`
+                      : null}
                   </p>
                   <SegmentedControl
                     name="history-aware-retrieval"

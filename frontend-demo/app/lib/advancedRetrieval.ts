@@ -36,16 +36,24 @@ export const EMPTY_ADVANCED_RETRIEVAL: AdvancedRetrievalState = {
 const STORAGE_KEY = "chatvector-advanced-retrieval-explicit";
 const LEGACY_STORAGE_KEY = "chatvector-retrieval-settings";
 
+/** @deprecated Use discovery.defaults instead of hardcoded display defaults */
 export const DEFAULT_DISPLAY_SCOPE: RetrievalScope = "session";
+/** @deprecated Use discovery.defaults instead of hardcoded display defaults */
 export const DEFAULT_DISPLAY_MATCH_COUNT = DEFAULT_MATCH_COUNT;
 
-export function effectiveScope(state: AdvancedRetrievalState): RetrievalScope {
-  return state.explicit.scope ?? DEFAULT_DISPLAY_SCOPE;
+export function effectiveScope(
+  state: AdvancedRetrievalState,
+  defaults?: { scope?: RetrievalScope }
+): RetrievalScope {
+  return state.explicit.scope ?? defaults?.scope ?? DEFAULT_DISPLAY_SCOPE;
 }
 
-export function effectiveMatchCount(state: AdvancedRetrievalState): number {
+export function effectiveMatchCount(
+  state: AdvancedRetrievalState,
+  defaults?: { match_count?: number }
+): number {
   return clampMatchCount(
-    state.explicit.matchCount ?? DEFAULT_DISPLAY_MATCH_COUNT
+    state.explicit.matchCount ?? defaults?.match_count ?? DEFAULT_DISPLAY_MATCH_COUNT
   );
 }
 
@@ -84,7 +92,12 @@ export function resolveScopeIndicator(
   };
 }
 
-export type FieldInheritSource = "explicit" | "preset" | "process-default";
+export type FieldInheritSource =
+  | "explicit"
+  | "preset"
+  | "process-default"
+  | "env"
+  | "default-from-env";
 
 export function fieldInheritSource(
   state: AdvancedRetrievalState,
@@ -92,17 +105,20 @@ export function fieldInheritSource(
 ): FieldInheritSource {
   if (fieldSet) return "explicit";
   if (selectedPresetName(state)) return "preset";
-  return "process-default";
+  return "default-from-env";
 }
 
 export function inheritSourceLabel(source: FieldInheritSource): string {
   switch (source) {
     case "explicit":
-      return "Explicit override";
+      return "Explicit request";
     case "preset":
-      return "Follows selected preset";
+      return "Preset";
+    case "default-from-env":
+    case "env":
+    case "process-default":
     default:
-      return "Process default";
+      return "Default from env";
   }
 }
 
