@@ -276,12 +276,13 @@ export default function AdvancedRetrievalDrawer({
                   <p className="font-medium text-foreground">Metadata filter</p>
                   <InfoPopover label="Metadata filter help">
                     Exact match on document metadata keys present in your
-                    current documents. Under session scope, the filter applies
-                    only to the active document
+                    current documents. Under session scope, the filter can only
+                    narrow the active document
                     {activeDocumentName
                       ? ` (${activeDocumentName})`
                       : null}
-                    ; if it does not match, the question returns an error.
+                    ; to filter across the library, use tenant scope.
+                    If it does not match, the question returns an error.
                     Omitting a filter leaves retrieval unchanged.
                   </InfoPopover>
                 </div>

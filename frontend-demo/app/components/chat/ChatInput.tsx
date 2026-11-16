@@ -62,7 +62,9 @@ export default function ChatInput({
   const scopeMessage = (() => {
     switch (scopeIndicator.kind) {
       case "tenant":
-        return "Tenant scope: searches the tenant's ready documents (can include documents other than the attached chip).";
+        return scopeIndicator.hasFilter || metadataFilterSummary
+          ? "Tenant scope: searches the tenant's ready documents (does not require the active document to match)."
+          : "Tenant scope: searches the tenant's ready documents (can include documents other than the attached chip).";
       case "preset":
         return "Scope follows the selected preset until you set scope explicitly.";
       case "session":

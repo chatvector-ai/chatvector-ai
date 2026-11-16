@@ -185,8 +185,29 @@ describe("ChatInput", () => {
     ).toBeInTheDocument();
   });
 
+  it("does not imply active document must match when tenant scope has an active filter", () => {
+    renderChatInput({
+      scopeIndicator: { kind: "tenant" },
+      metadataFilterSummary: "department=legal",
+      attachment: {
+        fileName: "notes.txt",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+        status: "ready",
+      },
+    });
+
+    expect(
+      screen.getByText(
+        /Tenant scope: searches the tenant's ready documents \(does not require the active document to match\)\./
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Metadata filter active: department=legal\./)).toBeInTheDocument();
+  });
+
   it("disables UploadButton while attachment is processing and enables it when ready or failed", () => {
     const { rerender, props } = renderChatInput({
+      isAdd: false,
       attachment: {
         fileName: "guide.pdf",
         documentId: "doc-1",

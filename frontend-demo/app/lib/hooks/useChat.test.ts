@@ -447,6 +447,8 @@ describe("useChat", () => {
     );
     expect(aiMessage?.error?.code).toBe("anchor_document_excluded_by_filter");
     expect(aiMessage?.error?.message).toContain("council-minutes.pdf");
+    expect(aiMessage?.error?.message).toMatch(/under session scope, the filter can only narrow the active document/i);
+    expect(aiMessage?.error?.message).toMatch(/to filter across the library, use tenant scope/i);
     expect(aiMessage?.error?.message).not.toBe(backendMessage);
   });
 
