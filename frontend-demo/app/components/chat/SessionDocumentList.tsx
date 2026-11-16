@@ -44,10 +44,16 @@ export default function SessionDocumentList({
   const scope = effectiveScope(retrievalState);
   const scopeIsExplicit = isRetrievalScopeMembershipDefinite(retrievalState);
   const selectedDocumentId = activeDocumentId ?? attachment?.documentId ?? null;
+  const hasMultipleDocuments = rows.length > 1;
+
+  const headingText =
+    scope === "session" && hasMultipleDocuments
+      ? "Session documents — only the active document is searched"
+      : "Session documents";
 
   return (
     <div className="px-4 pb-2" data-testid="session-document-list">
-      <p className="mb-2 text-xs font-medium text-muted">Session documents</p>
+      <p className="mb-2 text-xs font-medium text-muted">{headingText}</p>
       <ul className="flex flex-col gap-2">
         {rows.map((row) => {
           if (row.kind === "unavailable") {
@@ -74,6 +80,7 @@ export default function SessionDocumentList({
             selectedDocumentId,
             documentId: summary.document_id,
             status: summary.status,
+            hasMultipleDocuments,
           });
 
           const isActive = summary.document_id === selectedDocumentId;

@@ -371,15 +371,53 @@ describe("ChatPage session document list", () => {
     });
   });
 
-  it("marks only the selected attachment in session scope", async () => {
+  it("marks active document as 'Active · searched' and other document as 'Not searched' under session scope", async () => {
     render(<ChatPage />);
 
     await screen.findByTestId("session-document-list");
-    const inScope = screen.getAllByTestId("document-in-active-scope");
-    expect(inScope).toHaveLength(1);
     expect(
-      screen.getByTestId("document-list-row-doc-1").contains(inScope[0])
+      screen.getByText(
+        "Session documents — only the active document is searched",
+      ),
+    ).toBeVisible();
+
+    const activeSearched = screen.getByTestId("document-active-searched");
+    const notSearched = screen.getByTestId("document-not-searched");
+
+    expect(activeSearched).toHaveTextContent("Active · searched");
+    expect(notSearched).toHaveTextContent("Not searched");
+    expect(
+      screen.getByTestId("document-list-row-doc-1").contains(activeSearched),
     ).toBe(true);
+    expect(
+      screen.getByTestId("document-list-row-doc-2").contains(notSearched),
+    ).toBe(true);
+    expect(screen.queryByText("In scope")).not.toBeInTheDocument();
+  });
+
+  it("shows no extra noise for a single-document session", async () => {
+    vi.mocked(getSession).mockResolvedValue({
+      id: "session-1",
+      created_at: "2026-01-01T00:00:00Z",
+      last_active: "2026-01-01T00:00:00Z",
+      metadata: {},
+      document_ids: ["doc-1"],
+      display_label: "New session",
+    });
+
+    render(<ChatPage />);
+
+    await screen.findByTestId("session-document-list");
+    expect(screen.getByText("Session documents")).toBeVisible();
+    expect(
+      screen.queryByText(/only the active document is searched/i),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("document-in-active-scope")).toHaveTextContent(
+      "In scope",
+    );
+    expect(
+      screen.queryByTestId("document-not-searched"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows failure detail for failed session documents", async () => {

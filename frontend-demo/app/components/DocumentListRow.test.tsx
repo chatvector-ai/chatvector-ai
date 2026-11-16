@@ -57,6 +57,41 @@ describe("DocumentListRow scope labels", () => {
     );
   });
 
+  it("shows 'Active · searched' for active-searched scope membership", () => {
+    render(
+      <DocumentListRow
+        documentId="doc-a"
+        fileName="a.txt"
+        fileType="txt"
+        status="completed"
+        failureDetail={null}
+        inActiveScope="active-searched"
+      />,
+    );
+
+    const badge = screen.getByTestId("document-active-searched");
+    expect(badge).toHaveTextContent("Active · searched");
+    expect(screen.queryByTestId("document-in-active-scope")).not.toBeInTheDocument();
+  });
+
+  it("shows 'Not searched' in neutral style for not-searched scope membership", () => {
+    render(
+      <DocumentListRow
+        documentId="doc-b"
+        fileName="b.txt"
+        fileType="txt"
+        status="completed"
+        failureDetail={null}
+        inActiveScope="not-searched"
+      />,
+    );
+
+    const badge = screen.getByTestId("document-not-searched");
+    expect(badge).toHaveTextContent("Not searched");
+    expect(screen.queryByTestId("document-in-active-scope")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("document-active-searched")).not.toBeInTheDocument();
+  });
+
   it("omits in-scope badge when explicitly out of session scope", () => {
     render(
       <DocumentListRow

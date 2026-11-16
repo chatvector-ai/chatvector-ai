@@ -63,7 +63,23 @@ export default function DocumentListRow({
             <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
               {unavailable ? "missing" : status}
             </span>
-            {inActiveScope === true && (
+            {inActiveScope === "active-searched" && (
+              <span
+                className="shrink-0 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-accent-text"
+                data-testid="document-active-searched"
+              >
+                Active · searched
+              </span>
+            )}
+            {inActiveScope === "not-searched" && (
+              <span
+                className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted"
+                data-testid="document-not-searched"
+              >
+                Not searched
+              </span>
+            )}
+            {(inActiveScope === true || inActiveScope === "in-scope") && (
               <span
                 className="shrink-0 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-accent-text"
                 data-testid="document-in-active-scope"
