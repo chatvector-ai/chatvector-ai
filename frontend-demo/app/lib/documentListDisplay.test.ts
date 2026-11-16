@@ -5,6 +5,7 @@ import {
   isDocumentInActiveScope,
   isRetrievalScopeMembershipDefinite,
   sessionDocumentRows,
+  tenantScopeNotice,
 } from "./documentListDisplay";
 
 describe("fileTypeFromFileName", () => {
@@ -35,11 +36,12 @@ describe("documentFailureDetail", () => {
 });
 
 describe("isDocumentInActiveScope", () => {
-  it("marks only the selected id in session scope", () => {
+  it("marks active row as active-searched and others as not-searched in multi-document session scope", () => {
     const base = {
       scope: "session" as const,
       scopeIsExplicit: true,
       selectedDocumentId: "doc-a",
+      hasMultipleDocuments: true,
     };
     expect(
       isDocumentInActiveScope({
@@ -47,7 +49,30 @@ describe("isDocumentInActiveScope", () => {
         documentId: "doc-a",
         status: "completed",
       })
-    ).toBe(true);
+    ).toBe("active-searched");
+    expect(
+      isDocumentInActiveScope({
+        ...base,
+        documentId: "doc-b",
+        status: "completed",
+      })
+    ).toBe("not-searched");
+  });
+
+  it("marks active document as in-scope and non-active as false in single-document session scope", () => {
+    const base = {
+      scope: "session" as const,
+      scopeIsExplicit: true,
+      selectedDocumentId: "doc-a",
+      hasMultipleDocuments: false,
+    };
+    expect(
+      isDocumentInActiveScope({
+        ...base,
+        documentId: "doc-a",
+        status: "completed",
+      })
+    ).toBe("in-scope");
     expect(
       isDocumentInActiveScope({
         ...base,
@@ -57,7 +82,7 @@ describe("isDocumentInActiveScope", () => {
     ).toBe(false);
   });
 
-  it("marks completed documents in tenant scope", () => {
+  it("does not badge session rows in tenant scope", () => {
     expect(
       isDocumentInActiveScope({
         scope: "tenant",
@@ -66,7 +91,7 @@ describe("isDocumentInActiveScope", () => {
         documentId: "doc-1",
         status: "completed",
       })
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isDocumentInActiveScope({
         scope: "tenant",
@@ -101,6 +126,26 @@ describe("isRetrievalScopeMembershipDefinite", () => {
         explicit: { preset: "eval_hybrid", scope: "tenant" },
       })
     ).toBe(true);
+  });
+});
+
+describe("tenantScopeNotice", () => {
+  it("includes ready count when available", () => {
+    expect(tenantScopeNotice(3)).toBe(
+      "Tenant scope searches all ready documents in the tenant (3), which can include documents not shown here."
+    );
+    expect(tenantScopeNotice(0)).toBe(
+      "Tenant scope searches all ready documents in the tenant (0), which can include documents not shown here."
+    );
+  });
+
+  it("omits count when null, undefined, or negative", () => {
+    expect(tenantScopeNotice(null)).toBe(
+      "Tenant scope searches all ready documents in the tenant, which can include documents not shown here."
+    );
+    expect(tenantScopeNotice(undefined)).toBe(
+      "Tenant scope searches all ready documents in the tenant, which can include documents not shown here."
+    );
   });
 });
 

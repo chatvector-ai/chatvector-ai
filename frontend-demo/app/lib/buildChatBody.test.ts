@@ -113,4 +113,40 @@ describe("buildChatRequestBody", () => {
     expect(body.debug_retrieval).toBe(true);
     expect(body).not.toHaveProperty("match_count");
   });
+
+  it("omits history_aware_retrieval when historyAwareRetrieval is undefined (default state)", () => {
+    const body = buildChatRequestBody({
+      question: "q",
+      docId: "doc-1",
+      retrieval: {
+        explicit: {},
+      },
+    });
+
+    expect(body).not.toHaveProperty("history");
+  });
+
+  it("sends history_aware_retrieval as true when On is selected", () => {
+    const body = buildChatRequestBody({
+      question: "q",
+      docId: "doc-1",
+      retrieval: {
+        explicit: { historyAwareRetrieval: true },
+      },
+    });
+
+    expect(body.history).toEqual({ history_aware_retrieval: true });
+  });
+
+  it("sends history_aware_retrieval as false when Off is selected", () => {
+    const body = buildChatRequestBody({
+      question: "q",
+      docId: "doc-1",
+      retrieval: {
+        explicit: { historyAwareRetrieval: false },
+      },
+    });
+
+    expect(body.history).toEqual({ history_aware_retrieval: false });
+  });
 });

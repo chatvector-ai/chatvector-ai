@@ -35,7 +35,13 @@ export function documentFailureDetail(
 }
 
 /** UI scope membership: definite in/out, or preset-controlled ambiguity. */
-export type ActiveScopeMembership = true | false | "follows-preset";
+export type ActiveScopeMembership =
+  | true
+  | false
+  | "active-searched"
+  | "not-searched"
+  | "in-scope"
+  | "follows-preset";
 
 export type ActiveScopeParams = {
   scope: RetrievalScope;
@@ -44,6 +50,7 @@ export type ActiveScopeParams = {
   selectedDocumentId: string | null;
   documentId: string;
   status: string;
+  hasMultipleDocuments?: boolean;
 };
 
 /** False when scope comes from a preset and the user has not set scope explicitly. */
@@ -62,12 +69,31 @@ export function isDocumentInActiveScope(
     return "follows-preset";
   }
   if (params.scope === "tenant") {
-    return params.status === "completed";
-  }
-  if (params.selectedDocumentId === null) {
     return false;
   }
-  return params.documentId === params.selectedDocumentId;
+  if (params.scope === "session") {
+    const isActive =
+      params.selectedDocumentId !== null &&
+      params.documentId === params.selectedDocumentId;
+
+    if (params.hasMultipleDocuments === false) {
+      return isActive ? "in-scope" : false;
+    }
+
+    return isActive ? "active-searched" : "not-searched";
+  }
+  return false;
+}
+
+export function tenantScopeNotice(readyCount?: number | null): string {
+  if (
+    typeof readyCount === "number" &&
+    Number.isFinite(readyCount) &&
+    readyCount >= 0
+  ) {
+    return `Tenant scope searches all ready documents in the tenant (${readyCount}), which can include documents not shown here.`;
+  }
+  return "Tenant scope searches all ready documents in the tenant, which can include documents not shown here.";
 }
 
 export type SessionDocumentListRow<T> =
