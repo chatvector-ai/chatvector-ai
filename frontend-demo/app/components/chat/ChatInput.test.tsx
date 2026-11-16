@@ -228,4 +228,39 @@ describe("ChatInput", () => {
     );
     expect(screen.getByRole("button", { name: "Upload document" })).toBeEnabled();
   });
+
+  it("exposes a replace button on the attachment chip when document is ready", async () => {
+    const onUploadClick = vi.fn();
+    renderChatInput({
+      onUploadClick,
+      attachment: {
+        fileName: "guide.pdf",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+        status: "ready",
+      },
+    });
+
+    const replaceButton = screen.getByRole("button", {
+      name: "Replace guide.pdf",
+    });
+    expect(replaceButton).toBeInTheDocument();
+    await userEvent.click(replaceButton);
+    expect(onUploadClick).toHaveBeenCalledOnce();
+  });
+
+  it("does not expose replace button on the attachment chip when document is processing", () => {
+    renderChatInput({
+      attachment: {
+        fileName: "guide.pdf",
+        documentId: "doc-1",
+        statusEndpoint: "/documents/doc-1/status",
+        status: "processing",
+      },
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Replace guide.pdf" })
+    ).not.toBeInTheDocument();
+  });
 });
