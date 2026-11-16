@@ -27,7 +27,7 @@ import services.conversation_scenarios as conversation_scenarios
 
 def test_checked_in_directory_has_each_scenario_class():
     scenarios = load_scenario_directory(CHECKED_IN_SCENARIOS)
-    assert len(scenarios) == len(SCENARIO_CLASSES)
+    assert len(scenarios) >= len(SCENARIO_CLASSES)
     assert {scenario.scenario_class for scenario in scenarios} == set(SCENARIO_CLASSES)
     by_class = {scenario.scenario_class: scenario for scenario in scenarios}
     long_session = by_class["long_session"]
@@ -47,6 +47,17 @@ def test_loader_copies_user_lines_and_does_not_add_turns():
         raw = json.loads(scenario.source_path.read_text(encoding="utf-8"))
         assert [turn.user for turn in scenario.turns] == [row["user"] for row in raw["turns"]]
         assert len(scenario.turns) == len(raw["turns"])
+
+
+def test_all_checked_in_scenarios_have_valid_corpus_logical_keys():
+    scenarios = load_scenario_directory(CHECKED_IN_SCENARIOS)
+    corpus_path = CHECKED_IN_SCENARIOS.parent / "corpus.json"
+    corpus_data = json.loads(corpus_path.read_text(encoding="utf-8"))
+    valid_keys = {doc["logical_key"] for doc in corpus_data.get("documents", [])}
+    for scenario in scenarios:
+        assert scenario.logical_keys, f"{scenario.id} has no logical keys"
+        for key in scenario.logical_keys:
+            assert key in valid_keys, f"{scenario.id} has unknown logical key: {key}"
 
 
 def test_loader_rejects_a_field_that_would_supply_another_user_line(tmp_path):
@@ -702,3 +713,136 @@ async def test_command_reports_a_failed_scenario(tmp_path, monkeypatch):
             str(manifest_path),
             str(tmp_path / "artifacts"),
         )
+
+
+@pytest.mark.asyncio
+async def test_new_checked_in_scenarios_pass_mock_runner(tmp_path):
+    scenarios_by_id = {s.id: s for s in load_scenario_directory(CHECKED_IN_SCENARIOS)}
+    manifest = _manifest(
+        ("finance-expense-policy", "doc-expense"),
+        ("finance-travel-policy", "doc-travel"),
+        ("hr-pto-policy", "doc-pto"),
+        ("hr-pto-policy-2022", "doc-pto-2022"),
+    )
+    docs = ["doc-expense", "doc-travel", "doc-pto", "doc-pto-2022"]
+
+    # 1. first_one
+    first_one = scenarios_by_id["ordinal-first-one-limits"]
+    responses_first_one = [
+        _chat("Travel limit is 40 USD.", reason="empty_history", applied=False),
+        _chat(
+            "Expense limit is 75 USD.",
+            reason=None,
+            applied=True,
+            resolved="What is the dinner limit under the expense policy?",
+        ),
+    ]
+    res = await run_conversation_scenarios(
+        [first_one],
+        manifest=manifest,
+        tenant_id="eval-tenant",
+        listed_document_ids=docs,
+        play_turn=_player(responses_first_one),
+        artifact_dir=tmp_path / "art_first_one",
+        provider="mock-provider",
+        configured_model="configured-model",
+        persona="default",
+        retrieval_config={"match_count": {"value": 5, "source": "env"}},
+    )
+    assert res.passed
+
+    # 2. other_policy
+    other_policy = scenarios_by_id["ordinal-other-policy-pto"]
+    responses_other = [
+        _chat("Policy POL-HR-014 grants 18 paid days off.", reason="empty_history", applied=False),
+        _chat(
+            "The 2022 policy granted 15 paid days off.",
+            reason=None,
+            applied=True,
+            resolved="How many paid days off did policy POL-HR-014 grant in 2022?",
+        ),
+    ]
+    res = await run_conversation_scenarios(
+        [other_policy],
+        manifest=manifest,
+        tenant_id="eval-tenant",
+        listed_document_ids=docs,
+        play_turn=_player(responses_other),
+        artifact_dir=tmp_path / "art_other",
+        provider="mock-provider",
+        configured_model="configured-model",
+        persona="default",
+        retrieval_config={"match_count": {"value": 5, "source": "env"}},
+    )
+    assert res.passed
+
+    # 3. not_x_y
+    not_x_y = scenarios_by_id["correction-not-x-y-limits"]
+    responses_not_x_y = [
+        _chat("Travel limit is 40 USD.", reason="empty_history", applied=False),
+        _chat(
+            "Expense dinner limit is 75 USD.",
+            reason=None,
+            applied=True,
+            resolved="What is the dinner reimbursement limit under the expense policy?",
+        ),
+    ]
+    res = await run_conversation_scenarios(
+        [not_x_y],
+        manifest=manifest,
+        tenant_id="eval-tenant",
+        listed_document_ids=docs,
+        play_turn=_player(responses_not_x_y),
+        artifact_dir=tmp_path / "art_not_x_y",
+        provider="mock-provider",
+        configured_model="configured-model",
+        persona="default",
+        retrieval_config={"match_count": {"value": 5, "source": "env"}},
+    )
+    assert res.passed
+
+    # 4. no_not
+    no_not = scenarios_by_id["correction-no-not-pto"]
+    responses_no_not = [
+        _chat("In 2022, policy POL-HR-014 granted 15 paid days off.", reason="empty_history", applied=False),
+        _chat(
+            "The current rule for policy POL-HR-014 grants 18 paid days off.",
+            reason=None,
+            applied=True,
+            resolved="How many paid days off does policy POL-HR-014 grant under the current rule?",
+        ),
+    ]
+    res = await run_conversation_scenarios(
+        [no_not],
+        manifest=manifest,
+        tenant_id="eval-tenant",
+        listed_document_ids=docs,
+        play_turn=_player(responses_no_not),
+        artifact_dir=tmp_path / "art_no_not",
+        provider="mock-provider",
+        configured_model="configured-model",
+        persona="default",
+        retrieval_config={"match_count": {"value": 5, "source": "env"}},
+    )
+    assert res.passed
+
+    # 5. standalone_negative
+    standalone_neg = scenarios_by_id["standalone-negative-limits"]
+    responses_neg = [
+        _chat("Hosting port agent dinner limit is 75 USD.", reason="empty_history", applied=False),
+        _chat("The travel policy also mentions dinner reimbursement limits.", reason="standalone_question", applied=False),
+        _chat("Travel orders overnight dinner limit is 40 USD.", reason="standalone_question", applied=False),
+    ]
+    res = await run_conversation_scenarios(
+        [standalone_neg],
+        manifest=manifest,
+        tenant_id="eval-tenant",
+        listed_document_ids=docs,
+        play_turn=_player(responses_neg),
+        artifact_dir=tmp_path / "art_neg",
+        provider="mock-provider",
+        configured_model="configured-model",
+        persona="default",
+        retrieval_config={"match_count": {"value": 5, "source": "env"}},
+    )
+    assert res.passed

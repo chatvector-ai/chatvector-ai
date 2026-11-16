@@ -1,0 +1,18 @@
+{
+  "id": "ordinal-first-one-limits",
+  "class": "ordinal",
+  "max_turns": 2,
+  "logical_keys": ["finance-expense-policy", "finance-travel-policy"],
+  "turns": [
+    {
+      "user": "Between the expense policy and the travel policy, what is the dinner reimbursement limit under the travel policy?",
+      "resolution": "empty_history",
+      "expected_facts": ["40 USD"]
+    },
+    {
+      "user": "What is the dinner limit for the first one?",
+      "resolution": {"contains": "expense"},
+      "expected_facts": ["75 USD"]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "id": "standalone-negative-limits",
+  "class": "standalone_negative",
+  "max_turns": 3,
+  "logical_keys": ["finance-expense-policy", "finance-travel-policy"],
+  "turns": [
+    {
+      "user": "What is the dinner reimbursement limit when a captain hosts a port agent overnight?",
+      "resolution": "empty_history",
+      "expected_facts": ["75 USD"]
+    },
+    {
+      "user": "What other policies mention dinner reimbursement limits?",
+      "resolution": "standalone_question",
+      "expected_facts": ["travel policy"]
+    },
+    {
+      "user": "What is the dinner reimbursement limit when travel orders send a captain away overnight?",
+      "resolution": "standalone_question",
+      "expected_facts": ["40 USD"]
+    }
+  ]
+}
