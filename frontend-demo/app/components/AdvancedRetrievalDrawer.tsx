@@ -24,6 +24,7 @@ import {
 } from "../lib/metadataCorpus";
 import type { DocumentScalarMetadata } from "../lib/documentMetadata";
 import { InfoPopover } from "./ui/InfoPopover";
+import { SegmentedControl } from "./ui/SegmentedControl";
 
 type Props = {
   open: boolean;
@@ -36,7 +37,7 @@ type Props = {
   onRerankerProviderChange: (provider: RerankerProvider) => void;
   onQueryTransformationEnabledChange: (enabled: boolean) => void;
   onQueryTransformationStrategyChange: (strategy: QueryTransformationStrategy) => void;
-  onHistoryAwareRetrievalChange: (enabled: boolean) => void;
+  onHistoryAwareRetrievalChange: (value: boolean | undefined) => void;
   onRetrievalHistoryWindowChange: (value: number) => void;
   onGenerationHistoryWindowChange: (value: number) => void;
   onMetadataFilterChange: (filter: DocumentScalarMetadata | undefined) => void;
@@ -626,25 +627,40 @@ export default function AdvancedRetrievalDrawer({
 
               <section className="space-y-3">
                 <div>
+                  <span className="mb-1 block font-medium text-foreground">
+                    History-aware retrieval
+                  </span>
                   <p
-                    className="mb-1 text-muted"
+                    className="mb-2 text-muted"
                     data-testid="history-aware-inherit-label"
                   >
                     {inheritSourceLabel(historyAwareInherit)}
                   </p>
-                  <label className="flex cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={state.explicit.historyAwareRetrieval === true}
-                      onChange={(e) =>
-                        onHistoryAwareRetrievalChange(e.target.checked)
+                  <SegmentedControl
+                    name="history-aware-retrieval"
+                    ariaLabel="History-aware retrieval"
+                    value={
+                      state.explicit.historyAwareRetrieval === true
+                        ? "on"
+                        : state.explicit.historyAwareRetrieval === false
+                          ? "off"
+                          : "default"
+                    }
+                    onChange={(val) => {
+                      if (val === "on") {
+                        onHistoryAwareRetrievalChange(true);
+                      } else if (val === "off") {
+                        onHistoryAwareRetrievalChange(false);
+                      } else {
+                        onHistoryAwareRetrievalChange(undefined);
                       }
-                      className="h-3.5 w-3.5 accent-[color:var(--accent)]"
-                    />
-                    <span className="font-medium text-foreground">
-                      History-aware retrieval
-                    </span>
-                  </label>
+                    }}
+                    options={[
+                      { value: "default", label: "Default" },
+                      { value: "on", label: "On" },
+                      { value: "off", label: "Off" },
+                    ]}
+                  />
                 </div>
                 <div>
                   <span className="mb-1 block font-medium text-foreground">
