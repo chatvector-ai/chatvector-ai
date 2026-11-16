@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, X } from "lucide-react";
+import { FileText, RefreshCw, X } from "lucide-react";
 import type { DocumentScalarMetadata } from "../lib/documentMetadata";
 import { STAGE_LABELS } from "../lib/stageLabels";
 import DocumentMetadataPairs from "./DocumentMetadataPairs";
@@ -14,6 +14,7 @@ type Props = {
   queuePosition?: number;
   processingTime?: string;
   metadata?: DocumentScalarMetadata;
+  onReplace?: () => void;
   onRemove: () => void;
 };
 
@@ -59,6 +60,7 @@ export default function AttachmentChip({
   queuePosition,
   processingTime,
   metadata,
+  onReplace,
   onRemove,
 }: Props) {
   const label = chipLabel(
@@ -97,6 +99,17 @@ export default function AttachmentChip({
           <span className="shrink-0 text-[10px] text-subtle" title={`Processed in ${processingTime}`}>
             {processingTime}
           </span>
+        )}
+        {onReplace && (
+          <button
+            type="button"
+            onClick={onReplace}
+            className="shrink-0 rounded-md p-1 text-muted transition hover:bg-background hover:text-foreground"
+            aria-label={`Replace ${fileName}`}
+            title="Replace file"
+          >
+            <RefreshCw size={14} />
+          </button>
         )}
         <button
           type="button"

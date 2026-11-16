@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, type RefObject } from "react";
-import { X, Upload, AlertCircle, FileText, Loader2 } from "lucide-react";
+import { X, Upload, AlertCircle, FileText, Loader2, RefreshCw } from "lucide-react";
 import { uploadDocument } from "../lib/api";
 import {
   buildMetadataFromRows,
@@ -31,6 +31,7 @@ export type UploadAcceptedPayload = {
 
 export type UploadModalAttachment = {
   documentId?: string;
+  fileName?: string;
   status: "processing" | "ready" | "failed";
   stage?: string;
   chunks?: { total: number; processed: number };
@@ -46,6 +47,8 @@ type Props = {
   returnFocusRef?: RefObject<HTMLElement | null>;
   /** Document ID of an existing ready/failed attachment to replace in place on POST /upload. */
   replaceDocumentId?: string | null;
+  /** Original file name being replaced, shown in title and body when replacing. */
+  replaceFileName?: string | null;
   /** Run before POST /upload (e.g. delete the prior document so replacement does not orphan rows). */
   onBeforeUpload?: () => Promise<void>;
   onUploadAccepted: (payload: UploadAcceptedPayload) => void;
@@ -58,6 +61,7 @@ export default function UploadModal({
   sessionId,
   returnFocusRef,
   replaceDocumentId,
+  replaceFileName,
   onBeforeUpload,
   onUploadAccepted,
   attachment,
@@ -95,6 +99,10 @@ export default function UploadModal({
           (attachment.status === "ready" || attachment.status === "failed")
         ? (attachment.documentId ?? null)
         : null;
+
+  const isReplacing = Boolean(effectiveReplaceDocumentId);
+  const targetFileName = replaceFileName || attachment?.fileName || null;
+  const displayName = targetFileName || "document";
 
   useEffect(() => {
     if (attachment?.status === "processing") {
@@ -335,7 +343,7 @@ export default function UploadModal({
                 id="upload-modal-title"
                 className="text-xl font-semibold tracking-tight text-foreground"
               >
-                Upload document
+                {isReplacing ? `Replace ${displayName}` : "Upload document"}
               </h2>
               {showDismissWait && (
                 <button
@@ -348,7 +356,9 @@ export default function UploadModal({
               )}
             </div>
             <p className="mt-1 mb-2 text-base text-muted">
-              PDF, TXT, Markdown, HTML, and DOCX
+              {isReplacing
+                ? `${displayName} will be replaced. Its content is re-indexed under the same document ID.`
+                : "PDF, TXT, Markdown, HTML, and DOCX"}
             </p>
           </div>
           <button
@@ -442,7 +452,9 @@ export default function UploadModal({
           tabIndex={dropZoneInteractive ? 0 : undefined}
           aria-label={
             dropZoneInteractive
-              ? "Upload document — drop a file or press Enter to browse"
+              ? isReplacing
+                ? `Replace ${displayName}`
+                : "Upload document — drop a file or press Enter to browse"
               : undefined
           }
           className={dropZoneClassName}
@@ -582,14 +594,20 @@ export default function UploadModal({
           {showPicker && (
             <>
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-background ring-1 ring-border">
-                <Upload className="h-7 w-7 text-muted" strokeWidth={1.5} />
+                {isReplacing ? (
+                  <RefreshCw className="h-7 w-7 text-muted" strokeWidth={1.5} />
+                ) : (
+                  <Upload className="h-7 w-7 text-muted" strokeWidth={1.5} />
+                )}
               </div>
               <p className="max-w-[280px] text-center text-base text-muted">
                 Drop a file here or{" "}
                 <span className="font-medium text-accent-text">browse</span>
               </p>
               <p className="mt-2 text-sm text-subtle">
-                PDF · TXT · Markdown · HTML · DOCX
+                {isReplacing
+                  ? `Choose a new file to replace ${displayName}`
+                  : "PDF · TXT · Markdown · HTML · DOCX"}
               </p>
             </>
           )}

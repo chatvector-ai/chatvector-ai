@@ -19,6 +19,7 @@ const mockSwitchSession = vi.fn();
 const mockDeleteSession = vi.fn();
 
 let mockAttachment: AttachmentState | null = null;
+let mockActiveDocumentId: string | null | undefined = undefined;
 let mockInitialScope: RetrievalScope | undefined = undefined;
 let mockSessions: ChatSession[] = [];
 let mockActiveSessionId = "11111111-aaaa-bbbb-cccc-000000000001";
@@ -105,6 +106,10 @@ vi.mock("../lib/hooks/useChat", () => ({
     inflight: false,
     streaming: false,
     attachment: mockAttachment,
+    activeDocumentId:
+      mockActiveDocumentId !== undefined
+        ? mockActiveDocumentId
+        : (mockAttachment?.documentId ?? null),
     sessionNotice: null,
     removeError: null,
     sendDisabled: true,
@@ -158,6 +163,7 @@ describe("ChatPage preset discovery", () => {
 describe("ChatPage metadata corpus", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
     mockInitialScope = undefined;
     mockActiveSessionId = "session-1";
     mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
@@ -239,6 +245,7 @@ describe("ChatPage metadata corpus", () => {
 describe("ChatPage scope indicator", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
     mockInitialScope = undefined;
     mockActiveSessionId = "session-1";
     mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
@@ -284,11 +291,29 @@ describe("ChatPage scope indicator", () => {
       "Session scope: no document selected — upload a document to search it."
     );
   });
+
+  it("reflects active document filename in the scope indicator", () => {
+    mockActiveDocumentId = "doc-custom";
+    mockAttachment = {
+      fileName: "active-doc.pdf",
+      documentId: "doc-custom",
+      statusEndpoint: "/documents/doc-custom/status",
+      status: "ready",
+    };
+    render(<ChatPage />);
+
+    expect(
+      screen.getByText(
+        "Session scope: searches only the selected document (active-doc.pdf).",
+      ),
+    ).toBeVisible();
+  });
 });
 
 describe("ChatPage session document list", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
     mockInitialScope = undefined;
     mockActiveSessionId = "session-1";
     mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
@@ -415,6 +440,7 @@ describe("ChatPage new session retrieval reset", () => {
 describe("ChatPage session navigation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
     mockInitialScope = undefined;
     mockAttachment = null;
     mockActiveSessionId = "11111111-aaaa-bbbb-cccc-000000000001";
@@ -506,5 +532,87 @@ describe("ChatPage session navigation", () => {
     expect(screen.queryByRole("radio", { name: "Config compare" })).not.toBeInTheDocument();
     expect(screen.queryByText("Configuration A")).not.toBeInTheDocument();
     expect(screen.queryByText("Configuration B")).not.toBeInTheDocument();
+  });
+});
+
+describe("ChatPage document replacement labeled flow", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
+    mockInitialScope = undefined;
+    mockActiveSessionId = "session-1";
+    mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
+    mockAttachment = {
+      fileName: "notes.txt",
+      documentId: "doc-1",
+      statusEndpoint: "/documents/doc-1/status",
+      status: "ready",
+    };
+    vi.mocked(getSession).mockResolvedValue({
+      id: "session-1",
+      created_at: "2026-01-01T00:00:00Z",
+      last_active: "2026-01-01T00:00:00Z",
+      metadata: {},
+      document_ids: ["doc-1", "doc-2"],
+      display_label: "New session",
+    });
+    vi.mocked(listDocuments).mockResolvedValue({
+      tenant_id: "t",
+      documents: [
+        {
+          document_id: "doc-1",
+          file_name: "notes.txt",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+          metadata: {},
+        },
+        {
+          document_id: "doc-2",
+          file_name: "other.txt",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+          metadata: {},
+        },
+      ],
+    });
+  });
+
+  it("opens labeled replacement modal when clicking Replace from the document list row", async () => {
+    const user = userEvent.setup();
+    render(<ChatPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Replace other.txt" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Replace other.txt" }));
+
+    expect(
+      screen.getByRole("heading", { name: "Replace other.txt" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "other.txt will be replaced. Its content is re-indexed under the same document ID."
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("opens labeled replacement modal when clicking Replace from the attachment chip", async () => {
+    const user = userEvent.setup();
+    render(<ChatPage />);
+
+    const chipReplace = screen.getByRole("button", { name: "Replace notes.txt" });
+    await user.click(chipReplace);
+
+    expect(
+      screen.getByRole("heading", { name: "Replace notes.txt" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "notes.txt will be replaced. Its content is re-indexed under the same document ID."
+      )
+    ).toBeInTheDocument();
   });
 });

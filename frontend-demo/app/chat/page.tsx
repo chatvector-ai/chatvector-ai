@@ -97,6 +97,7 @@ export default function ChatPage() {
     inflight,
     streaming,
     attachment,
+    activeDocumentId,
     sessionNotice,
     removeError,
     sendDisabled,
@@ -153,6 +154,24 @@ export default function ChatPage() {
       ? attachment.documentId
       : null);
 
+  const resolvedReplaceFileName = useMemo(() => {
+    if (replaceDocumentIdFromList) {
+      return (
+        documentSummaries.find(
+          (d) => d.document_id === replaceDocumentIdFromList
+        )?.file_name ??
+        (attachment?.documentId === replaceDocumentIdFromList
+          ? attachment.fileName
+          : null) ??
+        null
+      );
+    }
+    if (attachment && attachment.status !== "processing") {
+      return attachment.fileName ?? null;
+    }
+    return null;
+  }, [replaceDocumentIdFromList, documentSummaries, attachment]);
+
   const handleReplaceDocument = (documentId: string) => {
     setReplaceDocumentIdFromList(documentId);
     setShowModal(true);
@@ -174,10 +193,21 @@ export default function ChatPage() {
     }
   };
 
+  const activeDocumentFileName = useMemo(() => {
+    if (!activeDocumentId) return null;
+    if (attachment?.documentId === activeDocumentId && attachment?.fileName) {
+      return attachment.fileName;
+    }
+    const fromSummary = documentSummaries.find(
+      (d) => d.document_id === activeDocumentId
+    )?.file_name;
+    return fromSummary ?? attachment?.fileName ?? null;
+  }, [activeDocumentId, attachment, documentSummaries]);
+
   const indicatorScope = effectiveScope(retrievalState);
   const scopeIndicator = resolveScopeIndicator(
     retrievalState,
-    attachment?.fileName
+    activeDocumentFileName ?? attachment?.fileName
   );
   const metadataCorpus = useMemo(() => {
     if (indicatorScope === "tenant") {
@@ -300,11 +330,13 @@ export default function ChatPage() {
             }}
             returnFocusRef={uploadButtonRef}
             replaceDocumentId={resolvedReplaceDocumentId}
+            replaceFileName={resolvedReplaceFileName}
             onUploadAccepted={handleUploadAccepted}
             attachment={
               attachment
                 ? {
                     documentId: attachment.documentId,
+                    fileName: attachment.fileName,
                     status: attachment.status,
                     stage: poll.stage,
                     chunks: poll.chunks,
