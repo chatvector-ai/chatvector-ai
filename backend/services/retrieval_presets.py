@@ -157,11 +157,35 @@ def list_configured_reranker_providers() -> list[str]:
     return providers
 
 
-def build_retrieval_preset_discovery() -> dict[str, list[str]]:
-    """Names of loaded presets and configured reranker identifiers (no bodies)."""
+def resolve_retrieval_discovery_defaults() -> dict[str, Any]:
+    """Derive effective defaults using canonical resolver logic."""
+    from services.history_config import HistoryProcessDefaults, resolve_history_config
+    from services.retrieval_config import RetrievalProcessDefaults, resolve_retrieval_config
+
+    retrieval_effective = resolve_retrieval_config({}, RetrievalProcessDefaults.from_process())
+    history_effective = resolve_history_config({}, HistoryProcessDefaults.from_process())
+
+    return {
+        "scope": retrieval_effective.scope,
+        "match_count": retrieval_effective.match_count,
+        "history_aware_retrieval": history_effective.history_aware_retrieval,
+        "retrieval_history_window": history_effective.retrieval_history_window,
+        "generation_history_window": history_effective.generation_history_window,
+        "hybrid_enabled": retrieval_effective.hybrid_enabled,
+        "reranking_enabled": retrieval_effective.reranking_enabled,
+        "reranker_provider": retrieval_effective.reranker_provider,
+        "query_transformation_enabled": retrieval_effective.query_transformation_enabled,
+        "query_transformation_strategy": retrieval_effective.query_transformation_strategy,
+        "max_context_chars": retrieval_effective.max_context_chars,
+    }
+
+
+def build_retrieval_preset_discovery() -> dict[str, Any]:
+    """Names of loaded presets, configured reranker identifiers, and effective defaults."""
     return {
         "preset_names": sorted(get_retrieval_presets().keys()),
         "reranker_providers": list_configured_reranker_providers(),
+        "defaults": resolve_retrieval_discovery_defaults(),
     }
 
 

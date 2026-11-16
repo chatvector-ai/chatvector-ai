@@ -93,7 +93,7 @@ ChatVector is a backend-first RAG engine with strong defaults. History-aware ses
 
 **Ingestion and documents**
 - PDF, plain text, Markdown, HTML, and DOCX, with a pluggable extractor registry
-- Flat document metadata and exact-match / `in` retrieval filters, scoped to the tenant
+- Flat document metadata and exact-match / `in` retrieval filters, scoped to the tenant (under session scope, narrows within the active document; under tenant scope, searches matching documents across the tenant)
 - In-place replacement (`replace_document_id`) that keeps the last good content retrievable until cutover; this is not historical versioning
 - Job status over HTTP and SSE, including non-terminal `retrying` until retries are exhausted
 - Optional HMAC webhooks for terminal `ingestion.completed` and `ingestion.failed` only

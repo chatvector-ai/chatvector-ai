@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, type RefObject } from "react";
-import { X, Upload, AlertCircle, FileText, Loader2 } from "lucide-react";
+import { X, Upload, AlertCircle, FileText, Loader2, RefreshCw } from "lucide-react";
 import { uploadDocument } from "../lib/api";
 import {
   buildMetadataFromRows,
@@ -10,6 +10,7 @@ import {
   type MetadataRow,
 } from "../lib/documentMetadata";
 import IngestionPipeline from "./IngestionPipeline";
+import { useDocumentPolling } from "../lib/hooks/useDocumentPolling";
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -27,10 +28,12 @@ export type UploadAcceptedPayload = {
   statusEndpoint: string;
   queuePosition?: number;
   metadata?: DocumentScalarMetadata;
+  isAdd?: boolean;
 };
 
 export type UploadModalAttachment = {
   documentId?: string;
+  fileName?: string;
   status: "processing" | "ready" | "failed";
   stage?: string;
   chunks?: { total: number; processed: number };
@@ -46,6 +49,10 @@ type Props = {
   returnFocusRef?: RefObject<HTMLElement | null>;
   /** Document ID of an existing ready/failed attachment to replace in place on POST /upload. */
   replaceDocumentId?: string | null;
+  /** Original file name being replaced, shown in title and body when replacing. */
+  replaceFileName?: string | null;
+  /** When true, upload action adds a new document to the session without replacing. */
+  isAdd?: boolean;
   /** Run before POST /upload (e.g. delete the prior document so replacement does not orphan rows). */
   onBeforeUpload?: () => Promise<void>;
   onUploadAccepted: (payload: UploadAcceptedPayload) => void;
@@ -58,6 +65,8 @@ export default function UploadModal({
   sessionId,
   returnFocusRef,
   replaceDocumentId,
+  replaceFileName,
+  isAdd = false,
   onBeforeUpload,
   onUploadAccepted,
   attachment,
@@ -88,31 +97,74 @@ export default function UploadModal({
     null,
   );
 
+  const [uploadedDoc, setUploadedDoc] = useState<{
+    documentId: string;
+    statusEndpoint: string;
+    fileName: string;
+  } | null>(null);
+
+  const internalPoll = useDocumentPolling(
+    uploadedDoc?.documentId,
+    uploadedDoc?.statusEndpoint,
+    uploadedDoc ? "processing" : undefined
+  );
+
+  const effectiveAttachment: UploadModalAttachment | null = isAdd
+    ? uploadedDoc
+      ? {
+          documentId: uploadedDoc.documentId,
+          fileName: internalPoll.fileName ?? uploadedDoc.fileName,
+          status: internalPoll.status ?? "processing",
+          stage: internalPoll.stage,
+          chunks: internalPoll.chunks,
+          processingTime: internalPoll.processingTime,
+          errorMessage: internalPoll.errorMessage,
+        }
+      : null
+    : attachment ??
+      (uploadedDoc
+        ? {
+            documentId: uploadedDoc.documentId,
+            fileName: internalPoll.fileName ?? uploadedDoc.fileName,
+            status: internalPoll.status ?? "processing",
+            stage: internalPoll.stage,
+            chunks: internalPoll.chunks,
+            processingTime: internalPoll.processingTime,
+            errorMessage: internalPoll.errorMessage,
+          }
+        : null);
+
   const effectiveReplaceDocumentId =
-    replaceDocumentId !== undefined
-      ? replaceDocumentId
-      : attachment &&
-          (attachment.status === "ready" || attachment.status === "failed")
-        ? (attachment.documentId ?? null)
-        : null;
+    isAdd
+      ? null
+      : replaceDocumentId !== undefined
+        ? replaceDocumentId
+        : attachment &&
+            (attachment.status === "ready" || attachment.status === "failed")
+          ? (attachment.documentId ?? null)
+          : null;
+
+  const isReplacing = Boolean(effectiveReplaceDocumentId);
+  const targetFileName = replaceFileName || effectiveAttachment?.fileName || attachment?.fileName || null;
+  const displayName = targetFileName || "document";
 
   useEffect(() => {
-    if (attachment?.status === "processing") {
+    if (effectiveAttachment?.status === "processing") {
       setHasActiveUpload(true);
     }
     if (
-      attachment?.status === "processing" ||
-      attachment?.status === "ready" ||
-      attachment?.status === "failed"
+      effectiveAttachment?.status === "processing" ||
+      effectiveAttachment?.status === "ready" ||
+      effectiveAttachment?.status === "failed"
     ) {
       setAwaitingProcessing(false);
     }
-  }, [attachment?.status]);
+  }, [effectiveAttachment?.status]);
 
   const hasServerError =
-    attachment?.status === "failed" || Boolean(attachment?.errorMessage);
+    effectiveAttachment?.status === "failed" || Boolean(effectiveAttachment?.errorMessage);
   const showSuccess =
-    hasActiveUpload && attachment?.status === "ready" && !hasServerError;
+    hasActiveUpload && effectiveAttachment?.status === "ready" && !hasServerError;
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -191,12 +243,18 @@ export default function UploadModal({
               metadata,
             )
           : await uploadDocument(file, sessionId, null, metadata);
+      setUploadedDoc({
+        documentId,
+        statusEndpoint,
+        fileName: file.name,
+      });
       setHasActiveUpload(true);
       onUploadAccepted({
         fileName: file.name,
         documentId,
         statusEndpoint,
         queuePosition,
+        ...(isAdd ? { isAdd: true } : {}),
         ...(metadata !== undefined ? { metadata } : {}),
       });
       setAwaitingProcessing(true);
@@ -243,16 +301,16 @@ export default function UploadModal({
     !showFailed &&
     !isUploading &&
     !showSuccess &&
-    (attachment?.status === "processing" || awaitingProcessing);
+    (effectiveAttachment?.status === "processing" || awaitingProcessing);
   const showUploading = isUploading;
   const showPicker =
     !showUploading &&
     !showProcessing &&
     !showFailed &&
     !showSuccess &&
-    (attachment === null ||
-      attachment.status === "ready" ||
-      attachment.status === "failed");
+    (effectiveAttachment === null ||
+      effectiveAttachment.status === "ready" ||
+      effectiveAttachment.status === "failed");
 
   const dropZoneInteractive = showPicker;
   // Keep "Dismiss and wait" visible until the animation visually reaches "completed",
@@ -335,7 +393,7 @@ export default function UploadModal({
                 id="upload-modal-title"
                 className="text-xl font-semibold tracking-tight text-foreground"
               >
-                Upload document
+                {isReplacing ? `Replace ${displayName}` : isAdd ? "Add document" : "Upload document"}
               </h2>
               {showDismissWait && (
                 <button
@@ -348,7 +406,9 @@ export default function UploadModal({
               )}
             </div>
             <p className="mt-1 mb-2 text-base text-muted">
-              PDF, TXT, Markdown, HTML, and DOCX
+              {isReplacing
+                ? `${displayName} will be replaced. Its content is re-indexed under the same document ID.`
+                : "PDF, TXT, Markdown, HTML, and DOCX"}
             </p>
           </div>
           <button
@@ -442,7 +502,11 @@ export default function UploadModal({
           tabIndex={dropZoneInteractive ? 0 : undefined}
           aria-label={
             dropZoneInteractive
-              ? "Upload document — drop a file or press Enter to browse"
+              ? isReplacing
+                ? `Replace ${displayName}`
+                : isAdd
+                  ? "Add document — drop a file or press Enter to browse"
+                  : "Upload document — drop a file or press Enter to browse"
               : undefined
           }
           className={dropZoneClassName}
@@ -459,10 +523,10 @@ export default function UploadModal({
               {/* Left — stage list */}
               <div className="w-40 shrink-0">
                 <IngestionPipeline
-                  currentStage={showUploading ? "uploading" : attachment?.stage}
+                  currentStage={showUploading ? "uploading" : effectiveAttachment?.stage}
                   failed={showServerFailed}
-                  chunks={attachment?.chunks}
-                  errorMessage={attachment?.errorMessage}
+                  chunks={effectiveAttachment?.chunks}
+                  errorMessage={effectiveAttachment?.errorMessage}
                   onDisplayedStageChange={(s) => {
                     if (s === "completed") setPipelineVisuallyComplete(true);
                   }}
@@ -508,8 +572,8 @@ export default function UploadModal({
                       <br />
                       Successful
                     </p>
-                    {attachment?.processingTime && (
-                      <p className="text-xs text-muted">Processed in {attachment.processingTime}</p>
+                    {effectiveAttachment?.processingTime && (
+                      <p className="text-xs text-muted">Processed in {effectiveAttachment.processingTime}</p>
                     )}
                   </>
                 ) : (
@@ -543,9 +607,9 @@ export default function UploadModal({
                           strokeWidth={2}
                           aria-hidden
                         />
-                        {attachment?.errorMessage && (
+                        {effectiveAttachment?.errorMessage && (
                           <p className="text-xs text-danger-text/90">
-                            {attachment.errorMessage.slice(0, 80)}
+                            {effectiveAttachment.errorMessage.slice(0, 80)}
                           </p>
                         )}
                       </>
@@ -582,14 +646,20 @@ export default function UploadModal({
           {showPicker && (
             <>
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-background ring-1 ring-border">
-                <Upload className="h-7 w-7 text-muted" strokeWidth={1.5} />
+                {isReplacing ? (
+                  <RefreshCw className="h-7 w-7 text-muted" strokeWidth={1.5} />
+                ) : (
+                  <Upload className="h-7 w-7 text-muted" strokeWidth={1.5} />
+                )}
               </div>
               <p className="max-w-[280px] text-center text-base text-muted">
                 Drop a file here or{" "}
                 <span className="font-medium text-accent-text">browse</span>
               </p>
               <p className="mt-2 text-sm text-subtle">
-                PDF · TXT · Markdown · HTML · DOCX
+                {isReplacing
+                  ? `Choose a new file to replace ${displayName}`
+                  : "PDF · TXT · Markdown · HTML · DOCX"}
               </p>
             </>
           )}

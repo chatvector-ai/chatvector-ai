@@ -19,16 +19,19 @@ type Props = {
   streaming: boolean;
   attachment: AttachmentState | null;
   sessionNotice?: string | null;
+  addedDocumentNotice?: string | null;
   removeError: string | null;
   poll: ReturnType<typeof useDocumentPolling>;
   handleSend: () => void;
   handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   handleRemoveAttachment: () => void;
+  onReplaceAttachment?: () => void;
   onUploadClick: () => void;
   uploadButtonRef?: RefObject<HTMLButtonElement | null>;
   stopStreaming: () => void;
   scopeIndicator?: ScopeIndicatorKind;
   metadataFilterSummary?: string | null;
+  isAdd?: boolean;
 };
 
 export default function ChatInput({
@@ -39,21 +42,29 @@ export default function ChatInput({
   streaming,
   attachment,
   sessionNotice,
+  addedDocumentNotice,
   removeError,
   poll,
   handleSend,
   handleKeyDown,
   handleRemoveAttachment,
+  onReplaceAttachment,
   onUploadClick,
   uploadButtonRef,
   stopStreaming,
   scopeIndicator = { kind: "default-session" },
   metadataFilterSummary = null,
+  isAdd,
 }: Props) {
+  const isAddUpload = isAdd ?? Boolean(attachment);
+  const uploadButtonLabel = isAddUpload ? "Add document" : "Upload document";
+  const handleReplace = onReplaceAttachment ?? onUploadClick;
   const scopeMessage = (() => {
     switch (scopeIndicator.kind) {
       case "tenant":
-        return "Tenant scope: searches the tenant's ready documents (can include documents other than the attached chip).";
+        return scopeIndicator.hasFilter || metadataFilterSummary
+          ? "Tenant scope: searches the tenant's ready documents (does not require the active document to match)."
+          : "Tenant scope: searches the tenant's ready documents (can include documents other than the attached chip).";
       case "preset":
         return "Scope follows the selected preset until you set scope explicitly.";
       case "session":
@@ -99,6 +110,9 @@ export default function ChatInput({
             }
             processingTime={poll.processingTime}
             metadata={attachment.metadata}
+            onReplace={
+              attachment.status !== "processing" ? handleReplace : undefined
+            }
             onRemove={() => void handleRemoveAttachment()}
           />
         </div>
@@ -115,6 +129,14 @@ export default function ChatInput({
           </>
         ) : null}
       </p>
+      {addedDocumentNotice && (
+        <p
+          data-testid="composer-added-document-notice"
+          className="px-4 pb-1 text-xs text-muted bg-background"
+        >
+          {addedDocumentNotice}
+        </p>
+      )}
       {attachment?.status === "processing" && (
         <p className="px-4 pb-1 text-xs text-amber-400 bg-background">
           Document still processing — sending is disabled until it is ready.
@@ -138,6 +160,7 @@ export default function ChatInput({
             ref={uploadButtonRef}
             onClick={onUploadClick}
             disabled={attachment?.status === "processing"}
+            label={uploadButtonLabel}
           />
           <textarea
             ref={textareaRef}

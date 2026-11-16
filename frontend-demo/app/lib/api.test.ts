@@ -7,6 +7,7 @@ import {
   sendConfigurationCompareBatchMessage,
   sendSynthesizedBatchMessage,
   fetchRetrievalDiscovery,
+  parseRetrievalDiscoveryDefaults,
   ChatError,
   StreamingDisabledError,
   getDocumentStatus,
@@ -85,6 +86,72 @@ describe("fetchRetrievalDiscovery", () => {
     });
   });
 
+  it("parses defaults object when present in discovery response", async () => {
+    const defaults = {
+      scope: "session",
+      match_count: 5,
+      history_aware_retrieval: true,
+      retrieval_history_window: 6,
+      generation_history_window: 10,
+      hybrid_enabled: false,
+      reranking_enabled: false,
+      reranker_provider: "similarity",
+      query_transformation_enabled: false,
+      query_transformation_strategy: "rewrite",
+      max_context_chars: 8000,
+    };
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          preset_names: ["eval_hybrid"],
+          reranker_providers: ["similarity"],
+          defaults,
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(fetchRetrievalDiscovery()).resolves.toEqual({
+      presets: ["eval_hybrid"],
+      reranker_providers: ["similarity"],
+      defaults,
+    });
+  });
+
+  it("tolerates absence of defaults (older backend)", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          preset_names: ["eval_hybrid"],
+          reranker_providers: ["similarity"],
+        }),
+        { status: 200 }
+      )
+    );
+
+    const result = await fetchRetrievalDiscovery();
+    expect(result.presets).toEqual(["eval_hybrid"]);
+    expect(result.reranker_providers).toEqual(["similarity"]);
+    expect(result.defaults).toBeUndefined();
+  });
+
+  it("tolerates malformed defaults (non-object or empty)", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          preset_names: ["eval_hybrid"],
+          reranker_providers: ["similarity"],
+          defaults: "invalid",
+        }),
+        { status: 200 }
+      )
+    );
+
+    const result = await fetchRetrievalDiscovery();
+    expect(result.presets).toEqual(["eval_hybrid"]);
+    expect(result.defaults).toBeUndefined();
+  });
+
   it("falls back when the request fails", async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(null, { status: 503 })
@@ -93,6 +160,45 @@ describe("fetchRetrievalDiscovery", () => {
     await expect(fetchRetrievalDiscovery()).resolves.toEqual({
       presets: [],
       reranker_providers: ["similarity"],
+    });
+  });
+});
+
+describe("parseRetrievalDiscoveryDefaults", () => {
+  it("returns parsed fields when valid object with properties is passed", () => {
+    const raw = {
+      scope: "session",
+      match_count: 5,
+      history_aware_retrieval: true,
+      retrieval_history_window: 4,
+      generation_history_window: 8,
+      hybrid_enabled: true,
+      reranking_enabled: false,
+      reranker_provider: "similarity",
+      query_transformation_enabled: false,
+      query_transformation_strategy: "rewrite",
+      max_context_chars: 16000,
+    };
+    expect(parseRetrievalDiscoveryDefaults(raw)).toEqual(raw);
+  });
+
+  it("returns undefined for absent, null, primitive, or array input", () => {
+    expect(parseRetrievalDiscoveryDefaults(undefined)).toBeUndefined();
+    expect(parseRetrievalDiscoveryDefaults(null)).toBeUndefined();
+    expect(parseRetrievalDiscoveryDefaults("string")).toBeUndefined();
+    expect(parseRetrievalDiscoveryDefaults(123)).toBeUndefined();
+    expect(parseRetrievalDiscoveryDefaults([1, 2, 3])).toBeUndefined();
+    expect(parseRetrievalDiscoveryDefaults({})).toBeUndefined();
+  });
+
+  it("filters out invalid property types while retaining valid ones", () => {
+    const raw = {
+      history_aware_retrieval: "not a boolean",
+      retrieval_history_window: 3,
+      generation_history_window: "not a number",
+    };
+    expect(parseRetrievalDiscoveryDefaults(raw)).toEqual({
+      retrieval_history_window: 3,
     });
   });
 });

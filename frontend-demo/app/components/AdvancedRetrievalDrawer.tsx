@@ -23,7 +23,9 @@ import {
   type MetadataCorpusDocument,
 } from "../lib/metadataCorpus";
 import type { DocumentScalarMetadata } from "../lib/documentMetadata";
+import type { RetrievalDiscoveryDefaults } from "../lib/api";
 import { InfoPopover } from "./ui/InfoPopover";
+import { SegmentedControl } from "./ui/SegmentedControl";
 
 type Props = {
   open: boolean;
@@ -36,7 +38,7 @@ type Props = {
   onRerankerProviderChange: (provider: RerankerProvider) => void;
   onQueryTransformationEnabledChange: (enabled: boolean) => void;
   onQueryTransformationStrategyChange: (strategy: QueryTransformationStrategy) => void;
-  onHistoryAwareRetrievalChange: (enabled: boolean) => void;
+  onHistoryAwareRetrievalChange: (value: boolean | undefined) => void;
   onRetrievalHistoryWindowChange: (value: number) => void;
   onGenerationHistoryWindowChange: (value: number) => void;
   onMetadataFilterChange: (filter: DocumentScalarMetadata | undefined) => void;
@@ -47,6 +49,7 @@ type Props = {
   activeDocumentFileName?: string;
   inspectMode?: boolean;
   onInspectModeChange?: (enabled: boolean) => void;
+  defaults?: RetrievalDiscoveryDefaults;
 };
 
 const TRANSFORM_STRATEGIES: { value: QueryTransformationStrategy; label: string }[] = [
@@ -87,7 +90,14 @@ export default function AdvancedRetrievalDrawer({
   activeDocumentFileName,
   inspectMode = false,
   onInspectModeChange,
+  defaults,
 }: Props) {
+  const defaultHistoryLabel =
+    defaults?.history_aware_retrieval === true
+      ? "Default · On"
+      : defaults?.history_aware_retrieval === false
+        ? "Default · Off"
+        : "Default";
   const activeDocumentName = activeDocumentFileName?.trim();
   const panelRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLButtonElement>(null);
@@ -276,12 +286,13 @@ export default function AdvancedRetrievalDrawer({
                   <p className="font-medium text-foreground">Metadata filter</p>
                   <InfoPopover label="Metadata filter help">
                     Exact match on document metadata keys present in your
-                    current documents. Under session scope, the filter applies
-                    only to the active document
+                    current documents. Under session scope, the filter can only
+                    narrow the active document
                     {activeDocumentName
                       ? ` (${activeDocumentName})`
                       : null}
-                    ; if it does not match, the question returns an error.
+                    ; to filter across the library, use tenant scope.
+                    If it does not match, the question returns an error.
                     Omitting a filter leaves retrieval unchanged.
                   </InfoPopover>
                 </div>
@@ -625,25 +636,40 @@ export default function AdvancedRetrievalDrawer({
 
               <section className="space-y-3">
                 <div>
+                  <span className="mb-1 block font-medium text-foreground">
+                    History-aware retrieval
+                  </span>
                   <p
-                    className="mb-1 text-muted"
+                    className="mb-2 text-muted"
                     data-testid="history-aware-inherit-label"
                   >
                     {inheritSourceLabel(historyAwareInherit)}
                   </p>
-                  <label className="flex cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={state.explicit.historyAwareRetrieval === true}
-                      onChange={(e) =>
-                        onHistoryAwareRetrievalChange(e.target.checked)
+                  <SegmentedControl
+                    name="history-aware-retrieval"
+                    ariaLabel="History-aware retrieval"
+                    value={
+                      state.explicit.historyAwareRetrieval === true
+                        ? "on"
+                        : state.explicit.historyAwareRetrieval === false
+                          ? "off"
+                          : "default"
+                    }
+                    onChange={(val) => {
+                      if (val === "on") {
+                        onHistoryAwareRetrievalChange(true);
+                      } else if (val === "off") {
+                        onHistoryAwareRetrievalChange(false);
+                      } else {
+                        onHistoryAwareRetrievalChange(undefined);
                       }
-                      className="h-3.5 w-3.5 accent-[color:var(--accent)]"
-                    />
-                    <span className="font-medium text-foreground">
-                      History-aware retrieval
-                    </span>
-                  </label>
+                    }}
+                    options={[
+                      { value: "default", label: defaultHistoryLabel },
+                      { value: "on", label: "On" },
+                      { value: "off", label: "Off" },
+                    ]}
+                  />
                 </div>
                 <div>
                   <span className="mb-1 block font-medium text-foreground">
@@ -660,16 +686,23 @@ export default function AdvancedRetrievalDrawer({
                           )
                         )}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRetrievalWindowDraft(null);
-                          setRetrievalWindowEditorOpen(true);
-                        }}
-                        className="text-accent hover:underline"
-                      >
-                        Set retrieval history window
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {defaults?.retrieval_history_window !== undefined ? (
+                          <span className="text-muted">
+                            Default: {defaults.retrieval_history_window}
+                          </span>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRetrievalWindowDraft(null);
+                            setRetrievalWindowEditorOpen(true);
+                          }}
+                          className="text-accent hover:underline"
+                        >
+                          Set retrieval history window
+                        </button>
+                      </div>
                     </>
                   ) : (
                     <input
@@ -707,16 +740,23 @@ export default function AdvancedRetrievalDrawer({
                           )
                         )}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setGenerationWindowDraft(null);
-                          setGenerationWindowEditorOpen(true);
-                        }}
-                        className="text-accent hover:underline"
-                      >
-                        Set generation history window
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {defaults?.generation_history_window !== undefined ? (
+                          <span className="text-muted">
+                            Default: {defaults.generation_history_window}
+                          </span>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGenerationWindowDraft(null);
+                            setGenerationWindowEditorOpen(true);
+                          }}
+                          className="text-accent hover:underline"
+                        >
+                          Set generation history window
+                        </button>
+                      </div>
                     </>
                   ) : (
                     <input

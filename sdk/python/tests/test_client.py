@@ -901,6 +901,44 @@ class ChatVectorClientTests(unittest.TestCase):
         self.assertEqual(result.preset_names, ["eval_hybrid"])
         self.assertEqual(result.reranker_providers, ["similarity", "cohere"])
 
+    def test_list_retrieval_presets_preserves_defaults_in_raw_only(self) -> None:
+        payload = {
+            "preset_names": ["eval_hybrid"],
+            "reranker_providers": ["similarity"],
+            "defaults": {
+                "scope": "session",
+                "match_count": 5,
+                "history_aware_retrieval": True,
+                "retrieval_history_window": 6,
+                "generation_history_window": 10,
+                "hybrid_enabled": False,
+                "reranking_enabled": False,
+                "reranker_provider": "similarity",
+                "query_transformation_enabled": False,
+                "query_transformation_strategy": "rewrite",
+                "max_context_chars": 8000,
+            },
+        }
+        response = make_response(
+            200,
+            url="https://api.chatvector.test/retrieval/presets",
+            json_data=payload,
+        )
+
+        with patch.object(self.client._client, "request", return_value=response):
+            result = self.client.list_retrieval_presets()
+
+        self.assertEqual(result.preset_names, ["eval_hybrid"])
+        self.assertEqual(result.reranker_providers, ["similarity"])
+        self.assertEqual(result.raw["defaults"], payload["defaults"])
+        self.assertEqual(
+            result.to_dict(),
+            {
+                "preset_names": ["eval_hybrid"],
+                "reranker_providers": ["similarity"],
+            },
+        )
+
     def test_delete_document_sends_delete_request(self) -> None:
         response = make_response(
             204,

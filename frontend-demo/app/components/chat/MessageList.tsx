@@ -14,6 +14,7 @@ type Props = {
   historyLoading?: boolean;
   sessionId?: string | null;
   bottomRef: RefObject<HTMLDivElement | null>;
+  documentMap?: Record<string, string>;
 };
 
 function canRate(msg: Message): msg is Message & { messageId: string } {
@@ -56,6 +57,7 @@ export default function MessageList({
   historyLoading = false,
   sessionId = null,
   bottomRef,
+  documentMap,
 }: Props) {
   const [animatingId, setAnimatingId] = useState<number | null>(null);
   const [displayedText, setDisplayedText] = useState("");
@@ -172,6 +174,7 @@ export default function MessageList({
                     retrievalDebug={msg.retrieval_debug}
                     detailsVisible={detailsVisible}
                     isStreaming={isRealStreaming}
+                    documentMap={documentMap}
                   />
                   {canRate(msg) && detailsVisible ? (
                     <AnswerFeedback

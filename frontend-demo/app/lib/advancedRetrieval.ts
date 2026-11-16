@@ -60,7 +60,7 @@ export function selectedPresetName(
 
 export type ScopeIndicatorKind =
   | { kind: "session"; fileName?: string }
-  | { kind: "tenant" }
+  | { kind: "tenant"; hasFilter?: boolean }
   | { kind: "preset" }
   | { kind: "default-session"; fileName?: string };
 
@@ -70,7 +70,7 @@ export function resolveScopeIndicator(
   attachmentFileName?: string | null
 ): ScopeIndicatorKind {
   if (state.explicit.scope === "tenant") {
-    return { kind: "tenant" };
+    return { kind: "tenant", hasFilter: hasActiveMetadataFilter(state) };
   }
   if (state.explicit.scope === "session") {
     return { kind: "session", fileName: attachmentFileName ?? undefined };

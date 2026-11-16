@@ -238,6 +238,9 @@ export default function BatchPage() {
 
   const renderMode = activeRequest?.mode ?? mode;
   const renderDocIds = activeRequest?.docIds ?? selectedDocIds;
+  const replaceFileName = replaceDocumentId
+    ? documents.find((d) => d.document_id === replaceDocumentId)?.file_name ?? null
+    : null;
 
   return (
     <div
@@ -248,6 +251,7 @@ export default function BatchPage() {
         <UploadModal
           sessionId={getSessionId()}
           replaceDocumentId={replaceDocumentId}
+          replaceFileName={replaceFileName}
           onClose={() => {
             setShowUploadModal(false);
             setReplaceDocumentId(null);
@@ -270,7 +274,9 @@ export default function BatchPage() {
         <h1 className="mt-2 text-3xl font-bold">Ask one question across many documents</h1>
         <p className="mt-2 max-w-2xl text-muted">
           Select documents you&apos;ve uploaded in the chat, enter a single
-          question, and choose how ChatVector should answer.
+          question, and choose how ChatVector should answer. Running a batch
+          attaches the selected documents to the current chat session (they then
+          appear in the session list as not searched until made active).
         </p>
       </div>
 
