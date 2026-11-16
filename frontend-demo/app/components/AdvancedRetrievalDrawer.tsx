@@ -23,6 +23,7 @@ import {
   type MetadataCorpusDocument,
 } from "../lib/metadataCorpus";
 import type { DocumentScalarMetadata } from "../lib/documentMetadata";
+import type { RetrievalDiscoveryDefaults } from "../lib/api";
 import { InfoPopover } from "./ui/InfoPopover";
 import { SegmentedControl } from "./ui/SegmentedControl";
 
@@ -48,6 +49,7 @@ type Props = {
   activeDocumentFileName?: string;
   inspectMode?: boolean;
   onInspectModeChange?: (enabled: boolean) => void;
+  defaults?: RetrievalDiscoveryDefaults;
 };
 
 const TRANSFORM_STRATEGIES: { value: QueryTransformationStrategy; label: string }[] = [
@@ -88,7 +90,14 @@ export default function AdvancedRetrievalDrawer({
   activeDocumentFileName,
   inspectMode = false,
   onInspectModeChange,
+  defaults,
 }: Props) {
+  const defaultHistoryLabel =
+    defaults?.history_aware_retrieval === true
+      ? "Default · On"
+      : defaults?.history_aware_retrieval === false
+        ? "Default · Off"
+        : "Default";
   const activeDocumentName = activeDocumentFileName?.trim();
   const panelRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLButtonElement>(null);
@@ -656,7 +665,7 @@ export default function AdvancedRetrievalDrawer({
                       }
                     }}
                     options={[
-                      { value: "default", label: "Default" },
+                      { value: "default", label: defaultHistoryLabel },
                       { value: "on", label: "On" },
                       { value: "off", label: "Off" },
                     ]}
@@ -677,16 +686,23 @@ export default function AdvancedRetrievalDrawer({
                           )
                         )}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRetrievalWindowDraft(null);
-                          setRetrievalWindowEditorOpen(true);
-                        }}
-                        className="text-accent hover:underline"
-                      >
-                        Set retrieval history window
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {defaults?.retrieval_history_window !== undefined ? (
+                          <span className="text-muted">
+                            Default: {defaults.retrieval_history_window}
+                          </span>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRetrievalWindowDraft(null);
+                            setRetrievalWindowEditorOpen(true);
+                          }}
+                          className="text-accent hover:underline"
+                        >
+                          Set retrieval history window
+                        </button>
+                      </div>
                     </>
                   ) : (
                     <input
@@ -724,16 +740,23 @@ export default function AdvancedRetrievalDrawer({
                           )
                         )}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setGenerationWindowDraft(null);
-                          setGenerationWindowEditorOpen(true);
-                        }}
-                        className="text-accent hover:underline"
-                      >
-                        Set generation history window
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {defaults?.generation_history_window !== undefined ? (
+                          <span className="text-muted">
+                            Default: {defaults.generation_history_window}
+                          </span>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGenerationWindowDraft(null);
+                            setGenerationWindowEditorOpen(true);
+                          }}
+                          className="text-accent hover:underline"
+                        >
+                          Set generation history window
+                        </button>
+                      </div>
                     </>
                   ) : (
                     <input

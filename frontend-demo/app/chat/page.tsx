@@ -432,6 +432,7 @@ export default function ChatPage() {
               metadataCorpus={metadataCorpus}
               availablePresets={discovery.presets}
               availableRerankerProviders={discovery.reranker_providers}
+              defaults={discovery.defaults}
               inspectMode={inspectMode}
               onInspectModeChange={setInspectMode}
             />
