@@ -354,9 +354,10 @@ with ChatVectorClient("http://localhost:8000", api_key="cv_live_...") as client:
         session_id=session.id,
         scope="session",
     )
-    print(answer.answer, answer.latency_ms, answer.model)
-    for source in answer.sources:
-        print(source.file_name, source.page_number, source.score, source.score_type)
+    if answer.status == "ok":
+        print(answer.answer, answer.latency_ms, answer.model)
+        for source in answer.sources:
+            print(source.file_name, source.page_number, source.score, source.score_type)
 
     for event in client.stream_chat("Summarize in one paragraph.", doc.document_id, session_id=session.id):
         if event.type == "token":
@@ -395,7 +396,9 @@ const answer = await client.chat({
   sessionId: session.id,
   scope: "session",
 });
-console.log(answer.answer);
+if (answer.status === "ok") {
+  console.log(answer.answer);
+}
 ```
 
 See [sdk/typescript/README.md](sdk/typescript/README.md) for streaming chat,
