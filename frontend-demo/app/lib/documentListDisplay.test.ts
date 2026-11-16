@@ -35,11 +35,12 @@ describe("documentFailureDetail", () => {
 });
 
 describe("isDocumentInActiveScope", () => {
-  it("marks only the selected id in session scope", () => {
+  it("marks active row as active-searched and others as not-searched in multi-document session scope", () => {
     const base = {
       scope: "session" as const,
       scopeIsExplicit: true,
       selectedDocumentId: "doc-a",
+      hasMultipleDocuments: true,
     };
     expect(
       isDocumentInActiveScope({
@@ -47,7 +48,30 @@ describe("isDocumentInActiveScope", () => {
         documentId: "doc-a",
         status: "completed",
       })
-    ).toBe(true);
+    ).toBe("active-searched");
+    expect(
+      isDocumentInActiveScope({
+        ...base,
+        documentId: "doc-b",
+        status: "completed",
+      })
+    ).toBe("not-searched");
+  });
+
+  it("marks active document as in-scope and non-active as false in single-document session scope", () => {
+    const base = {
+      scope: "session" as const,
+      scopeIsExplicit: true,
+      selectedDocumentId: "doc-a",
+      hasMultipleDocuments: false,
+    };
+    expect(
+      isDocumentInActiveScope({
+        ...base,
+        documentId: "doc-a",
+        status: "completed",
+      })
+    ).toBe("in-scope");
     expect(
       isDocumentInActiveScope({
         ...base,

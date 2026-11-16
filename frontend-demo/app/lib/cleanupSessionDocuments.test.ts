@@ -8,16 +8,18 @@ vi.mock("./api", () => ({
 
 vi.mock("./documentStore", () => ({
   removeUploadedDocument: vi.fn(),
+  clearStoredActiveDocumentId: vi.fn(),
 }));
 
 import { deleteDocument, getSession } from "./api";
-import { removeUploadedDocument } from "./documentStore";
+import { removeUploadedDocument, clearStoredActiveDocumentId } from "./documentStore";
 
 describe("cleanupSessionDocuments", () => {
   beforeEach(() => {
     vi.mocked(getSession).mockReset();
     vi.mocked(deleteDocument).mockReset();
     vi.mocked(removeUploadedDocument).mockReset();
+    vi.mocked(clearStoredActiveDocumentId).mockReset();
   });
 
   it("deletes bound documents and removes them from local storage", async () => {
@@ -33,6 +35,7 @@ describe("cleanupSessionDocuments", () => {
 
     await cleanupSessionDocuments("session-1");
 
+    expect(clearStoredActiveDocumentId).toHaveBeenCalledWith("session-1");
     expect(deleteDocument).toHaveBeenCalledWith("doc-a");
     expect(deleteDocument).toHaveBeenCalledWith("doc-b");
     expect(removeUploadedDocument).toHaveBeenCalledWith("doc-a");
