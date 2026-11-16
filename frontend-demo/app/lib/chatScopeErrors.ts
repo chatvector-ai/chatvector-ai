@@ -16,7 +16,8 @@ export function mapChatTurnError(
     code: error.code,
     message:
       `The active document (${name}) does not match the metadata filter. ` +
-      "Under session scope, the filter can only apply within that document. " +
+      "Under session scope, the filter can only narrow the active document; " +
+      "to filter across the library, use tenant scope. " +
       "Clear or change the filter in Advanced retrieval and try again.",
   };
 }
