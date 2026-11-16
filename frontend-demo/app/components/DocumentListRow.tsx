@@ -13,6 +13,8 @@ type Props = {
   failureDetail: string | null;
   metadata?: DocumentScalarMetadata;
   inActiveScope?: ActiveScopeMembership;
+  isActive?: boolean;
+  onMakeActive?: () => void;
   onReplace?: () => void;
   onDelete?: () => void;
   disabled?: boolean;
@@ -28,13 +30,17 @@ export default function DocumentListRow({
   failureDetail,
   metadata,
   inActiveScope,
+  isActive: _isActive,
+  onMakeActive,
   onReplace,
   onDelete,
   disabled = false,
   leading,
   unavailable = false,
 }: Props) {
-  const showActions = onReplace != null || onDelete != null;
+  const isReady = status === "completed" || status === "ready";
+  const showActions =
+    onMakeActive != null || onReplace != null || onDelete != null;
 
   return (
     <div
@@ -57,7 +63,23 @@ export default function DocumentListRow({
             <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
               {unavailable ? "missing" : status}
             </span>
-            {inActiveScope === true && (
+            {inActiveScope === "active-searched" && (
+              <span
+                className="shrink-0 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-accent-text"
+                data-testid="document-active-searched"
+              >
+                Active · searched
+              </span>
+            )}
+            {inActiveScope === "not-searched" && (
+              <span
+                className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted"
+                data-testid="document-not-searched"
+              >
+                Not searched
+              </span>
+            )}
+            {(inActiveScope === true || inActiveScope === "in-scope") && (
               <span
                 className="shrink-0 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-accent-text"
                 data-testid="document-in-active-scope"
@@ -96,6 +118,18 @@ export default function DocumentListRow({
         </div>
         {showActions && !unavailable && (
           <div className="flex shrink-0 items-center gap-1">
+            {onMakeActive && (
+              <button
+                type="button"
+                disabled={disabled || !isReady}
+                onClick={onMakeActive}
+                className="rounded-md border border-border px-2 py-1 text-xs font-medium text-muted transition hover:bg-background hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={`Make ${fileName} active`}
+                title="Make active"
+              >
+                Make active
+              </button>
+            )}
             {onReplace && (
               <button
                 type="button"

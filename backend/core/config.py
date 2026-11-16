@@ -169,6 +169,9 @@ class Settings:
     ).lower() in ("1", "true", "yes")
     QUERY_TRANSFORMATION_STRATEGY: str = _get_query_transformation_strategy()
     RETRIEVAL_MAX_CONCURRENCY: int = max(1, int(os.getenv("RETRIEVAL_MAX_CONCURRENCY", "8")))
+    RETRIEVAL_DEBUG_MAX_ELIGIBLE_IDS: int = max(
+        1, int(os.getenv("RETRIEVAL_DEBUG_MAX_ELIGIBLE_IDS", "100"))
+    )
     ENABLE_RERANKING: bool = os.getenv("ENABLE_RERANKING", "false").lower() in (
         "1",
         "true",
