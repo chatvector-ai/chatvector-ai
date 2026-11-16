@@ -68,3 +68,58 @@ export function removeUploadedDocument(documentId: string): void {
   if (!documentId) return;
   write(read().filter((d) => d.documentId !== documentId));
 }
+
+const ACTIVE_DOC_STORAGE_PREFIX = "chatvector_active_doc_";
+
+export function getSessionActiveDocumentKey(sessionId: string): string {
+  return `${ACTIVE_DOC_STORAGE_PREFIX}${sessionId}`;
+}
+
+function getSessionStorage(): Storage | undefined {
+  if (typeof window !== "undefined" && window.sessionStorage) {
+    return window.sessionStorage;
+  }
+  if (typeof sessionStorage !== "undefined") {
+    return sessionStorage;
+  }
+  return undefined;
+}
+
+export function getStoredActiveDocumentId(sessionId: string): string | null {
+  if (!sessionId) return null;
+  const storage = getSessionStorage();
+  if (!storage) return null;
+  try {
+    const value = storage.getItem(getSessionActiveDocumentKey(sessionId));
+    return value && value.trim().length > 0 ? value.trim() : null;
+  } catch (e) {
+    console.warn("Failed to read active document from sessionStorage", e);
+    return null;
+  }
+}
+
+export function setStoredActiveDocumentId(sessionId: string, documentId: string): void {
+  if (!sessionId) return;
+  const storage = getSessionStorage();
+  if (!storage) return;
+  try {
+    if (documentId) {
+      storage.setItem(getSessionActiveDocumentKey(sessionId), documentId);
+    } else {
+      storage.removeItem(getSessionActiveDocumentKey(sessionId));
+    }
+  } catch (e) {
+    console.warn("Failed to persist active document to sessionStorage", e);
+  }
+}
+
+export function clearStoredActiveDocumentId(sessionId: string): void {
+  if (!sessionId) return;
+  const storage = getSessionStorage();
+  if (!storage) return;
+  try {
+    storage.removeItem(getSessionActiveDocumentKey(sessionId));
+  } catch (e) {
+    console.warn("Failed to clear active document from sessionStorage", e);
+  }
+}

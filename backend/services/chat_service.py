@@ -228,7 +228,8 @@ async def _resolve_retrieval_doc_ids(
 
 ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE = (
     "The requested document does not match metadata_filter. "
-    "Under session scope, metadata_filter can only narrow the requested document."
+    "Under session scope, metadata_filter can only narrow the requested document; "
+    "to filter across documents, use tenant scope."
 )
 
 
@@ -240,14 +241,17 @@ def _scope_error(
 ) -> dict | None:
     """Structured error when a chat request has no usable scope, else ``None``.
 
-    With a ``metadata_filter`` at least one requested/anchor document must
-    remain in the filtered scope set; the filter never replaces the anchors.
+    Under tenant scope, metadata_filter operates across tenant documents and does
+    not require the anchor/requested documents to survive the filter. Under
+    session scope, at least one requested/anchor document must remain in the
+    filtered scope set; the filter never replaces the anchors.
     """
-    if effective.metadata_filter and not any(doc_id in doc_ids for doc_id in requested_doc_ids):
-        return {
-            "code": "anchor_document_excluded_by_filter",
-            "message": ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE,
-        }
+    if effective.scope != "tenant":
+        if effective.metadata_filter and not any(doc_id in doc_ids for doc_id in requested_doc_ids):
+            return {
+                "code": "anchor_document_excluded_by_filter",
+                "message": ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE,
+            }
     if not doc_ids:
         return {
             "code": "no_documents_in_scope",

@@ -22,6 +22,9 @@ import {
   saveUploadedDocument,
   removeUploadedDocument,
   getUploadedDocument,
+  getStoredActiveDocumentId,
+  setStoredActiveDocumentId,
+  clearStoredActiveDocumentId,
 } from "../documentStore";
 import type { DocumentScalarMetadata } from "../documentMetadata";
 import type { AdvancedRetrievalState } from "../advancedRetrieval";
@@ -192,6 +195,8 @@ export function useChat(
   const [historyLoading, setHistoryLoading] = useState(false);
   const [input, setInput] = useState("");
   const [attachment, setAttachment] = useState<AttachmentState | null>(null);
+  const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
+  const [addedDocumentNotice, setAddedDocumentNotice] = useState<string | null>(null);
   const [sessionNotice, setSessionNotice] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [inflight, setInflight] = useState(false);
@@ -300,6 +305,8 @@ export function useChat(
 
     setInput("");
     setAttachment(null);
+    setActiveDocumentId(null);
+    setAddedDocumentNotice(null);
     setSessionNotice(null);
     setRemoveError(null);
     readyAnnouncedForDocRef.current = null;
@@ -320,6 +327,7 @@ export function useChat(
           await sessionPromise.catch(() => undefined);
           if (historyRequestRef.current !== requestId) return;
           setMessages(welcomeMessages);
+          setActiveDocumentId(null);
           setAttachment(null);
           setSessionNotice(SESSION_HISTORY_FAILED_NOTICE);
           return;
@@ -362,6 +370,7 @@ export function useChat(
           sessionResult = await sessionPromise;
         } catch {
           if (historyRequestRef.current !== requestId) return;
+          setActiveDocumentId(null);
           setAttachment(null);
           setSessionNotice(SESSION_DETAILS_FAILED_NOTICE);
           return;
@@ -369,29 +378,101 @@ export function useChat(
 
         if (historyRequestRef.current !== requestId) return;
 
-        const documentIds = sessionResult.document_ids;
-        if (documentIds.length === 0) return;
-
-        const documentId = documentIds[documentIds.length - 1];
-        try {
-          const restored = await restoreSessionAttachment(documentId);
-          if (historyRequestRef.current !== requestId) return;
-
-          if (restored.attachment) {
-            setAttachment(restored.attachment);
-            setSessionNotice(null);
-            if (restored.replacementError) {
-              setRemoveError(restored.replacementError);
-            }
-          } else if (restored.notice) {
-            setAttachment(null);
-            setSessionNotice(restored.notice);
-          }
-        } catch {
-          // A document-restore failure must not replace a transcript that already loaded.
-          if (historyRequestRef.current !== requestId) return;
+        const documentIds = sessionResult.document_ids ?? [];
+        if (documentIds.length === 0) {
+          setActiveDocumentId(null);
           setAttachment(null);
-          setSessionNotice(DOCUMENT_UNAVAILABLE_NOTICE);
+          if (sessionId) {
+            clearStoredActiveDocumentId(sessionId);
+          }
+          return;
+        }
+
+        const storedId = sessionId ? getStoredActiveDocumentId(sessionId) : null;
+        let chosenId: string | null = null;
+        let chosenRestored: {
+          attachment: AttachmentState | null;
+          notice: string | null;
+          replacementError: string | null;
+        } | null = null;
+
+        // 1. If stored id is in the session, try to restore it.
+        if (storedId && documentIds.includes(storedId)) {
+          try {
+            const restored = await restoreSessionAttachment(storedId);
+            if (historyRequestRef.current !== requestId) return;
+            if (restored.attachment) {
+              chosenId = storedId;
+              chosenRestored = restored;
+            }
+          } catch {
+            if (historyRequestRef.current !== requestId) return;
+          }
+        }
+
+        // 2. If stored id was missing or gone, fall back to the most recently registered ready document.
+        if (!chosenId) {
+          for (let i = documentIds.length - 1; i >= 0; i--) {
+            const candidateId = documentIds[i];
+            if (candidateId === storedId) continue;
+            try {
+              const candidateRestored = await restoreSessionAttachment(candidateId);
+              if (historyRequestRef.current !== requestId) return;
+              if (
+                candidateRestored.attachment &&
+                candidateRestored.attachment.status === "ready"
+              ) {
+                chosenId = candidateId;
+                chosenRestored = candidateRestored;
+                break;
+              }
+            } catch {
+              if (historyRequestRef.current !== requestId) return;
+            }
+          }
+        }
+
+        // 3. If no document was ready (e.g. single document that is processing, failed, or gone),
+        // fall back to the most recently registered document in the session.
+        if (!chosenId) {
+          const fallbackId = documentIds[documentIds.length - 1];
+          try {
+            const fallbackRestored = await restoreSessionAttachment(fallbackId);
+            if (historyRequestRef.current !== requestId) return;
+            chosenId = fallbackId;
+            chosenRestored = fallbackRestored;
+          } catch {
+            // A document-restore failure must not replace a transcript that already loaded.
+            if (historyRequestRef.current !== requestId) return;
+            setActiveDocumentId(null);
+            if (sessionId) {
+              clearStoredActiveDocumentId(sessionId);
+            }
+            setAttachment(null);
+            setSessionNotice(DOCUMENT_UNAVAILABLE_NOTICE);
+            return;
+          }
+        }
+
+        if (chosenRestored) {
+          if (chosenRestored.attachment) {
+            setActiveDocumentId(chosenId);
+            if (sessionId && chosenId) {
+              setStoredActiveDocumentId(sessionId, chosenId);
+            }
+            setAttachment(chosenRestored.attachment);
+            setSessionNotice(null);
+            if (chosenRestored.replacementError) {
+              setRemoveError(chosenRestored.replacementError);
+            }
+          } else if (chosenRestored.notice) {
+            setActiveDocumentId(null);
+            if (sessionId) {
+              clearStoredActiveDocumentId(sessionId);
+            }
+            setAttachment(null);
+            setSessionNotice(chosenRestored.notice);
+          }
         }
       } finally {
         if (historyRequestRef.current === requestId) {
@@ -477,6 +558,10 @@ export function useChat(
         documentId: previous.documentId,
         fileName,
       });
+      setActiveDocumentId(previous.documentId);
+      if (sessionId) {
+        setStoredActiveDocumentId(sessionId, previous.documentId);
+      }
       setAttachment(
         previous.status === "ready"
           ? { ...previous, fileName }
@@ -494,6 +579,10 @@ export function useChat(
     ) {
       const fileName = statusName || attachment.fileName;
       saveUploadedDocument({ documentId: docId, fileName });
+      setActiveDocumentId(docId);
+      if (sessionId) {
+        setStoredActiveDocumentId(sessionId, docId);
+      }
       setAttachment((curr) =>
         curr?.documentId === docId
           ? { ...curr, fileName, status: "ready", stage: "completed" }
@@ -675,7 +764,7 @@ export function useChat(
 
     setInput("");
 
-    if (attachment === null) {
+    if (attachment === null || activeDocumentId === null) {
       const base = Date.now();
       setMessages((prev) => [
         ...prev,
@@ -729,10 +818,11 @@ export function useChat(
       }
     }
 
+    const activeDocId = activeDocumentId ?? attachment.documentId;
     const base = Date.now();
     setMessages((prev) => [
       ...prev,
-      { id: base, sender: "user", text, document_id: attachment.documentId },
+      { id: base, sender: "user", text, document_id: activeDocId },
     ]);
     setInflight(true);
 
@@ -758,7 +848,7 @@ export function useChat(
       try {
         const generator = sendMessageStream(
           text,
-          attachment.documentId,
+          activeDocId,
           chatOptions,
           controller.signal,
         );
@@ -772,7 +862,7 @@ export function useChat(
 
           setMessages((prev) => prev.filter((m) => m.id !== aiMsgId));
 
-          const response = await sendMessage(text, attachment.documentId, chatOptions);
+          const response = await sendMessage(text, activeDocId, chatOptions);
           if (chatEpochRef.current !== epoch) return;
 
           setMessages((prev) => [
@@ -849,8 +939,27 @@ export function useChat(
     statusEndpoint: string;
     queuePosition?: number;
     metadata?: DocumentScalarMetadata;
+    isAdd?: boolean;
   }) => {
     const fileName = payload.fileName.trim();
+    saveUploadedDocument({
+      documentId: payload.documentId,
+      fileName: payload.fileName,
+    });
+
+    if (payload.isAdd) {
+      const activeName =
+        attachment?.fileName ||
+        (activeDocumentId
+          ? getUploadedDocument(activeDocumentId)?.fileName
+          : undefined) ||
+        "active document";
+      setAddedDocumentNotice(`${fileName} added. Searching ${activeName}.`);
+      setRemoveError(null);
+      return;
+    }
+
+    setAddedDocumentNotice(null);
     if (sessionId && fileName && !questionLockedRef.current) {
       if (!historyReadyRef.current) {
         pendingFileRef.current = fileName;
@@ -869,10 +978,10 @@ export function useChat(
     }
     setRemoveError(null);
     setSessionNotice(null);
-    saveUploadedDocument({
-      documentId: payload.documentId,
-      fileName: payload.fileName,
-    });
+    setActiveDocumentId(payload.documentId);
+    if (sessionId) {
+      setStoredActiveDocumentId(sessionId, payload.documentId);
+    }
     setAttachment({
       fileName: payload.fileName,
       documentId: payload.documentId,
@@ -886,12 +995,54 @@ export function useChat(
   const handleRemoveAttachment = async () => {
     if (!attachment) return;
     setRemoveError(null);
+    setAddedDocumentNotice(null);
     try {
       const out = await deleteDocument(attachment.documentId);
       if (out.status === "gone") {
         previousAttachmentRef.current = null;
         removeUploadedDocument(attachment.documentId);
-        setAttachment(null);
+        const deletedId = attachment.documentId;
+
+        let remainingReadyDoc: AttachmentState | null = null;
+        let remainingReadyId: string | null = null;
+
+        if (sessionId) {
+          try {
+            const session = await getSession(sessionId);
+            const remainingIds = (session.document_ids ?? []).filter(
+              (id) => id !== deletedId
+            );
+            for (let i = remainingIds.length - 1; i >= 0; i--) {
+              const candidateId = remainingIds[i];
+              try {
+                const restored = await restoreSessionAttachment(candidateId);
+                if (restored.attachment && restored.attachment.status === "ready") {
+                  remainingReadyDoc = restored.attachment;
+                  remainingReadyId = candidateId;
+                  break;
+                }
+              } catch {
+                // Ignore errors checking candidate
+              }
+            }
+          } catch {
+            // Ignore error getting session
+          }
+        }
+
+        if (remainingReadyDoc && remainingReadyId) {
+          setActiveDocumentId(remainingReadyId);
+          if (sessionId) {
+            setStoredActiveDocumentId(sessionId, remainingReadyId);
+          }
+          setAttachment(remainingReadyDoc);
+        } else {
+          setActiveDocumentId(null);
+          if (sessionId) {
+            clearStoredActiveDocumentId(sessionId);
+          }
+          setAttachment(null);
+        }
         return;
       }
       if (out.status === "conflict") {
@@ -904,6 +1055,50 @@ export function useChat(
     }
   };
 
+  const selectActiveDocument = useCallback(
+    async (
+      documentId: string,
+      fallbackFileName?: string,
+      fallbackMetadata?: DocumentScalarMetadata
+    ) => {
+      if (!documentId) return;
+      setActiveDocumentId(documentId);
+      if (sessionId) {
+        setStoredActiveDocumentId(sessionId, documentId);
+      }
+      setRemoveError(null);
+      setAddedDocumentNotice(null);
+      setAttachment((curr) => {
+        const fileName =
+          fallbackFileName ||
+          (curr?.documentId === documentId ? curr.fileName : undefined) ||
+          getUploadedDocument(documentId)?.fileName ||
+          `Document ${documentId.slice(0, 8)}`;
+        return {
+          documentId,
+          fileName,
+          statusEndpoint: documentStatusEndpoint(documentId),
+          status: "ready",
+          ...(fallbackMetadata ? { metadata: fallbackMetadata } : {}),
+        };
+      });
+
+      try {
+        const restored = await restoreSessionAttachment(documentId);
+        if (restored.attachment) {
+          setAttachment(restored.attachment);
+          setSessionNotice(null);
+          if (restored.replacementError) {
+            setRemoveError(restored.replacementError);
+          }
+        }
+      } catch {
+        // Keep optimistic ready attachment
+      }
+    },
+    [sessionId]
+  );
+
   const sendDisabled =
     inflight || !input.trim() || attachment?.status === "processing";
 
@@ -915,6 +1110,8 @@ export function useChat(
     inflight,
     streaming,
     attachment,
+    activeDocumentId,
+    addedDocumentNotice,
     sessionNotice,
     removeError,
     sendDisabled,
@@ -924,6 +1121,7 @@ export function useChat(
     handleKeyDown,
     handleUploadAccepted,
     handleRemoveAttachment,
+    selectActiveDocument,
     stopStreaming,
   };
 }

@@ -238,6 +238,9 @@ export default function BatchPage() {
 
   const renderMode = activeRequest?.mode ?? mode;
   const renderDocIds = activeRequest?.docIds ?? selectedDocIds;
+  const replaceFileName = replaceDocumentId
+    ? documents.find((d) => d.document_id === replaceDocumentId)?.file_name ?? null
+    : null;
 
   return (
     <div
@@ -248,6 +251,7 @@ export default function BatchPage() {
         <UploadModal
           sessionId={getSessionId()}
           replaceDocumentId={replaceDocumentId}
+          replaceFileName={replaceFileName}
           onClose={() => {
             setShowUploadModal(false);
             setReplaceDocumentId(null);
