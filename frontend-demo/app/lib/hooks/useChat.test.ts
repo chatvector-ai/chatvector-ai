@@ -48,10 +48,24 @@ vi.mock("./useDocumentPolling", () => ({
   useDocumentPolling: () => mockPoll,
 }));
 
+const mockActiveDocStore = new Map<string, string>();
+
 vi.mock("../documentStore", () => ({
   saveUploadedDocument: vi.fn(),
   removeUploadedDocument: vi.fn(),
   getUploadedDocument: (...args: unknown[]) => mockGetUploadedDocument(...args),
+  getSessionActiveDocumentKey: (sessionId: string) => `chatvector_active_doc_${sessionId}`,
+  getStoredActiveDocumentId: vi.fn((sessionId: string) => mockActiveDocStore.get(sessionId) ?? null),
+  setStoredActiveDocumentId: vi.fn((sessionId: string, docId: string) => {
+    if (docId) {
+      mockActiveDocStore.set(sessionId, docId);
+    } else {
+      mockActiveDocStore.delete(sessionId);
+    }
+  }),
+  clearStoredActiveDocumentId: vi.fn((sessionId: string) => {
+    mockActiveDocStore.delete(sessionId);
+  }),
 }));
 
 const WELCOME_TEXT =
@@ -79,6 +93,7 @@ function sessionPayload(sessionId: string, documentIds: string[] = []) {
 
 describe("useChat", () => {
   beforeEach(() => {
+    mockActiveDocStore.clear();
     mockSendMessageStream.mockReset();
     mockSendMessage.mockReset();
     mockGetSessionHistory.mockResolvedValue({ messages: [] });
@@ -1770,5 +1785,350 @@ describe("useChat", () => {
       status: "ready",
     });
     expect(result.current.removeError).toBe("Embedding provider exploded");
+  });
+
+  describe("explicit activeDocumentId state (#705)", () => {
+    it("activates the first session document automatically and sends its doc_id", async () => {
+      mockGetSession.mockResolvedValue(
+        sessionPayload("session-a", ["doc-alpha"]),
+      );
+      mockGetDocumentStatus.mockResolvedValue({
+        status: "completed",
+        file_name: "alpha.pdf",
+      });
+      mockSendMessageStream.mockImplementation(async function* () {
+        yield { type: "token", text: "Sure thing" };
+        yield { type: "done" };
+      });
+
+      const { result } = renderHook(() =>
+        useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
+      );
+
+      await waitFor(() =>
+        expect(result.current.attachment?.status).toBe("ready"),
+      );
+
+      expect(result.current.activeDocumentId).toBe("doc-alpha");
+      expect(result.current.attachment?.documentId).toBe("doc-alpha");
+      expect(mockActiveDocStore.get("session-a")).toBe("doc-alpha");
+
+      act(() => {
+        result.current.setInput("Question about alpha");
+      });
+
+      await act(async () => {
+        await result.current.handleSend();
+      });
+
+      expect(mockSendMessageStream).toHaveBeenCalledWith(
+        "Question about alpha",
+        "doc-alpha",
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it("activates an uploaded document on handleUploadAccepted and updates sessionStorage", async () => {
+      mockGetSession.mockResolvedValue(sessionPayload("session-a", []));
+
+      const { result } = renderHook(() =>
+        useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
+      );
+
+      await waitFor(() => expect(result.current.historyLoading).toBe(false));
+
+      act(() => {
+        result.current.handleUploadAccepted({
+          fileName: "fresh.pdf",
+          documentId: "doc-fresh",
+          statusEndpoint: "/documents/doc-fresh/status",
+        });
+      });
+
+      expect(result.current.activeDocumentId).toBe("doc-fresh");
+      expect(result.current.attachment?.documentId).toBe("doc-fresh");
+      expect(mockActiveDocStore.get("session-a")).toBe("doc-fresh");
+    });
+
+    it("same-tab reload restores that session's active document and sends its doc_id", async () => {
+      mockActiveDocStore.set("session-a", "doc-1");
+      mockGetSession.mockResolvedValue(
+        sessionPayload("session-a", ["doc-1", "doc-2"]),
+      );
+      mockGetDocumentStatus.mockImplementation(async (url: string) => {
+        if (url.includes("doc-1")) {
+          return { status: "completed", file_name: "doc-1.pdf" };
+        }
+        return { status: "completed", file_name: "doc-2.pdf" };
+      });
+      mockSendMessageStream.mockImplementation(async function* () {
+        yield { type: "token", text: "Response" };
+        yield { type: "done" };
+      });
+
+      const { result } = renderHook(() =>
+        useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
+      );
+
+      await waitFor(() =>
+        expect(result.current.attachment?.status).toBe("ready"),
+      );
+
+      expect(result.current.activeDocumentId).toBe("doc-1");
+      expect(result.current.attachment?.documentId).toBe("doc-1");
+
+      act(() => {
+        result.current.setInput("Ask doc 1");
+      });
+
+      await act(async () => {
+        await result.current.handleSend();
+      });
+
+      expect(mockSendMessageStream).toHaveBeenCalledWith(
+        "Ask doc 1",
+        "doc-1",
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it("switching from session A to session B sends B's id, and switching back sends A's id", async () => {
+      mockActiveDocStore.set("session-a", "doc-a");
+      mockActiveDocStore.set("session-b", "doc-b");
+
+      mockGetSession.mockImplementation(async (sid: string) => {
+        if (sid === "session-a") {
+          return sessionPayload("session-a", ["doc-a"]);
+        }
+        return sessionPayload("session-b", ["doc-b"]);
+      });
+
+      mockGetDocumentStatus.mockImplementation(async (url: string) => {
+        if (url.includes("doc-a")) {
+          return { status: "completed", file_name: "a.pdf" };
+        }
+        return { status: "completed", file_name: "b.pdf" };
+      });
+
+      mockSendMessageStream.mockImplementation(async function* () {
+        yield { type: "token", text: "Answer" };
+        yield { type: "done" };
+      });
+
+      let currentSession = "session-a";
+      const { result, rerender } = renderHook(() =>
+        useChat(currentSession, EMPTY_ADVANCED_RETRIEVAL),
+      );
+
+      await waitFor(() =>
+        expect(result.current.attachment?.documentId).toBe("doc-a"),
+      );
+      expect(result.current.activeDocumentId).toBe("doc-a");
+
+      // Switch to session B
+      currentSession = "session-b";
+      rerender();
+
+      await waitFor(() =>
+        expect(result.current.attachment?.documentId).toBe("doc-b"),
+      );
+      expect(result.current.activeDocumentId).toBe("doc-b");
+
+      act(() => {
+        result.current.setInput("Ask B");
+      });
+      await act(async () => {
+        await result.current.handleSend();
+      });
+
+      expect(mockSendMessageStream).toHaveBeenCalledWith(
+        "Ask B",
+        "doc-b",
+        expect.anything(),
+        expect.anything(),
+      );
+
+      // Switch back to session A
+      currentSession = "session-a";
+      rerender();
+
+      await waitFor(() =>
+        expect(result.current.attachment?.documentId).toBe("doc-a"),
+      );
+      expect(result.current.activeDocumentId).toBe("doc-a");
+
+      act(() => {
+        result.current.setInput("Ask A again");
+      });
+      await act(async () => {
+        await result.current.handleSend();
+      });
+
+      expect(mockSendMessageStream).toHaveBeenCalledWith(
+        "Ask A again",
+        "doc-a",
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it("falls back to the most recently registered ready document when stored id is gone", async () => {
+      mockActiveDocStore.set("session-a", "doc-deleted");
+      mockGetSession.mockResolvedValue(
+        sessionPayload("session-a", ["doc-ready-1", "doc-ready-2"]),
+      );
+
+      mockGetDocumentStatus.mockImplementation(async (url: string) => {
+        if (url.includes("doc-deleted")) {
+          throw new DocumentNotFoundError("deleted");
+        }
+        if (url.includes("doc-ready-2")) {
+          return { status: "completed", file_name: "ready-2.pdf" };
+        }
+        return { status: "completed", file_name: "ready-1.pdf" };
+      });
+
+      const { result } = renderHook(() =>
+        useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
+      );
+
+      await waitFor(() =>
+        expect(result.current.attachment?.documentId).toBe("doc-ready-2"),
+      );
+
+      expect(result.current.activeDocumentId).toBe("doc-ready-2");
+      expect(mockActiveDocStore.get("session-a")).toBe("doc-ready-2");
+    });
+
+    it("deleting the active document selects the most recently added remaining ready document", async () => {
+      const { deleteDocument } = await import("../api");
+      vi.mocked(deleteDocument).mockClear();
+      vi.mocked(deleteDocument).mockResolvedValue({ status: "gone" });
+
+      mockActiveDocStore.set("session-a", "doc-2");
+      let sessionDocs = ["doc-1", "doc-2"];
+      mockGetSession.mockImplementation(async () =>
+        sessionPayload("session-a", sessionDocs),
+      );
+
+      mockGetDocumentStatus.mockImplementation(async (url: string) => {
+        if (url.includes("doc-1")) {
+          return { status: "completed", file_name: "doc-1.pdf" };
+        }
+        return { status: "completed", file_name: "doc-2.pdf" };
+      });
+
+      const { result } = renderHook(() =>
+        useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
+      );
+
+      await waitFor(() =>
+        expect(result.current.attachment?.documentId).toBe("doc-2"),
+      );
+      expect(result.current.activeDocumentId).toBe("doc-2");
+
+      // Delete active doc-2
+      sessionDocs = ["doc-1"];
+      await act(async () => {
+        await result.current.handleRemoveAttachment();
+      });
+
+      expect(deleteDocument).toHaveBeenCalledWith("doc-2");
+      expect(result.current.activeDocumentId).toBe("doc-1");
+      expect(result.current.attachment?.documentId).toBe("doc-1");
+      expect(result.current.attachment?.fileName).toBe("doc-1.pdf");
+      expect(mockActiveDocStore.get("session-a")).toBe("doc-1");
+
+      // Delete doc-1 (no documents remain)
+      sessionDocs = [];
+      await act(async () => {
+        await result.current.handleRemoveAttachment();
+      });
+
+      expect(deleteDocument).toHaveBeenCalledWith("doc-1");
+      expect(result.current.activeDocumentId).toBeNull();
+      expect(result.current.attachment).toBeNull();
+      expect(mockActiveDocStore.get("session-a")).toBeUndefined();
+    });
+
+    it("blocks sending when the session has no active document", async () => {
+      mockGetSession.mockResolvedValue(sessionPayload("session-a", []));
+
+      const { result } = renderHook(() =>
+        useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
+      );
+
+      await waitFor(() => expect(result.current.historyLoading).toBe(false));
+
+      act(() => {
+        result.current.setInput("Question with no document");
+      });
+
+      await act(async () => {
+        await result.current.handleSend();
+      });
+
+      expect(mockSendMessageStream).not.toHaveBeenCalled();
+      expect(mockSendMessage).not.toHaveBeenCalled();
+      expect(
+        result.current.messages.some((msg) =>
+          msg.text.includes(
+            "Please upload a document first so I can answer questions about it.",
+          ),
+        ),
+      ).toBe(true);
+    });
+
+    it("selectActiveDocument switches the active document, persists in sessionStorage, and sends its doc_id", async () => {
+      mockGetSession.mockResolvedValue(
+        sessionPayload("session-a", ["doc-1", "doc-2"]),
+      );
+      mockGetDocumentStatus.mockImplementation(async (url: string) => {
+        if (url.includes("doc-1")) {
+          return { status: "completed", file_name: "doc-1.pdf" };
+        }
+        return { status: "completed", file_name: "doc-2.pdf" };
+      });
+      mockSendMessageStream.mockImplementation(async function* () {
+        yield { type: "token", text: "Response for doc 2" };
+        yield { type: "done" };
+      });
+
+      const { result } = renderHook(() =>
+        useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
+      );
+
+      await waitFor(() =>
+        expect(result.current.attachment?.documentId).toBe("doc-2"),
+      );
+      expect(result.current.activeDocumentId).toBe("doc-2");
+
+      // Switch active document to doc-1 via selectActiveDocument
+      await act(async () => {
+        await result.current.selectActiveDocument("doc-1", "doc-1.pdf");
+      });
+
+      expect(result.current.activeDocumentId).toBe("doc-1");
+      expect(result.current.attachment?.documentId).toBe("doc-1");
+      expect(result.current.attachment?.fileName).toBe("doc-1.pdf");
+      expect(mockActiveDocStore.get("session-a")).toBe("doc-1");
+
+      act(() => {
+        result.current.setInput("Question for doc 1");
+      });
+
+      await act(async () => {
+        await result.current.handleSend();
+      });
+
+      expect(mockSendMessageStream).toHaveBeenCalledWith(
+        "Question for doc 1",
+        "doc-1",
+        expect.anything(),
+        expect.anything(),
+      );
+    });
   });
 });
