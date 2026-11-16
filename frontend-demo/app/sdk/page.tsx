@@ -64,15 +64,23 @@ export default function SdkPage() {
   },
   { parts: [{ c: SYNTAX.plain, t: " " }] },
   {
-    parts: [{ c: SYNTAX.plain, t: "    print(answer.answer)" }],
+    parts: [
+      { c: SYNTAX.kw, t: "    if " },
+      { c: SYNTAX.plain, t: "answer.status == " },
+      { c: SYNTAX.str, t: '"ok"' },
+      { c: SYNTAX.plain, t: ":" },
+    ],
+  },
+  {
+    parts: [{ c: SYNTAX.plain, t: "        print(answer.answer)" }],
   },
   { parts: [{ c: SYNTAX.plain, t: " " }] },
   {
-    parts: [{ c: SYNTAX.cm, t: "    # Print cited sources" }],
+    parts: [{ c: SYNTAX.cm, t: "        # Print cited sources" }],
   },
   {
     parts: [
-      { c: SYNTAX.kw, t: "    for " },
+      { c: SYNTAX.kw, t: "        for " },
       { c: SYNTAX.plain, t: "source " },
       { c: SYNTAX.kw, t: "in " },
       { c: SYNTAX.plain, t: "answer.sources:" },
@@ -80,7 +88,7 @@ export default function SdkPage() {
   },
   {
     parts: [
-      { c: SYNTAX.plain, t: "        print(source.file_name, source.page_number)" },
+      { c: SYNTAX.plain, t: "            print(source.file_name, source.page_number)" },
     ],
   },
 ];
@@ -332,6 +340,26 @@ client.delete_session(session.id)`}
           </section>
 
           <section>
+            <Kicker spacing="lg">typescript sdk</Kicker>
+            <p className="text-foreground/90">
+              Building with Node.js or TypeScript? The official{" "}
+              <code className="rounded-xl border border-border bg-surface px-2 py-0.5 font-mono text-[0.82rem]">
+                @chatvector/sdk
+              </code>{" "}
+              client is also available. See the{" "}
+              <a
+                href="https://github.com/chatvector-ai/chatvector-ai/blob/main/sdk/typescript/README.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent-text underline underline-offset-4 transition-opacity hover:opacity-80"
+              >
+                TypeScript SDK README
+              </a>{" "}
+              for setup and usage examples.
+            </p>
+          </section>
+
+          <section>
             <Kicker spacing="lg">examples</Kicker>
             <p className="mb-4 text-foreground/90">
               More complete usage examples are available in the repository:
@@ -388,9 +416,18 @@ client.delete_session(session.id)`}
             rel="noopener noreferrer"
             className="text-accent-text underline underline-offset-4 transition-opacity hover:opacity-80"
           >
-            SDK README on GitHub
-          </a>
-          .
+            Python SDK README
+          </a>{" "}
+          or the{" "}
+          <a
+            href="https://github.com/chatvector-ai/chatvector-ai/blob/main/sdk/typescript/README.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent-text underline underline-offset-4 transition-opacity hover:opacity-80"
+          >
+            TypeScript SDK README
+          </a>{" "}
+          on GitHub.
         </p>
       </div>
     </DocLayout>
