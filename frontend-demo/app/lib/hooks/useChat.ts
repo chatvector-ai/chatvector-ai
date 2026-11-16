@@ -196,6 +196,7 @@ export function useChat(
   const [input, setInput] = useState("");
   const [attachment, setAttachment] = useState<AttachmentState | null>(null);
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
+  const [addedDocumentNotice, setAddedDocumentNotice] = useState<string | null>(null);
   const [sessionNotice, setSessionNotice] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [inflight, setInflight] = useState(false);
@@ -305,6 +306,7 @@ export function useChat(
     setInput("");
     setAttachment(null);
     setActiveDocumentId(null);
+    setAddedDocumentNotice(null);
     setSessionNotice(null);
     setRemoveError(null);
     readyAnnouncedForDocRef.current = null;
@@ -937,8 +939,27 @@ export function useChat(
     statusEndpoint: string;
     queuePosition?: number;
     metadata?: DocumentScalarMetadata;
+    isAdd?: boolean;
   }) => {
     const fileName = payload.fileName.trim();
+    saveUploadedDocument({
+      documentId: payload.documentId,
+      fileName: payload.fileName,
+    });
+
+    if (payload.isAdd) {
+      const activeName =
+        attachment?.fileName ||
+        (activeDocumentId
+          ? getUploadedDocument(activeDocumentId)?.fileName
+          : undefined) ||
+        "active document";
+      setAddedDocumentNotice(`${fileName} added. Searching ${activeName}.`);
+      setRemoveError(null);
+      return;
+    }
+
+    setAddedDocumentNotice(null);
     if (sessionId && fileName && !questionLockedRef.current) {
       if (!historyReadyRef.current) {
         pendingFileRef.current = fileName;
@@ -957,10 +978,6 @@ export function useChat(
     }
     setRemoveError(null);
     setSessionNotice(null);
-    saveUploadedDocument({
-      documentId: payload.documentId,
-      fileName: payload.fileName,
-    });
     setActiveDocumentId(payload.documentId);
     if (sessionId) {
       setStoredActiveDocumentId(sessionId, payload.documentId);
@@ -978,6 +995,7 @@ export function useChat(
   const handleRemoveAttachment = async () => {
     if (!attachment) return;
     setRemoveError(null);
+    setAddedDocumentNotice(null);
     try {
       const out = await deleteDocument(attachment.documentId);
       if (out.status === "gone") {
@@ -1049,6 +1067,7 @@ export function useChat(
         setStoredActiveDocumentId(sessionId, documentId);
       }
       setRemoveError(null);
+      setAddedDocumentNotice(null);
       setAttachment((curr) => {
         const fileName =
           fallbackFileName ||
@@ -1092,6 +1111,7 @@ export function useChat(
     streaming,
     attachment,
     activeDocumentId,
+    addedDocumentNotice,
     sessionNotice,
     removeError,
     sendDisabled,

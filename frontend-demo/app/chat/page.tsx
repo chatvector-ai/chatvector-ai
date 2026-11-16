@@ -33,6 +33,9 @@ import {
 
 export default function ChatPage() {
   const [showModal, setShowModal] = useState(false);
+  const [modalMode, setModalMode] = useState<"upload" | "add" | "replace">("upload");
+  const [replaceDocumentId, setReplaceDocumentId] = useState<string | null>(null);
+  const [replaceFileName, setReplaceFileName] = useState<string | null>(null);
   const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false);
   const [inspectMode, setInspectMode] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -43,9 +46,6 @@ export default function ChatPage() {
   const [documentSummaries, setDocumentSummaries] = useState<DocumentSummary[]>([]);
   const [sessionDocumentIds, setSessionDocumentIds] = useState<string[]>([]);
   const [documentsRefreshKey, setDocumentsRefreshKey] = useState(0);
-  const [replaceDocumentIdFromList, setReplaceDocumentIdFromList] = useState<
-    string | null
-  >(null);
   const uploadButtonRef = useRef<HTMLButtonElement>(null);
   const {
     sessions,
@@ -98,6 +98,7 @@ export default function ChatPage() {
     streaming,
     attachment,
     activeDocumentId,
+    addedDocumentNotice,
     sessionNotice,
     removeError,
     sendDisabled,
@@ -149,33 +150,63 @@ export default function ChatPage() {
     setDocumentsRefreshKey((key) => key + 1);
   };
 
-  const resolvedReplaceDocumentId =
-    replaceDocumentIdFromList ??
-    (attachment && attachment.status !== "processing"
-      ? attachment.documentId
-      : null);
+  const hasSessionDocument = Boolean(attachment || sessionDocumentIds.length > 0);
 
-  const resolvedReplaceFileName = useMemo(() => {
-    if (replaceDocumentIdFromList) {
-      return (
-        documentSummaries.find(
-          (d) => d.document_id === replaceDocumentIdFromList
-        )?.file_name ??
-        (attachment?.documentId === replaceDocumentIdFromList
-          ? attachment.fileName
-          : null) ??
-        null
-      );
-    }
-    if (attachment && attachment.status !== "processing") {
-      return attachment.fileName ?? null;
-    }
-    return null;
-  }, [replaceDocumentIdFromList, documentSummaries, attachment]);
+  const hasUnsettledSessionDocs = useMemo(() => {
+    return documentSummaries.some(
+      (d) =>
+        sessionDocumentIds.includes(d.document_id) &&
+        d.status !== "completed" &&
+        d.status !== "failed"
+    );
+  }, [documentSummaries, sessionDocumentIds]);
+
+  useEffect(() => {
+    if (!hasUnsettledSessionDocs) return;
+    const interval = setInterval(() => {
+      refreshSessionDocuments();
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [hasUnsettledSessionDocs]);
+
+  const handleOpenUploadModal = () => {
+    setReplaceDocumentId(null);
+    setReplaceFileName(null);
+    setModalMode(hasSessionDocument ? "add" : "upload");
+    setShowModal(true);
+  };
+
+  const handleReplaceActiveAttachment = () => {
+    if (!attachment) return;
+    setReplaceDocumentId(attachment.documentId);
+    setReplaceFileName(attachment.fileName ?? null);
+    setModalMode("replace");
+    setShowModal(true);
+  };
 
   const handleReplaceDocument = (documentId: string) => {
-    setReplaceDocumentIdFromList(documentId);
+    const summary = documentSummaries.find((d) => d.document_id === documentId);
+    const fileName =
+      summary?.file_name ??
+      (attachment?.documentId === documentId ? attachment.fileName : null);
+    setReplaceDocumentId(documentId);
+    setReplaceFileName(fileName ?? null);
+    setModalMode("replace");
     setShowModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setReplaceDocumentId(null);
+    setReplaceFileName(null);
+    setModalMode("upload");
+  };
+
+  const handleUploadAcceptedWithRefresh = (
+    payload: Parameters<typeof handleUploadAccepted>[0]
+  ) => {
+    handleUploadAccepted(payload);
+    refreshSessionDocuments();
   };
 
   const handleMakeActive = (documentId: string) => {
@@ -334,16 +365,16 @@ export default function ChatPage() {
         {showModal && (
           <UploadModal
             sessionId={activeSessionId}
-            onClose={() => {
-              setShowModal(false);
-              setReplaceDocumentIdFromList(null);
-            }}
+            onClose={handleCloseModal}
             returnFocusRef={uploadButtonRef}
-            replaceDocumentId={resolvedReplaceDocumentId}
-            replaceFileName={resolvedReplaceFileName}
-            onUploadAccepted={handleUploadAccepted}
+            isAdd={modalMode === "add"}
+            replaceDocumentId={modalMode === "replace" ? replaceDocumentId : null}
+            replaceFileName={modalMode === "replace" ? replaceFileName : null}
+            onUploadAccepted={handleUploadAcceptedWithRefresh}
             attachment={
-              attachment
+              modalMode === "replace" &&
+              attachment &&
+              attachment.documentId === replaceDocumentId
                 ? {
                     documentId: attachment.documentId,
                     fileName: attachment.fileName,
@@ -413,17 +444,20 @@ export default function ChatPage() {
             inflight={inflight}
             streaming={streaming}
             attachment={attachment}
+            addedDocumentNotice={addedDocumentNotice}
             sessionNotice={sessionNotice}
             removeError={removeError}
             poll={poll}
             handleSend={handleSend}
             handleKeyDown={handleKeyDown}
             handleRemoveAttachment={handleRemoveAttachment}
-            onUploadClick={() => setShowModal(true)}
+            onReplaceAttachment={handleReplaceActiveAttachment}
+            onUploadClick={handleOpenUploadModal}
             uploadButtonRef={uploadButtonRef}
             stopStreaming={stopStreaming}
             scopeIndicator={scopeIndicator}
             metadataFilterSummary={metadataFilterSummary}
+            isAdd={hasSessionDocument}
           />
         </div>
       </div>

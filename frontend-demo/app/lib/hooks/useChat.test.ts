@@ -2130,5 +2130,75 @@ describe("useChat", () => {
         expect.anything(),
       );
     });
+
+    it("Add document action leaves active id and chip unchanged, sets added notice, and sends prior active doc_id", async () => {
+      mockActiveDocStore.set("session-a", "doc-1");
+      mockGetSession.mockResolvedValue(
+        sessionPayload("session-a", ["doc-1"]),
+      );
+      mockGetDocumentStatus.mockImplementation(async (url: string) => {
+        if (url.includes("doc-1")) {
+          return { status: "completed", file_name: "policy-2024.pdf" };
+        }
+        return { status: "completed", file_name: "policy-2025.pdf" };
+      });
+      mockSendMessageStream.mockImplementation(async function* () {
+        yield { type: "token", text: "Response" };
+        yield { type: "done" };
+      });
+
+      const { result } = renderHook(() =>
+        useChat("session-a", EMPTY_ADVANCED_RETRIEVAL),
+      );
+
+      await waitFor(() =>
+        expect(result.current.attachment?.status).toBe("ready"),
+      );
+
+      expect(result.current.activeDocumentId).toBe("doc-1");
+      expect(result.current.attachment?.fileName).toBe("policy-2024.pdf");
+
+      act(() => {
+        result.current.handleUploadAccepted({
+          fileName: "policy-2025.pdf",
+          documentId: "doc-2",
+          statusEndpoint: "/documents/doc-2/status",
+          isAdd: true,
+        });
+      });
+
+      // Active id and chip remain on the prior document
+      expect(result.current.activeDocumentId).toBe("doc-1");
+      expect(result.current.attachment?.documentId).toBe("doc-1");
+      expect(result.current.attachment?.fileName).toBe("policy-2024.pdf");
+      expect(result.current.addedDocumentNotice).toBe(
+        "policy-2025.pdf added. Searching policy-2024.pdf."
+      );
+
+      // Sending a chat message still uses doc-1
+      act(() => {
+        result.current.setInput("What changed in policy?");
+      });
+
+      await act(async () => {
+        await result.current.handleSend();
+      });
+
+      expect(mockSendMessageStream).toHaveBeenCalledWith(
+        "What changed in policy?",
+        "doc-1",
+        expect.anything(),
+        expect.anything(),
+      );
+
+      // Selecting the added document as active clears the notice
+      await act(async () => {
+        await result.current.selectActiveDocument("doc-2", "policy-2025.pdf");
+      });
+
+      expect(result.current.activeDocumentId).toBe("doc-2");
+      expect(result.current.attachment?.documentId).toBe("doc-2");
+      expect(result.current.addedDocumentNotice).toBeNull();
+    });
   });
 });

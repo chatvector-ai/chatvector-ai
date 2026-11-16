@@ -21,6 +21,7 @@ const mockSelectActiveDocument = vi.fn();
 
 let mockAttachment: AttachmentState | null = null;
 let mockActiveDocumentId: string | null | undefined = undefined;
+let mockAddedDocumentNotice: string | null = null;
 let mockInitialScope: RetrievalScope | undefined = undefined;
 let mockSessions: ChatSession[] = [];
 let mockActiveSessionId = "11111111-aaaa-bbbb-cccc-000000000001";
@@ -111,6 +112,7 @@ vi.mock("../lib/hooks/useChat", () => ({
       mockActiveDocumentId !== undefined
         ? mockActiveDocumentId
         : (mockAttachment?.documentId ?? null),
+    addedDocumentNotice: mockAddedDocumentNotice,
     sessionNotice: null,
     removeError: null,
     sendDisabled: true,
@@ -755,5 +757,117 @@ describe("ChatPage document replacement labeled flow", () => {
         "notes.txt will be replaced. Its content is re-indexed under the same document ID."
       )
     ).toBeInTheDocument();
+  });
+});
+
+describe("ChatPage add document action", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
+    mockAddedDocumentNotice = null;
+    mockInitialScope = undefined;
+    mockActiveSessionId = "session-1";
+    mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
+    mockAttachment = {
+      fileName: "policy-2024.pdf",
+      documentId: "doc-1",
+      statusEndpoint: "/documents/doc-1/status",
+      status: "ready",
+    };
+    vi.mocked(getSession).mockResolvedValue({
+      id: "session-1",
+      created_at: "2026-01-01T00:00:00Z",
+      last_active: "2026-01-01T00:00:00Z",
+      metadata: {},
+      document_ids: ["doc-1"],
+      display_label: "New session",
+    });
+    vi.mocked(listDocuments).mockResolvedValue({
+      tenant_id: "t",
+      documents: [
+        {
+          document_id: "doc-1",
+          file_name: "policy-2024.pdf",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+          metadata: {},
+        },
+      ],
+    });
+  });
+
+  it("reads 'Add document' when session already has a document and opens modal in Add mode", async () => {
+    const user = userEvent.setup();
+    render(<ChatPage />);
+
+    const addButton = screen.getByRole("button", { name: "Add document" });
+    expect(addButton).toBeInTheDocument();
+    expect(addButton).toHaveAttribute("title", "Add document");
+
+    await user.click(addButton);
+
+    expect(
+      screen.getByRole("heading", { name: "Add document" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("PDF, TXT, Markdown, HTML, and DOCX")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Add document — drop a file or press Enter to browse",
+      })
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/will be replaced/i)).not.toBeInTheDocument();
+  });
+
+  it("reads 'Upload document' when session is empty and does not show added line", async () => {
+    mockAttachment = null;
+    vi.mocked(getSession).mockResolvedValue({
+      id: "session-1",
+      created_at: "2026-01-01T00:00:00Z",
+      last_active: "2026-01-01T00:00:00Z",
+      metadata: {},
+      document_ids: [],
+      display_label: "New session",
+    });
+    vi.mocked(listDocuments).mockResolvedValue({
+      tenant_id: "t",
+      documents: [],
+    });
+
+    const user = userEvent.setup();
+    render(<ChatPage />);
+
+    const uploadButton = screen.getByRole("button", { name: "Upload document" });
+    expect(uploadButton).toBeInTheDocument();
+    expect(uploadButton).toHaveAttribute("title", "Upload document");
+
+    await user.click(uploadButton);
+
+    expect(
+      screen.getByRole("heading", { name: "Upload document" })
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("composer-added-document-notice")).not.toBeInTheDocument();
+  });
+
+  it("shows persistent added document line in composer and preserves active doc_id for chat request", () => {
+    mockAddedDocumentNotice = "policy-2025.pdf added. Searching policy-2024.pdf.";
+    mockActiveDocumentId = "doc-1";
+
+    render(<ChatPage />);
+
+    const notice = screen.getByTestId("composer-added-document-notice");
+    expect(notice).toBeVisible();
+    expect(notice).toHaveTextContent("policy-2025.pdf added. Searching policy-2024.pdf.");
+
+    const body = buildChatRequestBody({
+      question: "What is the deductible?",
+      docId: mockActiveDocumentId ?? "doc-1",
+      sessionId: "session-1",
+      retrieval: capturedRetrievalState,
+    });
+
+    expect(body.doc_id).toBe("doc-1");
   });
 });
