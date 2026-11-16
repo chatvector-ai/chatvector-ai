@@ -26,11 +26,14 @@ def main() -> None:
             match_count=3,
         )
 
-    print(answer.answer)
-    for source in answer.sources:
-        print(
-            f"- file={source.file_name!r} page={source.page_number} chunk={source.chunk_index}"
-        )
+    if answer.status == "ok":
+        print(answer.answer)
+        for source in answer.sources:
+            print(
+                f"- file={source.file_name!r} page={source.page_number} chunk={source.chunk_index}"
+            )
+    else:
+        print(f"Chat failed ({answer.status}): {answer.error}")
 
 
 if __name__ == "__main__":
