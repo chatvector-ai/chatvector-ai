@@ -415,6 +415,54 @@ async def test_chat_anchor_outside_filtered_scope_returns_structured_error():
 
 
 @pytest.mark.asyncio
+async def test_chat_tenant_scope_metadata_filter_eligible_document_ids_in_debug_payload():
+    """Under tenant scope with a filter excluding anchor, eligible_document_ids equals matching docs."""
+    _register_docs("tenant-a", "doc-1", "doc-2")
+    find_similar = AsyncMock(return_value=[])
+    p1, p2, p3, p4 = _chat_patches(find_similar)
+
+    with p1, p2, p3, p4, patch(
+        "services.chat_service.filter_document_ids_by_metadata",
+        new=AsyncMock(return_value=["doc-2"]),
+    ):
+        result = await answer_question_for_document(
+            question="Q?",
+            doc_id="doc-1",
+            auth=AuthContext(tenant_id="tenant-a"),
+            scope="tenant",
+            retrieval_fields={"scope": "tenant", "metadata_filter": _FILTER},
+            debug_retrieval=True,
+        )
+
+    assert result["status"] == "ok"
+    assert "retrieval_debug" in result
+    debug = result["retrieval_debug"]
+    assert debug["eligible_document_ids"] == ["doc-2"]
+    assert "doc-1" not in debug["eligible_document_ids"]
+    assert debug["eligible_document_count"] == 1
+    assert debug["truncated"] is False
+
+    # Debug retrieval disabled asserts absence of keys
+    with p1, p2, p3, p4, patch(
+        "services.chat_service.filter_document_ids_by_metadata",
+        new=AsyncMock(return_value=["doc-2"]),
+    ):
+        result_off = await answer_question_for_document(
+            question="Q?",
+            doc_id="doc-1",
+            auth=AuthContext(tenant_id="tenant-a"),
+            scope="tenant",
+            retrieval_fields={"scope": "tenant", "metadata_filter": _FILTER},
+            debug_retrieval=False,
+        )
+
+    assert "retrieval_debug" not in result_off
+    assert "eligible_document_ids" not in result_off
+    assert "eligible_document_count" not in result_off
+    assert "truncated" not in result_off
+
+
+@pytest.mark.asyncio
 async def test_chat_anchor_outside_filtered_scope_returns_structured_error_under_session_scope():
     _register_docs("tenant-a", "doc-1", "doc-2")
     find_similar = AsyncMock(return_value=[])

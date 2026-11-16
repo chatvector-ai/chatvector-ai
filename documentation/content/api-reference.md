@@ -169,7 +169,7 @@ The optional `job` object can include `attempt`, timestamps, and `failure_class`
 
 ## Retrieval debug
 
-Set `debug_retrieval` to `true` as a query parameter or request field. The response adds `retrieval_debug`. It is diagnostic. Useful fields include `effective_config` (resolved value and source `request`, `preset`, or `env`), the effective retrieval query, history-considered / skip reason, `history_resolution_latency_ms` when a resolution call ran, retrieval and rerank timings, component scores, and `reranker.fallback_reason` when a hosted reranker fell back. Stream `complete.latency_ms` is generation time only. `request_latency_ms` includes history resolution and retrieval.
+Set `debug_retrieval` to `true` as a query parameter or request field. The response adds `retrieval_debug`. It is diagnostic. Useful fields include `effective_config` (resolved value and source `request`, `preset`, or `env`), the effective retrieval query, history-considered / skip reason, `history_resolution_latency_ms` when a resolution call ran, retrieval and rerank timings, component scores, and `reranker.fallback_reason` when a hosted reranker fell back. Retrieval debug also reports `eligible_document_ids` (the resolved document IDs after scope, tenant isolation, and metadata-filter evaluation, prior to ranking and top-k truncation), `eligible_document_count` (total count of eligible documents before truncation), and `truncated` (boolean indicating whether `eligible_document_ids` was capped by `RETRIEVAL_DEBUG_MAX_ELIGIBLE_IDS`, default 100). Stream `complete.latency_ms` is generation time only. `request_latency_ms` includes history resolution and retrieval.
 
 ## Evaluation
 

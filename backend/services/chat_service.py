@@ -406,6 +406,7 @@ class RetrievalResult:
     retrieved_chunks: list = field(default_factory=list)
     # Chunks written into ``context``, in packer order.
     packed_chunks: list = field(default_factory=list)
+    eligible_document_ids: list[str] = field(default_factory=list)
 
     def to_debug_dict(self) -> dict:
         payload = self.transform_result.to_retrieval_debug()
@@ -415,6 +416,14 @@ class RetrievalResult:
             payload["reranker"] = dict(self.reranker_debug)
         payload["effective_retrieval_query"] = self.primary_query
         payload["timing_ms"] = dict(self.timing_ms)
+
+        max_eligible = max(1, int(getattr(config, "RETRIEVAL_DEBUG_MAX_ELIGIBLE_IDS", 100)))
+        eligible = list(self.eligible_document_ids)
+        total_count = len(eligible)
+        truncated = total_count > max_eligible
+        payload["eligible_document_ids"] = eligible[:max_eligible]
+        payload["eligible_document_count"] = total_count
+        payload["truncated"] = truncated
         return payload
 
 
@@ -610,6 +619,7 @@ async def retrieve_for_documents(
         reranker_debug=reranker_debug,
         retrieved_chunks=retrieved_chunks,
         packed_chunks=packed_chunks,
+        eligible_document_ids=list(document_ids),
     )
 
 
