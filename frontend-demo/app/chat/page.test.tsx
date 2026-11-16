@@ -429,6 +429,47 @@ describe("ChatPage session document list", () => {
     expect(detail).toHaveTextContent("embedding: boom");
   });
 
+  it("shows tenant scope notice without per-row search badges under tenant scope, and restores P6-W2-04 labels when returning to session", async () => {
+    const user = userEvent.setup();
+    render(<ChatPage />);
+
+    await screen.findByTestId("session-document-list");
+    expect(
+      screen.getByText("Session documents — only the active document is searched")
+    ).toBeVisible();
+
+    // Open drawer and switch to tenant scope
+    await user.click(screen.getByTestId("advanced-retrieval-open"));
+    await user.click(screen.getByRole("radio", { name: /tenant/i }));
+
+    // Heading returns to plain "Session documents" and tenant notice is visible
+    expect(screen.getByText("Session documents")).toBeVisible();
+    expect(
+      screen.queryByText(/only the active document is searched/i)
+    ).not.toBeInTheDocument();
+
+    const notice = screen.getByTestId("tenant-scope-notice");
+    expect(notice).toHaveTextContent(
+      "Tenant scope searches all ready documents in the tenant (1), which can include documents not shown here."
+    );
+
+    // No session rows claim to be the search set
+    expect(screen.queryByTestId("document-in-active-scope")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("document-active-searched")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("document-not-searched")).not.toBeInTheDocument();
+
+    // Switch back to session scope
+    await user.click(screen.getByRole("radio", { name: /session/i }));
+
+    // P6-W2-04 labels are restored
+    expect(
+      screen.getByText("Session documents — only the active document is searched")
+    ).toBeVisible();
+    expect(screen.queryByTestId("tenant-scope-notice")).not.toBeInTheDocument();
+    expect(screen.getByTestId("document-active-searched")).toHaveTextContent("Active · searched");
+    expect(screen.getByTestId("document-not-searched")).toHaveTextContent("Not searched");
+  });
+
   it("allows selecting a non-active ready document with 'Make active' and updates active state", async () => {
     vi.mocked(listDocuments).mockResolvedValue({
       tenant_id: "t",

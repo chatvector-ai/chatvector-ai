@@ -5,6 +5,7 @@ import {
   isDocumentInActiveScope,
   isRetrievalScopeMembershipDefinite,
   sessionDocumentRows,
+  tenantScopeNotice,
 } from "./documentListDisplay";
 
 describe("fileTypeFromFileName", () => {
@@ -81,7 +82,7 @@ describe("isDocumentInActiveScope", () => {
     ).toBe(false);
   });
 
-  it("marks completed documents in tenant scope", () => {
+  it("does not badge session rows in tenant scope", () => {
     expect(
       isDocumentInActiveScope({
         scope: "tenant",
@@ -90,7 +91,7 @@ describe("isDocumentInActiveScope", () => {
         documentId: "doc-1",
         status: "completed",
       })
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isDocumentInActiveScope({
         scope: "tenant",
@@ -125,6 +126,26 @@ describe("isRetrievalScopeMembershipDefinite", () => {
         explicit: { preset: "eval_hybrid", scope: "tenant" },
       })
     ).toBe(true);
+  });
+});
+
+describe("tenantScopeNotice", () => {
+  it("includes ready count when available", () => {
+    expect(tenantScopeNotice(3)).toBe(
+      "Tenant scope searches all ready documents in the tenant (3), which can include documents not shown here."
+    );
+    expect(tenantScopeNotice(0)).toBe(
+      "Tenant scope searches all ready documents in the tenant (0), which can include documents not shown here."
+    );
+  });
+
+  it("omits count when null, undefined, or negative", () => {
+    expect(tenantScopeNotice(null)).toBe(
+      "Tenant scope searches all ready documents in the tenant, which can include documents not shown here."
+    );
+    expect(tenantScopeNotice(undefined)).toBe(
+      "Tenant scope searches all ready documents in the tenant, which can include documents not shown here."
+    );
   });
 });
 

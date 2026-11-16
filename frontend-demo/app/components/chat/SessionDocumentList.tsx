@@ -10,6 +10,7 @@ import {
   isDocumentInActiveScope,
   isRetrievalScopeMembershipDefinite,
   sessionDocumentRows,
+  tenantScopeNotice,
 } from "../../lib/documentListDisplay";
 import type { DocumentSummary } from "../../lib/api";
 
@@ -23,6 +24,7 @@ type Props = {
   onReplace: (documentId: string) => void;
   onDelete: (documentId: string) => void;
   actionsDisabled?: boolean;
+  isDocumentsPaginated?: boolean;
 };
 
 export default function SessionDocumentList({
@@ -35,6 +37,7 @@ export default function SessionDocumentList({
   onReplace,
   onDelete,
   actionsDisabled = false,
+  isDocumentsPaginated = false,
 }: Props) {
   const rows = sessionDocumentRows(sessionDocumentIds, documentSummaries);
   if (rows.length === 0) {
@@ -51,9 +54,25 @@ export default function SessionDocumentList({
       ? "Session documents — only the active document is searched"
       : "Session documents";
 
+  const readyTenantCount = isDocumentsPaginated
+    ? null
+    : documentSummaries.filter(
+        (doc) => doc.status === "completed" || doc.status === "ready"
+      ).length;
+
+  const tenantNotice = tenantScopeNotice(readyTenantCount);
+
   return (
     <div className="px-4 pb-2" data-testid="session-document-list">
       <p className="mb-2 text-xs font-medium text-muted">{headingText}</p>
+      {scope === "tenant" && (
+        <p
+          data-testid="tenant-scope-notice"
+          className="mb-2 text-xs text-muted"
+        >
+          {tenantNotice}
+        </p>
+      )}
       <ul className="flex flex-col gap-2">
         {rows.map((row) => {
           if (row.kind === "unavailable") {

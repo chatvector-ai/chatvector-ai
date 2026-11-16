@@ -69,7 +69,7 @@ export function isDocumentInActiveScope(
     return "follows-preset";
   }
   if (params.scope === "tenant") {
-    return params.status === "completed";
+    return false;
   }
   if (params.scope === "session") {
     const isActive =
@@ -83,6 +83,17 @@ export function isDocumentInActiveScope(
     return isActive ? "active-searched" : "not-searched";
   }
   return false;
+}
+
+export function tenantScopeNotice(readyCount?: number | null): string {
+  if (
+    typeof readyCount === "number" &&
+    Number.isFinite(readyCount) &&
+    readyCount >= 0
+  ) {
+    return `Tenant scope searches all ready documents in the tenant (${readyCount}), which can include documents not shown here.`;
+  }
+  return "Tenant scope searches all ready documents in the tenant, which can include documents not shown here.";
 }
 
 export type SessionDocumentListRow<T> =
