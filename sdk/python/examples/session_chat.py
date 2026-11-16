@@ -22,7 +22,10 @@ def main() -> None:
             doc_id=document_id,
             session_id=session.id,
         )
-        print(scoped.answer)
+        if scoped.status == "ok":
+            print(scoped.answer)
+        else:
+            print(f"Scoped chat failed ({scoped.status}): {scoped.error}")
 
         tenant_wide = client.chat(
             question="What do we know across all documents?",
@@ -30,7 +33,10 @@ def main() -> None:
             session_id=session.id,
             scope="tenant",
         )
-        print(tenant_wide.answer)
+        if tenant_wide.status == "ok":
+            print(tenant_wide.answer)
+        else:
+            print(f"Tenant-wide chat failed ({tenant_wide.status}): {tenant_wide.error}")
 
         updated = client.get_session(session.id)
         print(f"Session documents: {updated.document_ids}")

@@ -266,8 +266,10 @@ async def chat(
         return {
             "session_id": session_id,
             "response": {
+                "status": response.status,
                 "answer": response.answer,
                 "sources": [source.to_dict() for source in response.sources],
+                "error": response.error,
                 "latency_ms": response.latency_ms,
                 "model": response.model,
             },

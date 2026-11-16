@@ -34,10 +34,10 @@ def main() -> None:
     )
     for result in batch.results:
         print(f"[{result.status}] {result.question}")
-        if result.answer:
+        if result.status == "ok":
             print(result.answer)
-        if result.error:
-            print(result.error)
+        elif result.error:
+            print(f"Error: {result.error}")
 
 
 if __name__ == "__main__":
