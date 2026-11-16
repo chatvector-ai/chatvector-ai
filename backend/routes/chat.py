@@ -283,6 +283,8 @@ async def chat(
 ):
     """Answer a question with retrieval scoped to ``doc_id``.
 
+    HTTP 200 does not mean success; check `status`.
+
     ``metadata_filter`` narrows which in-scope documents participate in retrieval.
     Under session scope it applies only to the requested document; it can narrow
     retrieval within that document but cannot replace it. When the requested

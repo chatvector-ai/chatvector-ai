@@ -127,15 +127,16 @@ Pass `debug_retrieval: true` on chat when you need the effective query, history 
             doc_id=ready.document_id,
             match_count=5,
         )
+        if answer.status == "ok":
+            print(answer.answer)
 
-    print(answer.answer)
-
-    follow_up = client.chat(
-        question="What does that section require?",
-        doc_id=ready.document_id,
-        session_id=answer.session_id,
-    )
-    print(follow_up.answer)
+        follow_up = client.chat(
+            question="What does that section require?",
+            doc_id=ready.document_id,
+            session_id=answer.session_id,
+        )
+        if follow_up.status == "ok":
+            print(follow_up.answer)
     ```
 
 === "TypeScript SDK"
@@ -159,7 +160,9 @@ Pass `debug_retrieval: true` on chat when you need the effective query, history 
       docId: uploaded.documentId,
       sessionId: answer.sessionId,
     });
-    console.log(answer.answer, followUp.answer);
+    if (answer.status === "ok" && followUp.status === "ok") {
+      console.log(answer.answer, followUp.answer);
+    }
     ```
 
 === "Frontend demo"

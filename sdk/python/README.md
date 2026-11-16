@@ -328,12 +328,14 @@ with ChatVectorClient(base_url="http://localhost:8000", api_key="cv_live_...") a
 
 ## Error Handling
 
-All SDK methods raise typed exceptions:
+HTTP failures and transport errors raise typed exceptions:
 
 - `ChatVectorAuthError` for `401` and `403`
 - `ChatVectorRateLimitError` for `429`
 - `ChatVectorTimeoutError` for `408`, `504`, and timeout/connection failures
 - `ChatVectorAPIError` for other API or transport failures
+
+Non-streaming `chat()` and `batch_chat()` return typed responses where HTTP 200 does not imply success — callers must check `response.status == "ok"` before using `answer`. Soft failures (such as provider errors or filter exclusions) return `status: "error"` and a structured `error` dict rather than raising exceptions. Streaming chat (`stream_chat()`) delivers errors via an `error` event and raises `ChatVectorAPIError`.
 
 Example:
 
@@ -343,6 +345,10 @@ from chatvector import ChatVectorAPIError, ChatVectorClient
 try:
     with ChatVectorClient("http://localhost:8000") as client:
         response = client.chat("Summarize the document", "doc-123")
+        if response.status == "ok":
+            print(response.answer)
+        else:
+            print(f"Chat error: {response.error}")
 except ChatVectorAPIError as exc:
     print(exc)
 ```
