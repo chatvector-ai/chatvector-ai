@@ -1,0 +1,18 @@
+{
+  "id": "correction-no-not-pto",
+  "class": "correction",
+  "max_turns": 2,
+  "logical_keys": ["hr-pto-policy", "hr-pto-policy-2022"],
+  "turns": [
+    {
+      "user": "How many paid days off did policy POL-HR-014 grant under the 2022 text?",
+      "resolution": "empty_history",
+      "expected_facts": ["15 paid days off"]
+    },
+    {
+      "user": "No, not the 2022 text.",
+      "resolution": {"contains": "POL-HR-014"},
+      "expected_facts": ["18 paid days off"]
+    }
+  ]
+}

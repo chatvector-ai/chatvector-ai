@@ -31,6 +31,7 @@ SCENARIO_CLASSES = frozenset(
         "absent_answer",
         "contradictory_sources",
         "long_session",
+        "standalone_negative",
     }
 )
 SKIP_REASONS = frozenset(

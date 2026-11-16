@@ -1,0 +1,18 @@
+{
+  "id": "ordinal-other-policy-pto",
+  "class": "ordinal",
+  "max_turns": 2,
+  "logical_keys": ["hr-pto-policy", "hr-pto-policy-2022"],
+  "turns": [
+    {
+      "user": "How many paid days off does policy POL-HR-014 grant captains under the 2026 rule?",
+      "resolution": "empty_history",
+      "expected_facts": ["18 paid days off"]
+    },
+    {
+      "user": "How many days off did the other policy grant?",
+      "resolution": {"contains": "POL-HR-014"},
+      "expected_facts": ["15 paid days off"]
+    }
+  ]
+}
