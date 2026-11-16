@@ -10,6 +10,7 @@ import {
   isDocumentInActiveScope,
   isRetrievalScopeMembershipDefinite,
   sessionDocumentRows,
+  tenantScopeNotice,
 } from "../../lib/documentListDisplay";
 import type { DocumentSummary } from "../../lib/api";
 
@@ -18,9 +19,12 @@ type Props = {
   documentSummaries: DocumentSummary[];
   retrievalState: AdvancedRetrievalState;
   attachment: AttachmentState | null;
+  activeDocumentId?: string | null;
+  onMakeActive?: (documentId: string) => void;
   onReplace: (documentId: string) => void;
   onDelete: (documentId: string) => void;
   actionsDisabled?: boolean;
+  isDocumentsPaginated?: boolean;
 };
 
 export default function SessionDocumentList({
@@ -28,9 +32,12 @@ export default function SessionDocumentList({
   documentSummaries,
   retrievalState,
   attachment,
+  activeDocumentId,
+  onMakeActive,
   onReplace,
   onDelete,
   actionsDisabled = false,
+  isDocumentsPaginated = false,
 }: Props) {
   const rows = sessionDocumentRows(sessionDocumentIds, documentSummaries);
   if (rows.length === 0) {
@@ -39,11 +46,33 @@ export default function SessionDocumentList({
 
   const scope = effectiveScope(retrievalState);
   const scopeIsExplicit = isRetrievalScopeMembershipDefinite(retrievalState);
-  const selectedDocumentId = attachment?.documentId ?? null;
+  const selectedDocumentId = activeDocumentId ?? attachment?.documentId ?? null;
+  const hasMultipleDocuments = rows.length > 1;
+
+  const headingText =
+    scope === "session" && hasMultipleDocuments
+      ? "Session documents — only the active document is searched"
+      : "Session documents";
+
+  const readyTenantCount = isDocumentsPaginated
+    ? null
+    : documentSummaries.filter(
+        (doc) => doc.status === "completed" || doc.status === "ready"
+      ).length;
+
+  const tenantNotice = tenantScopeNotice(readyTenantCount);
 
   return (
     <div className="px-4 pb-2" data-testid="session-document-list">
-      <p className="mb-2 text-xs font-medium text-muted">Session documents</p>
+      <p className="mb-2 text-xs font-medium text-muted">{headingText}</p>
+      {scope === "tenant" && (
+        <p
+          data-testid="tenant-scope-notice"
+          className="mb-2 text-xs text-muted"
+        >
+          {tenantNotice}
+        </p>
+      )}
       <ul className="flex flex-col gap-2">
         {rows.map((row) => {
           if (row.kind === "unavailable") {
@@ -70,7 +99,14 @@ export default function SessionDocumentList({
             selectedDocumentId,
             documentId: summary.document_id,
             status: summary.status,
+            hasMultipleDocuments,
           });
+
+          const isActive = summary.document_id === selectedDocumentId;
+          const onRowMakeActive =
+            !isActive && onMakeActive
+              ? () => onMakeActive(summary.document_id)
+              : undefined;
 
           return (
             <li key={summary.document_id}>
@@ -85,6 +121,8 @@ export default function SessionDocumentList({
                 )}
                 metadata={summary.metadata}
                 inActiveScope={inActiveScope}
+                isActive={isActive}
+                onMakeActive={onRowMakeActive}
                 onReplace={
                   processing ? undefined : () => onReplace(summary.document_id)
                 }

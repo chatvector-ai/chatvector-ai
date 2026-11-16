@@ -17,8 +17,11 @@ import { buildChatRequestBody } from "../lib/buildChatBody";
 const mockCreateNewSession = vi.fn();
 const mockSwitchSession = vi.fn();
 const mockDeleteSession = vi.fn();
+const mockSelectActiveDocument = vi.fn();
 
 let mockAttachment: AttachmentState | null = null;
+let mockActiveDocumentId: string | null | undefined = undefined;
+let mockAddedDocumentNotice: string | null = null;
 let mockInitialScope: RetrievalScope | undefined = undefined;
 let mockSessions: ChatSession[] = [];
 let mockActiveSessionId = "11111111-aaaa-bbbb-cccc-000000000001";
@@ -105,6 +108,11 @@ vi.mock("../lib/hooks/useChat", () => ({
     inflight: false,
     streaming: false,
     attachment: mockAttachment,
+    activeDocumentId:
+      mockActiveDocumentId !== undefined
+        ? mockActiveDocumentId
+        : (mockAttachment?.documentId ?? null),
+    addedDocumentNotice: mockAddedDocumentNotice,
     sessionNotice: null,
     removeError: null,
     sendDisabled: true,
@@ -125,6 +133,8 @@ vi.mock("../lib/hooks/useChat", () => ({
     handleBeforeUpload: vi.fn(),
     handleUploadAccepted: vi.fn(),
     handleRemoveAttachment: vi.fn(),
+    selectActiveDocument: (...args: unknown[]) =>
+      mockSelectActiveDocument(...args),
     stopStreaming: vi.fn(),
   };
   },
@@ -158,6 +168,7 @@ describe("ChatPage preset discovery", () => {
 describe("ChatPage metadata corpus", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
     mockInitialScope = undefined;
     mockActiveSessionId = "session-1";
     mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
@@ -239,6 +250,7 @@ describe("ChatPage metadata corpus", () => {
 describe("ChatPage scope indicator", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
     mockInitialScope = undefined;
     mockActiveSessionId = "session-1";
     mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
@@ -284,11 +296,29 @@ describe("ChatPage scope indicator", () => {
       "Session scope: no document selected — upload a document to search it."
     );
   });
+
+  it("reflects active document filename in the scope indicator", () => {
+    mockActiveDocumentId = "doc-custom";
+    mockAttachment = {
+      fileName: "active-doc.pdf",
+      documentId: "doc-custom",
+      statusEndpoint: "/documents/doc-custom/status",
+      status: "ready",
+    };
+    render(<ChatPage />);
+
+    expect(
+      screen.getByText(
+        "Session scope: searches only the selected document (active-doc.pdf).",
+      ),
+    ).toBeVisible();
+  });
 });
 
 describe("ChatPage session document list", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
     mockInitialScope = undefined;
     mockActiveSessionId = "session-1";
     mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
@@ -343,15 +373,53 @@ describe("ChatPage session document list", () => {
     });
   });
 
-  it("marks only the selected attachment in session scope", async () => {
+  it("marks active document as 'Active · searched' and other document as 'Not searched' under session scope", async () => {
     render(<ChatPage />);
 
     await screen.findByTestId("session-document-list");
-    const inScope = screen.getAllByTestId("document-in-active-scope");
-    expect(inScope).toHaveLength(1);
     expect(
-      screen.getByTestId("document-list-row-doc-1").contains(inScope[0])
+      screen.getByText(
+        "Session documents — only the active document is searched",
+      ),
+    ).toBeVisible();
+
+    const activeSearched = screen.getByTestId("document-active-searched");
+    const notSearched = screen.getByTestId("document-not-searched");
+
+    expect(activeSearched).toHaveTextContent("Active · searched");
+    expect(notSearched).toHaveTextContent("Not searched");
+    expect(
+      screen.getByTestId("document-list-row-doc-1").contains(activeSearched),
     ).toBe(true);
+    expect(
+      screen.getByTestId("document-list-row-doc-2").contains(notSearched),
+    ).toBe(true);
+    expect(screen.queryByText("In scope")).not.toBeInTheDocument();
+  });
+
+  it("shows no extra noise for a single-document session", async () => {
+    vi.mocked(getSession).mockResolvedValue({
+      id: "session-1",
+      created_at: "2026-01-01T00:00:00Z",
+      last_active: "2026-01-01T00:00:00Z",
+      metadata: {},
+      document_ids: ["doc-1"],
+      display_label: "New session",
+    });
+
+    render(<ChatPage />);
+
+    await screen.findByTestId("session-document-list");
+    expect(screen.getByText("Session documents")).toBeVisible();
+    expect(
+      screen.queryByText(/only the active document is searched/i),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("document-in-active-scope")).toHaveTextContent(
+      "In scope",
+    );
+    expect(
+      screen.queryByTestId("document-not-searched"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows failure detail for failed session documents", async () => {
@@ -359,6 +427,147 @@ describe("ChatPage session document list", () => {
 
     const detail = await screen.findByTestId("document-failure-detail");
     expect(detail).toHaveTextContent("embedding: boom");
+  });
+
+  it("shows tenant scope notice without per-row search badges under tenant scope, and restores P6-W2-04 labels when returning to session", async () => {
+    const user = userEvent.setup();
+    render(<ChatPage />);
+
+    await screen.findByTestId("session-document-list");
+    expect(
+      screen.getByText("Session documents — only the active document is searched")
+    ).toBeVisible();
+
+    // Open drawer and switch to tenant scope
+    await user.click(screen.getByTestId("advanced-retrieval-open"));
+    await user.click(screen.getByRole("radio", { name: /tenant/i }));
+
+    // Heading returns to plain "Session documents" and tenant notice is visible
+    expect(screen.getByText("Session documents")).toBeVisible();
+    expect(
+      screen.queryByText(/only the active document is searched/i)
+    ).not.toBeInTheDocument();
+
+    const notice = screen.getByTestId("tenant-scope-notice");
+    expect(notice).toHaveTextContent(
+      "Tenant scope searches all ready documents in the tenant (1), which can include documents not shown here."
+    );
+
+    // No session rows claim to be the search set
+    expect(screen.queryByTestId("document-in-active-scope")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("document-active-searched")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("document-not-searched")).not.toBeInTheDocument();
+
+    // Switch back to session scope
+    await user.click(screen.getByRole("radio", { name: /session/i }));
+
+    // P6-W2-04 labels are restored
+    expect(
+      screen.getByText("Session documents — only the active document is searched")
+    ).toBeVisible();
+    expect(screen.queryByTestId("tenant-scope-notice")).not.toBeInTheDocument();
+    expect(screen.getByTestId("document-active-searched")).toHaveTextContent("Active · searched");
+    expect(screen.getByTestId("document-not-searched")).toHaveTextContent("Not searched");
+  });
+
+  it("allows selecting a non-active ready document with 'Make active' and updates active state", async () => {
+    vi.mocked(listDocuments).mockResolvedValue({
+      tenant_id: "t",
+      documents: [
+        {
+          document_id: "doc-1",
+          file_name: "notes.txt",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+        },
+        {
+          document_id: "doc-2",
+          file_name: "other.pdf",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+        },
+      ],
+    });
+
+    render(<ChatPage />);
+
+    await screen.findByTestId("session-document-list");
+
+    const row1 = screen.getByTestId("document-list-row-doc-1");
+    const row2 = screen.getByTestId("document-list-row-doc-2");
+
+    expect(
+      within(row1).queryByRole("button", { name: /make.*active/i }),
+    ).not.toBeInTheDocument();
+
+    const makeActiveButton = within(row2).getByRole("button", {
+      name: "Make other.pdf active",
+    });
+    expect(makeActiveButton).toBeInTheDocument();
+    expect(makeActiveButton).toBeEnabled();
+
+    await userEvent.click(makeActiveButton);
+
+    expect(mockSelectActiveDocument).toHaveBeenCalledWith(
+      "doc-2",
+      "other.pdf",
+      undefined,
+    );
+  });
+
+  it("sends the newly activated doc_id in the chat request body after Make active", async () => {
+    vi.mocked(listDocuments).mockResolvedValue({
+      tenant_id: "t",
+      documents: [
+        {
+          document_id: "doc-1",
+          file_name: "notes.txt",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+        },
+        {
+          document_id: "doc-2",
+          file_name: "other.pdf",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+        },
+      ],
+    });
+
+    mockSelectActiveDocument.mockImplementation(
+      (documentId: string, fileName?: string) => {
+        mockActiveDocumentId = documentId;
+        mockAttachment = {
+          documentId,
+          fileName: fileName ?? "other.pdf",
+          statusEndpoint: `/documents/${documentId}/status`,
+          status: "ready",
+        };
+      },
+    );
+
+    const { rerender } = render(<ChatPage />);
+
+    await screen.findByTestId("session-document-list");
+    const row2 = screen.getByTestId("document-list-row-doc-2");
+    await userEvent.click(
+      within(row2).getByRole("button", { name: "Make other.pdf active" }),
+    );
+
+    rerender(<ChatPage />);
+
+    const body = buildChatRequestBody({
+      question: "What does other say?",
+      docId: mockActiveDocumentId ?? "doc-1",
+      retrieval: capturedRetrievalState,
+    });
+
+    expect(body.doc_id).toBe("doc-2");
+    expect(body.question).toBe("What does other say?");
   });
 });
 
@@ -415,6 +624,7 @@ describe("ChatPage new session retrieval reset", () => {
 describe("ChatPage session navigation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
     mockInitialScope = undefined;
     mockAttachment = null;
     mockActiveSessionId = "11111111-aaaa-bbbb-cccc-000000000001";
@@ -506,5 +716,199 @@ describe("ChatPage session navigation", () => {
     expect(screen.queryByRole("radio", { name: "Config compare" })).not.toBeInTheDocument();
     expect(screen.queryByText("Configuration A")).not.toBeInTheDocument();
     expect(screen.queryByText("Configuration B")).not.toBeInTheDocument();
+  });
+});
+
+describe("ChatPage document replacement labeled flow", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
+    mockInitialScope = undefined;
+    mockActiveSessionId = "session-1";
+    mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
+    mockAttachment = {
+      fileName: "notes.txt",
+      documentId: "doc-1",
+      statusEndpoint: "/documents/doc-1/status",
+      status: "ready",
+    };
+    vi.mocked(getSession).mockResolvedValue({
+      id: "session-1",
+      created_at: "2026-01-01T00:00:00Z",
+      last_active: "2026-01-01T00:00:00Z",
+      metadata: {},
+      document_ids: ["doc-1", "doc-2"],
+      display_label: "New session",
+    });
+    vi.mocked(listDocuments).mockResolvedValue({
+      tenant_id: "t",
+      documents: [
+        {
+          document_id: "doc-1",
+          file_name: "notes.txt",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+          metadata: {},
+        },
+        {
+          document_id: "doc-2",
+          file_name: "other.txt",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+          metadata: {},
+        },
+      ],
+    });
+  });
+
+  it("opens labeled replacement modal when clicking Replace from the document list row", async () => {
+    const user = userEvent.setup();
+    render(<ChatPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Replace other.txt" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Replace other.txt" }));
+
+    expect(
+      screen.getByRole("heading", { name: "Replace other.txt" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "other.txt will be replaced. Its content is re-indexed under the same document ID."
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("opens labeled replacement modal when clicking Replace from the attachment chip", async () => {
+    const user = userEvent.setup();
+    render(<ChatPage />);
+
+    const chipReplace = screen.getByRole("button", { name: "Replace notes.txt" });
+    await user.click(chipReplace);
+
+    expect(
+      screen.getByRole("heading", { name: "Replace notes.txt" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "notes.txt will be replaced. Its content is re-indexed under the same document ID."
+      )
+    ).toBeInTheDocument();
+  });
+});
+
+describe("ChatPage add document action", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
+    mockAddedDocumentNotice = null;
+    mockInitialScope = undefined;
+    mockActiveSessionId = "session-1";
+    mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
+    mockAttachment = {
+      fileName: "policy-2024.pdf",
+      documentId: "doc-1",
+      statusEndpoint: "/documents/doc-1/status",
+      status: "ready",
+    };
+    vi.mocked(getSession).mockResolvedValue({
+      id: "session-1",
+      created_at: "2026-01-01T00:00:00Z",
+      last_active: "2026-01-01T00:00:00Z",
+      metadata: {},
+      document_ids: ["doc-1"],
+      display_label: "New session",
+    });
+    vi.mocked(listDocuments).mockResolvedValue({
+      tenant_id: "t",
+      documents: [
+        {
+          document_id: "doc-1",
+          file_name: "policy-2024.pdf",
+          status: "completed",
+          created_at: null,
+          updated_at: null,
+          metadata: {},
+        },
+      ],
+    });
+  });
+
+  it("reads 'Add document' when session already has a document and opens modal in Add mode", async () => {
+    const user = userEvent.setup();
+    render(<ChatPage />);
+
+    const addButton = screen.getByRole("button", { name: "Add document" });
+    expect(addButton).toBeInTheDocument();
+    expect(addButton).toHaveAttribute("title", "Add document");
+
+    await user.click(addButton);
+
+    expect(
+      screen.getByRole("heading", { name: "Add document" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("PDF, TXT, Markdown, HTML, and DOCX")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Add document — drop a file or press Enter to browse",
+      })
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/will be replaced/i)).not.toBeInTheDocument();
+  });
+
+  it("reads 'Upload document' when session is empty and does not show added line", async () => {
+    mockAttachment = null;
+    vi.mocked(getSession).mockResolvedValue({
+      id: "session-1",
+      created_at: "2026-01-01T00:00:00Z",
+      last_active: "2026-01-01T00:00:00Z",
+      metadata: {},
+      document_ids: [],
+      display_label: "New session",
+    });
+    vi.mocked(listDocuments).mockResolvedValue({
+      tenant_id: "t",
+      documents: [],
+    });
+
+    const user = userEvent.setup();
+    render(<ChatPage />);
+
+    const uploadButton = screen.getByRole("button", { name: "Upload document" });
+    expect(uploadButton).toBeInTheDocument();
+    expect(uploadButton).toHaveAttribute("title", "Upload document");
+
+    await user.click(uploadButton);
+
+    expect(
+      screen.getByRole("heading", { name: "Upload document" })
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("composer-added-document-notice")).not.toBeInTheDocument();
+  });
+
+  it("shows persistent added document line in composer and preserves active doc_id for chat request", () => {
+    mockAddedDocumentNotice = "policy-2025.pdf added. Searching policy-2024.pdf.";
+    mockActiveDocumentId = "doc-1";
+
+    render(<ChatPage />);
+
+    const notice = screen.getByTestId("composer-added-document-notice");
+    expect(notice).toBeVisible();
+    expect(notice).toHaveTextContent("policy-2025.pdf added. Searching policy-2024.pdf.");
+
+    const body = buildChatRequestBody({
+      question: "What is the deductible?",
+      docId: mockActiveDocumentId ?? "doc-1",
+      sessionId: "session-1",
+      retrieval: capturedRetrievalState,
+    });
+
+    expect(body.doc_id).toBe("doc-1");
   });
 });
