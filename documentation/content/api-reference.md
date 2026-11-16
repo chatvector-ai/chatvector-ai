@@ -242,13 +242,28 @@ There is no public HTTP endpoint that runs retrieval over documents; `GET /retri
 
 ## Chat error codes
 
-`POST /chat`, `POST /chat/stream`, and `POST /chat/batch` can return HTTP `200` with `status: "error"` and a structured `error` object (`code`, `message`) for provider or scope failures. Sync and batch use that shape; the stream emits an SSE `error` event with the same `code` and `message`.
+`POST /chat`, `POST /chat/stream`, and `POST /chat/batch` can return HTTP `200` with `status: "error"` and a structured `error` object (`code`, `message`) for provider or scope failures. HTTP 200 does not mean success; check `status`. Sync and batch use that shape; streaming delivers the error as an SSE `error` event with the same `code` and `message` payload.
+
+When printing `answer` on non-streaming chat, callers that inspect `answer` without checking `status` will get an empty string or an error sentence. The main codes returned on non-streaming chat include:
 
 | Code | When |
 |------|------|
+| `llm_*` | LLM provider failures (such as `llm_invalid_api_key`, `llm_rate_limited`, `llm_unreachable`, or `llm_unexpected`). |
+| `anchor_document_excluded_by_filter` | The requested document under session scope does not match the specified `metadata_filter`. |
+| `no_documents_in_scope` | No completed documents were found participating in retrieval for the requested scope and filter. |
 | `embedding_invalid_api_key` | Query embedding is rejected (invalid or missing embedding provider credentials). Same wording as ingestion failures. |
+
+Streaming (`/chat/stream`) and batch (`/chat/batch`) also emit other codes, including `embedding_failed`, `embedding_mismatch`, `stream_failed`, `preset_not_found`, and `invalid_retrieval_config`:
+
+| Code | When |
+|------|------|
 | `embedding_failed` | Batch only: the shared batch embedding call failed for a reason other than auth. |
+| `embedding_mismatch` | Batch only: batch embedding returned a different number of vectors than queries. |
 | `stream_failed` | Stream only: an unexpected error after the stream has started (excluding preset/config errors and embedding auth). |
+| `preset_not_found` | An unknown retrieval preset name was provided in the request or configuration. |
+| `invalid_retrieval_config` | The requested retrieval options violate constraints or cannot be reconciled. |
+
+This set is not closed and can grow as providers and features expand. Callers should handle unknown `code` values gracefully whenever `status == "error"` or an SSE `error` event is received.
 
 Unhandled embedding errors on sync `/chat` still surface as HTTP `500` with `detail.code = "internal_error"`.
 
