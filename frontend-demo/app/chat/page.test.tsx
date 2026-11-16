@@ -19,6 +19,7 @@ const mockSwitchSession = vi.fn();
 const mockDeleteSession = vi.fn();
 
 let mockAttachment: AttachmentState | null = null;
+let mockActiveDocumentId: string | null | undefined = undefined;
 let mockInitialScope: RetrievalScope | undefined = undefined;
 let mockSessions: ChatSession[] = [];
 let mockActiveSessionId = "11111111-aaaa-bbbb-cccc-000000000001";
@@ -105,6 +106,10 @@ vi.mock("../lib/hooks/useChat", () => ({
     inflight: false,
     streaming: false,
     attachment: mockAttachment,
+    activeDocumentId:
+      mockActiveDocumentId !== undefined
+        ? mockActiveDocumentId
+        : (mockAttachment?.documentId ?? null),
     sessionNotice: null,
     removeError: null,
     sendDisabled: true,
@@ -158,6 +163,7 @@ describe("ChatPage preset discovery", () => {
 describe("ChatPage metadata corpus", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
     mockInitialScope = undefined;
     mockActiveSessionId = "session-1";
     mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
@@ -239,6 +245,7 @@ describe("ChatPage metadata corpus", () => {
 describe("ChatPage scope indicator", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
     mockInitialScope = undefined;
     mockActiveSessionId = "session-1";
     mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
@@ -284,11 +291,29 @@ describe("ChatPage scope indicator", () => {
       "Session scope: no document selected — upload a document to search it."
     );
   });
+
+  it("reflects active document filename in the scope indicator", () => {
+    mockActiveDocumentId = "doc-custom";
+    mockAttachment = {
+      fileName: "active-doc.pdf",
+      documentId: "doc-custom",
+      statusEndpoint: "/documents/doc-custom/status",
+      status: "ready",
+    };
+    render(<ChatPage />);
+
+    expect(
+      screen.getByText(
+        "Session scope: searches only the selected document (active-doc.pdf).",
+      ),
+    ).toBeVisible();
+  });
 });
 
 describe("ChatPage session document list", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
     mockInitialScope = undefined;
     mockActiveSessionId = "session-1";
     mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];
@@ -415,6 +440,7 @@ describe("ChatPage new session retrieval reset", () => {
 describe("ChatPage session navigation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
     mockInitialScope = undefined;
     mockAttachment = null;
     mockActiveSessionId = "11111111-aaaa-bbbb-cccc-000000000001";
@@ -512,6 +538,7 @@ describe("ChatPage session navigation", () => {
 describe("ChatPage document replacement labeled flow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveDocumentId = undefined;
     mockInitialScope = undefined;
     mockActiveSessionId = "session-1";
     mockSessions = [{ id: "session-1", createdAt: 1, displayLabel: "New session" }];

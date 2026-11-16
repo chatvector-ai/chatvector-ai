@@ -97,6 +97,7 @@ export default function ChatPage() {
     inflight,
     streaming,
     attachment,
+    activeDocumentId,
     sessionNotice,
     removeError,
     sendDisabled,
@@ -192,10 +193,21 @@ export default function ChatPage() {
     }
   };
 
+  const activeDocumentFileName = useMemo(() => {
+    if (!activeDocumentId) return null;
+    if (attachment?.documentId === activeDocumentId && attachment?.fileName) {
+      return attachment.fileName;
+    }
+    const fromSummary = documentSummaries.find(
+      (d) => d.document_id === activeDocumentId
+    )?.file_name;
+    return fromSummary ?? attachment?.fileName ?? null;
+  }, [activeDocumentId, attachment, documentSummaries]);
+
   const indicatorScope = effectiveScope(retrievalState);
   const scopeIndicator = resolveScopeIndicator(
     retrievalState,
-    attachment?.fileName
+    activeDocumentFileName ?? attachment?.fileName
   );
   const metadataCorpus = useMemo(() => {
     if (indicatorScope === "tenant") {
