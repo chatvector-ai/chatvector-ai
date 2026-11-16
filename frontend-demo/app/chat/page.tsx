@@ -44,6 +44,15 @@ export default function ChatPage() {
     reranker_providers: ["similarity"],
   });
   const [documentSummaries, setDocumentSummaries] = useState<DocumentSummary[]>([]);
+  const documentMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const doc of documentSummaries) {
+      if (doc.id && doc.file_name) {
+        map[doc.id] = doc.file_name;
+      }
+    }
+    return map;
+  }, [documentSummaries]);
   const [sessionDocumentIds, setSessionDocumentIds] = useState<string[]>([]);
   const [documentsRefreshKey, setDocumentsRefreshKey] = useState(0);
   const uploadButtonRef = useRef<HTMLButtonElement>(null);
@@ -397,6 +406,7 @@ export default function ChatPage() {
             historyLoading={historyLoading}
             sessionId={activeSessionId}
             bottomRef={bottomRef}
+            documentMap={documentMap}
           />
 
           <SessionDocumentList

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import RetrievalInspector from "./RetrievalInspector";
 
@@ -254,5 +254,96 @@ describe("RetrievalInspector config and diagnostics", () => {
     expect(screen.getByText("Ran")).toBeInTheDocument();
     expect(screen.getByText("Searched query")).toBeInTheDocument();
     expect(screen.getByText("Effective config")).toBeInTheDocument();
+  });
+});
+
+describe("RetrievalInspector eligible documents section", () => {
+  it("renders eligible documents with resolved filenames and marks contributing documents", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          question: "test question",
+          retrieval_debug: {
+            eligible_document_ids: ["doc-1", "doc-2"],
+            eligible_document_count: 2,
+          },
+          sources: [{ file_name: "handbook.pdf", chunk_index: 0 }],
+        }}
+        documentMap={{
+          "doc-1": "handbook.pdf",
+          "doc-2": "policy.pdf",
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.getByText("Eligible documents (2)")).toBeInTheDocument();
+    const section = screen.getByRole("region", { name: "Eligible documents" });
+    expect(within(section).getByText("handbook.pdf")).toBeInTheDocument();
+    expect(within(section).getByText("policy.pdf")).toBeInTheDocument();
+    expect(within(section).getByText("Contributed chunk")).toBeInTheDocument();
+    expect(screen.queryByText(/truncated/i)).not.toBeInTheDocument();
+  });
+
+  it("does not render eligible documents section when eligible_document_ids is absent", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          question: "test question",
+          retrieval_debug: {
+            original_query: "test",
+          },
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.queryByText(/Eligible documents/)).not.toBeInTheDocument();
+  });
+
+  it("shows short id when document id is unknown", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          question: "test question",
+          retrieval_debug: {
+            eligible_document_ids: ["12345678-90ab-cdef-1234-567890abcdef"],
+            eligible_document_count: 1,
+          },
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.getByText("Eligible documents (1)")).toBeInTheDocument();
+    expect(screen.getByText("12345678")).toBeInTheDocument();
+  });
+
+  it("renders a truncation note when truncated is true or count exceeds list length", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          question: "test question",
+          retrieval_debug: {
+            eligible_document_ids: ["doc-1", "doc-2"],
+            eligible_document_count: 10,
+            truncated: true,
+          },
+        }}
+        documentMap={{
+          "doc-1": "handbook.pdf",
+          "doc-2": "policy.pdf",
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.getByText("Eligible documents (10)")).toBeInTheDocument();
+    expect(screen.getByText(/truncated/i)).toBeInTheDocument();
+    expect(screen.getByText(/Showing first 2 of 10 eligible documents/i)).toBeInTheDocument();
   });
 });

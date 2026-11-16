@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ChatSource, RetrievalInspectorData } from "../lib/api";
+import { getUploadedDocument } from "../lib/documentStore";
 import {
   deduplicatedSources,
   formatLatencySeconds,
@@ -17,7 +18,22 @@ import {
 
 type Props = {
   data: RetrievalInspectorData;
+  documentMap?: Record<string, string>;
 };
+
+function resolveDocumentName(
+  id: string,
+  documentMap?: Record<string, string>
+): string {
+  if (documentMap && documentMap[id]) {
+    return documentMap[id];
+  }
+  const uploaded = getUploadedDocument(id);
+  if (uploaded && uploaded.fileName) {
+    return uploaded.fileName;
+  }
+  return id.length > 8 ? id.slice(0, 8) : id;
+}
 
 function InspectorRow({ label, value }: { label: string; value: string }) {
   return (
@@ -48,7 +64,7 @@ function packedContextItemLabel(item: unknown, index: number): string {
   return `Item ${index + 1}`;
 }
 
-export default function RetrievalInspector({ data }: Props) {
+export default function RetrievalInspector({ data, documentMap }: Props) {
   const [isOpen, setIsOpen] = useState(false);
 
   if (!hasInspectableRetrievalData(data)) {
@@ -56,6 +72,19 @@ export default function RetrievalInspector({ data }: Props) {
   }
 
   const debug = data.retrieval_debug;
+  const eligibleIds = Array.isArray(debug?.eligible_document_ids)
+    ? (debug.eligible_document_ids as string[])
+    : undefined;
+  const eligibleCount =
+    typeof debug?.eligible_document_count === "number"
+      ? debug.eligible_document_count
+      : eligibleIds?.length ?? 0;
+  const isTruncated =
+    debug?.truncated === true ||
+    (typeof debug?.eligible_document_count === "number" &&
+      eligibleIds !== undefined &&
+      debug.eligible_document_count > eligibleIds.length);
+  const activeDocumentMap = documentMap ?? data.documentMap;
   const debugRecord = debug as Record<string, unknown> | undefined;
   const effectiveConfig =
     debug?.effective_config &&
@@ -223,6 +252,47 @@ export default function RetrievalInspector({ data }: Props) {
                 />
               )}
             </dl>
+          </section>
+        )}
+
+        {eligibleIds && (
+          <section aria-label="Eligible documents">
+            <h4 className="mb-1.5 font-medium text-foreground">
+              Eligible documents ({eligibleCount})
+            </h4>
+            <ul className="space-y-1">
+              {eligibleIds.map((id) => {
+                const name = resolveDocumentName(id, activeDocumentMap);
+                const isContributed = sources.some(
+                  (s) =>
+                    (s as unknown as { document_id?: string }).document_id === id ||
+                    s.file_name === name
+                );
+                return (
+                  <li
+                    key={id}
+                    className="flex items-center justify-between gap-2 rounded bg-surface/60 px-2.5 py-1.5 text-xs"
+                  >
+                    <span className="truncate text-foreground" title={name}>
+                      {name}
+                    </span>
+                    {isContributed && (
+                      <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                        Contributed chunk
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {isTruncated && (
+              <p
+                className="mt-1.5 text-xs text-muted"
+                data-testid="eligible-documents-truncated"
+              >
+                Showing first {eligibleIds.length} of {eligibleCount} eligible documents (truncated).
+              </p>
+            )}
           </section>
         )}
 

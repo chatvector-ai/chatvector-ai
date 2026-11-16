@@ -204,6 +204,9 @@ export type RetrievalDebugMetadata = {
   resolved_preset?: string | null;
   timing_ms?: Record<string, number>;
   reranker?: Record<string, unknown>;
+  eligible_document_ids?: string[];
+  eligible_document_count?: number;
+  truncated?: boolean;
   [key: string]: unknown;
 };
 
@@ -225,6 +228,7 @@ export type RetrievalInspectorData = {
   model?: string;
   latency_ms?: number;
   request_latency_ms?: number;
+  documentMap?: Record<string, string>;
 };
 
 export type Message = {

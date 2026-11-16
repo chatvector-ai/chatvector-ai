@@ -134,6 +134,7 @@ export type AiResponseContentProps = {
   metadataClassName?: string;
   zeroChunksClassName?: string;
   emptyMessageClassName?: string;
+  documentMap?: Record<string, string>;
 };
 
 export default function AiResponseContent({
@@ -156,6 +157,7 @@ export default function AiResponseContent({
   metadataClassName = "mt-2 text-xs text-muted",
   zeroChunksClassName = "mt-1 text-sm text-muted italic",
   emptyMessageClassName = "text-sm text-muted italic",
+  documentMap,
 }: AiResponseContentProps) {
   const citationSummary = formatCitationSummary(sources);
   const metadata = formatResponseMetadata({
@@ -201,7 +203,9 @@ export default function AiResponseContent({
             model,
             latency_ms: latencyMs,
             request_latency_ms: requestLatencyMs,
+            documentMap,
           }}
+          documentMap={documentMap}
         />
       )}
     </>
