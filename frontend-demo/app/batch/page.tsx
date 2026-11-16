@@ -274,7 +274,9 @@ export default function BatchPage() {
         <h1 className="mt-2 text-3xl font-bold">Ask one question across many documents</h1>
         <p className="mt-2 max-w-2xl text-muted">
           Select documents you&apos;ve uploaded in the chat, enter a single
-          question, and choose how ChatVector should answer.
+          question, and choose how ChatVector should answer. Running a batch
+          attaches the selected documents to the current chat session (they then
+          appear in the session list as not searched until made active).
         </p>
       </div>
 
