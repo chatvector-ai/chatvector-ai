@@ -45,11 +45,47 @@ def test_build_discovery_returns_names_not_bodies():
         }
     )
     payload = build_retrieval_preset_discovery()
-    assert payload == {
-        "preset_names": ["eval_hybrid"],
-        "reranker_providers": ["similarity"],
+    assert payload["preset_names"] == ["eval_hybrid"]
+    assert payload["reranker_providers"] == ["similarity"]
+    assert "defaults" in payload
+    assert payload.get("eval_hybrid") is None
+
+
+def test_discovery_defaults_matches_effective_config_for_empty_request(monkeypatch):
+    """With monkeypatched process defaults, defaults equals the effective config for an empty request."""
+    from core import config
+    from services.history_config import HistoryProcessDefaults, resolve_history_config
+    from services.retrieval_config import RetrievalProcessDefaults, resolve_retrieval_config
+
+    monkeypatch.setattr(config.config, "HYBRID_RETRIEVAL_ENABLED", True)
+    monkeypatch.setattr(config.config, "HISTORY_AWARE_RETRIEVAL_DEFAULT", False)
+    monkeypatch.setattr(config.config, "QUERY_TRANSFORMATION_HISTORY_WINDOW", 4)
+    monkeypatch.setattr(config.config, "GENERATION_HISTORY_WINDOW", 8)
+
+    payload = build_retrieval_preset_discovery()
+    defaults = payload["defaults"]
+
+    effective_retrieval = resolve_retrieval_config({}, RetrievalProcessDefaults.from_process())
+    effective_history = resolve_history_config({}, HistoryProcessDefaults.from_process())
+
+    assert defaults == {
+        "scope": effective_retrieval.scope,
+        "match_count": effective_retrieval.match_count,
+        "history_aware_retrieval": effective_history.history_aware_retrieval,
+        "retrieval_history_window": effective_history.retrieval_history_window,
+        "generation_history_window": effective_history.generation_history_window,
+        "hybrid_enabled": effective_retrieval.hybrid_enabled,
+        "reranking_enabled": effective_retrieval.reranking_enabled,
+        "reranker_provider": effective_retrieval.reranker_provider,
+        "query_transformation_enabled": effective_retrieval.query_transformation_enabled,
+        "query_transformation_strategy": effective_retrieval.query_transformation_strategy,
+        "max_context_chars": effective_retrieval.max_context_chars,
     }
-    assert "hybrid_enabled" not in json.dumps(payload)
+
+    assert defaults["hybrid_enabled"] is True
+    assert defaults["history_aware_retrieval"] is False
+    assert defaults["retrieval_history_window"] == 4
+    assert defaults["generation_history_window"] == 8
 
 
 def test_reranker_providers_includes_cohere_when_key_set(monkeypatch):
@@ -87,8 +123,15 @@ def test_discovery_payload_is_not_a_capabilities_catalog():
         assert token not in serialized
 
 
+def _safe_reset_limiter():
+    try:
+        limiter.reset()
+    except Exception:
+        pass
+
+
 def _discovery_client():
-    limiter.reset()
+    _safe_reset_limiter()
     app = FastAPI()
     app.state.limiter = limiter
     app.include_router(retrieval_router)
@@ -109,7 +152,9 @@ def test_get_retrieval_presets_route_returns_200():
     body = response.json()
     assert body["preset_names"] == ["alpha", "beta"]
     assert body["reranker_providers"] == ["similarity"]
-    assert "hybrid_enabled" not in response.text
+    assert "defaults" in body
+    assert body.get("alpha") is None
+    assert body.get("beta") is None
 
 
 @pytest.mark.asyncio
@@ -133,7 +178,7 @@ def test_chat_unknown_preset_still_preset_not_found():
     from services.retrieval_presets import RetrievalPresetNotFoundError
 
     set_retrieval_presets_for_tests({})
-    limiter.reset()
+    _safe_reset_limiter()
     app = FastAPI()
     app.state.limiter = limiter
     app.add_exception_handler(RetrievalPresetNotFoundError, retrieval_preset_not_found_handler)

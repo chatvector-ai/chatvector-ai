@@ -1,11 +1,12 @@
 import { deleteDocument, getSession } from "./api";
-import { removeUploadedDocument } from "./documentStore";
+import { removeUploadedDocument, clearStoredActiveDocumentId } from "./documentStore";
 
 /**
  * Demo-only: delete documents bound to a session and drop them from the
  * browser document registry so batch does not keep stale entries.
  */
 export async function cleanupSessionDocuments(sessionId: string): Promise<void> {
+  clearStoredActiveDocumentId(sessionId);
   let documentIds: string[] = [];
 
   try {

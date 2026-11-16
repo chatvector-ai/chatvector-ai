@@ -114,6 +114,16 @@ describe("BatchPage", () => {
     expect(screen.getByText("File 1.pdf")).toBeInTheDocument();
   });
 
+  it("informs the user that running a batch attaches selected documents to the chat session", async () => {
+    render(<BatchPage />);
+
+    expect(
+      await screen.findByText(
+        /Running a batch attaches the selected documents to the current chat session \(they then appear in the session list as not searched until made active\)\./,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("keeps compare results when mode changes during an in-flight request", async () => {
     let resolveBatch: ((value: BatchChatResponse) => void) | undefined;
     vi.mocked(sendBatchMessage).mockImplementation(

@@ -129,7 +129,7 @@ A strategy other than `none` enables transformation for that request even when `
 
 Nested objects, arrays as operands, `null`, an empty object, unknown operators, and any other shape are rejected with `422`. The filter is bounded by `DOCUMENT_METADATA_MAX_KEYS` and `DOCUMENT_METADATA_MAX_BYTES`. Array metadata such as tags is not supported in v1.
 
-The filter applies at document level, after the session or tenant scope is resolved and always within the authenticated tenant. It cannot widen tenant or document scope. `doc_id` stays required on `POST /chat` and `POST /chat/stream`. The requested (`doc_id`) document must itself match the filter. Under session scope, `metadata_filter` applies only to that requested document; it can narrow retrieval within it but cannot replace it with other session documents. Otherwise chat, stream, and batch return `anchor_document_excluded_by_filter` (an `error` event on the stream) with a message that the requested document does not match the filter and that, under session scope, the filter can only narrow the requested document. Omitting `metadata_filter` leaves retrieval unchanged.
+The filter applies at document level, after the session or tenant scope is resolved and always within the authenticated tenant. It cannot widen tenant or document scope. `doc_id` stays required on `POST /chat` and `POST /chat/stream`. Under session scope, the requested (`doc_id`) document must itself match the filter: `metadata_filter` applies only to that requested document; it can narrow retrieval within it but cannot replace it with other session documents. If the requested document does not match the filter under session scope, chat, stream, and batch return `anchor_document_excluded_by_filter` (an `error` event on the stream) with a message that under session scope the filter can only narrow the requested document, and pointing to tenant scope to filter across documents. Under tenant scope, retrieval searches all tenant documents matching the filter without requiring the requested document to survive; if no documents match under tenant scope, retrieval returns `no_documents_in_scope`. Omitting `metadata_filter` leaves retrieval unchanged.
 
 ### Named presets
 
@@ -143,19 +143,33 @@ Unknown preset names return 400 `preset_not_found` on `/chat`, `/chat/stream`, a
 
 ### Preset discovery
 
-`GET /retrieval/presets` is a read-only discovery route for preset names loaded in this process and for reranker provider identifiers the server can use. It does not return preset bodies, environment defaults, or secrets. Authentication follows [Authentication](#authentication) above; the auth context must include a tenant (otherwise `401`). In production, send `Authorization: Bearer …` as for other protected routes.
+`GET /retrieval/presets` is a read-only discovery route for preset names loaded in this process, reranker provider identifiers the server can use, and process-level effective retrieval/history defaults. It does not return preset bodies or secrets. Authentication follows [Authentication](#authentication) above; the auth context must include a tenant (otherwise `401`). In production, send `Authorization: Bearer …` as for other protected routes.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `preset_names` | string array | Sorted names of presets from `RETRIEVAL_PRESETS_PATH` / `RETRIEVAL_PRESETS`. Empty when no presets are loaded. |
 | `reranker_providers` | string array | Always includes `similarity`. Includes `cohere` when `COHERE_API_KEY` is set on the server. |
+| `defaults` | object | Effective process defaults for an unconfigured request: `scope`, `match_count`, `history_aware_retrieval`, `retrieval_history_window`, `generation_history_window`, `hybrid_enabled`, `reranking_enabled`, `reranker_provider`, `query_transformation_enabled`, `query_transformation_strategy`, and `max_context_chars`. |
 
 Example when presets exist and Cohere is configured:
 
 ```json
 {
   "preset_names": ["eval_hybrid", "legal_dense"],
-  "reranker_providers": ["similarity", "cohere"]
+  "reranker_providers": ["similarity", "cohere"],
+  "defaults": {
+    "scope": "session",
+    "match_count": 5,
+    "history_aware_retrieval": true,
+    "retrieval_history_window": 6,
+    "generation_history_window": 10,
+    "hybrid_enabled": false,
+    "reranking_enabled": false,
+    "reranker_provider": "similarity",
+    "query_transformation_enabled": false,
+    "query_transformation_strategy": "rewrite",
+    "max_context_chars": 32000
+  }
 }
 ```
 
@@ -169,7 +183,7 @@ The optional `job` object can include `attempt`, timestamps, and `failure_class`
 
 ## Retrieval debug
 
-Set `debug_retrieval` to `true` as a query parameter or request field. The response adds `retrieval_debug`. It is diagnostic. Useful fields include `effective_config` (resolved value and source `request`, `preset`, or `env`), the effective retrieval query, history-considered / skip reason, `history_resolution_latency_ms` when a resolution call ran, retrieval and rerank timings, component scores, and `reranker.fallback_reason` when a hosted reranker fell back. Stream `complete.latency_ms` is generation time only. `request_latency_ms` includes history resolution and retrieval.
+Set `debug_retrieval` to `true` as a query parameter or request field. The response adds `retrieval_debug`. It is diagnostic. Useful fields include `effective_config` (resolved value and source `request`, `preset`, or `env`), the effective retrieval query, history-considered / skip reason, `history_resolution_latency_ms` when a resolution call ran, retrieval and rerank timings, component scores, and `reranker.fallback_reason` when a hosted reranker fell back. Retrieval debug also reports `eligible_document_ids` (the resolved document IDs after scope, tenant isolation, and metadata-filter evaluation, prior to ranking and top-k truncation), `eligible_document_count` (total count of eligible documents before truncation), and `truncated` (boolean indicating whether `eligible_document_ids` was capped by `RETRIEVAL_DEBUG_MAX_ELIGIBLE_IDS`, default 100). Stream `complete.latency_ms` is generation time only. `request_latency_ms` includes history resolution and retrieval.
 
 ## Evaluation
 

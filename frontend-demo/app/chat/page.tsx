@@ -33,6 +33,9 @@ import {
 
 export default function ChatPage() {
   const [showModal, setShowModal] = useState(false);
+  const [modalMode, setModalMode] = useState<"upload" | "add" | "replace">("upload");
+  const [replaceDocumentId, setReplaceDocumentId] = useState<string | null>(null);
+  const [replaceFileName, setReplaceFileName] = useState<string | null>(null);
   const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false);
   const [inspectMode, setInspectMode] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -41,11 +44,18 @@ export default function ChatPage() {
     reranker_providers: ["similarity"],
   });
   const [documentSummaries, setDocumentSummaries] = useState<DocumentSummary[]>([]);
+  const documentMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const doc of documentSummaries) {
+      const id = doc.document_id || (doc as unknown as { id?: string }).id;
+      if (id && doc.file_name) {
+        map[id] = doc.file_name;
+      }
+    }
+    return map;
+  }, [documentSummaries]);
   const [sessionDocumentIds, setSessionDocumentIds] = useState<string[]>([]);
   const [documentsRefreshKey, setDocumentsRefreshKey] = useState(0);
-  const [replaceDocumentIdFromList, setReplaceDocumentIdFromList] = useState<
-    string | null
-  >(null);
   const uploadButtonRef = useRef<HTMLButtonElement>(null);
   const {
     sessions,
@@ -97,6 +107,8 @@ export default function ChatPage() {
     inflight,
     streaming,
     attachment,
+    activeDocumentId,
+    addedDocumentNotice,
     sessionNotice,
     removeError,
     sendDisabled,
@@ -106,6 +118,7 @@ export default function ChatPage() {
     handleKeyDown,
     handleUploadAccepted,
     handleRemoveAttachment,
+    selectActiveDocument,
     stopStreaming,
   } = useChat(
     activeSessionId,
@@ -147,15 +160,72 @@ export default function ChatPage() {
     setDocumentsRefreshKey((key) => key + 1);
   };
 
-  const resolvedReplaceDocumentId =
-    replaceDocumentIdFromList ??
-    (attachment && attachment.status !== "processing"
-      ? attachment.documentId
-      : null);
+  const hasSessionDocument = Boolean(attachment || sessionDocumentIds.length > 0);
+
+  const hasUnsettledSessionDocs = useMemo(() => {
+    return documentSummaries.some(
+      (d) =>
+        sessionDocumentIds.includes(d.document_id) &&
+        d.status !== "completed" &&
+        d.status !== "failed"
+    );
+  }, [documentSummaries, sessionDocumentIds]);
+
+  useEffect(() => {
+    if (!hasUnsettledSessionDocs) return;
+    const interval = setInterval(() => {
+      refreshSessionDocuments();
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [hasUnsettledSessionDocs]);
+
+  const handleOpenUploadModal = () => {
+    setReplaceDocumentId(null);
+    setReplaceFileName(null);
+    setModalMode(hasSessionDocument ? "add" : "upload");
+    setShowModal(true);
+  };
+
+  const handleReplaceActiveAttachment = () => {
+    if (!attachment) return;
+    setReplaceDocumentId(attachment.documentId);
+    setReplaceFileName(attachment.fileName ?? null);
+    setModalMode("replace");
+    setShowModal(true);
+  };
 
   const handleReplaceDocument = (documentId: string) => {
-    setReplaceDocumentIdFromList(documentId);
+    const summary = documentSummaries.find((d) => d.document_id === documentId);
+    const fileName =
+      summary?.file_name ??
+      (attachment?.documentId === documentId ? attachment.fileName : null);
+    setReplaceDocumentId(documentId);
+    setReplaceFileName(fileName ?? null);
+    setModalMode("replace");
     setShowModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setReplaceDocumentId(null);
+    setReplaceFileName(null);
+    setModalMode("upload");
+  };
+
+  const handleUploadAcceptedWithRefresh = (
+    payload: Parameters<typeof handleUploadAccepted>[0]
+  ) => {
+    handleUploadAccepted(payload);
+    refreshSessionDocuments();
+  };
+
+  const handleMakeActive = (documentId: string) => {
+    const summary = documentSummaries.find((d) => d.document_id === documentId);
+    void selectActiveDocument(
+      documentId,
+      summary?.file_name,
+      summary?.metadata,
+    );
   };
 
   const handleDeleteListedDocument = async (documentId: string) => {
@@ -174,10 +244,21 @@ export default function ChatPage() {
     }
   };
 
+  const activeDocumentFileName = useMemo(() => {
+    if (!activeDocumentId) return null;
+    if (attachment?.documentId === activeDocumentId && attachment?.fileName) {
+      return attachment.fileName;
+    }
+    const fromSummary = documentSummaries.find(
+      (d) => d.document_id === activeDocumentId
+    )?.file_name;
+    return fromSummary ?? attachment?.fileName ?? null;
+  }, [activeDocumentId, attachment, documentSummaries]);
+
   const indicatorScope = effectiveScope(retrievalState);
   const scopeIndicator = resolveScopeIndicator(
     retrievalState,
-    attachment?.fileName
+    activeDocumentFileName ?? attachment?.fileName
   );
   const metadataCorpus = useMemo(() => {
     if (indicatorScope === "tenant") {
@@ -294,17 +375,19 @@ export default function ChatPage() {
         {showModal && (
           <UploadModal
             sessionId={activeSessionId}
-            onClose={() => {
-              setShowModal(false);
-              setReplaceDocumentIdFromList(null);
-            }}
+            onClose={handleCloseModal}
             returnFocusRef={uploadButtonRef}
-            replaceDocumentId={resolvedReplaceDocumentId}
-            onUploadAccepted={handleUploadAccepted}
+            isAdd={modalMode === "add"}
+            replaceDocumentId={modalMode === "replace" ? replaceDocumentId : null}
+            replaceFileName={modalMode === "replace" ? replaceFileName : null}
+            onUploadAccepted={handleUploadAcceptedWithRefresh}
             attachment={
-              attachment
+              modalMode === "replace" &&
+              attachment &&
+              attachment.documentId === replaceDocumentId
                 ? {
                     documentId: attachment.documentId,
+                    fileName: attachment.fileName,
                     status: attachment.status,
                     stage: poll.stage,
                     chunks: poll.chunks,
@@ -324,6 +407,7 @@ export default function ChatPage() {
             historyLoading={historyLoading}
             sessionId={activeSessionId}
             bottomRef={bottomRef}
+            documentMap={documentMap}
           />
 
           <SessionDocumentList
@@ -331,6 +415,8 @@ export default function ChatPage() {
             documentSummaries={documentSummaries}
             retrievalState={retrievalState}
             attachment={attachment}
+            activeDocumentId={activeDocumentId}
+            onMakeActive={handleMakeActive}
             onReplace={handleReplaceDocument}
             onDelete={(id) => void handleDeleteListedDocument(id)}
             actionsDisabled={inflight || streaming}
@@ -357,6 +443,7 @@ export default function ChatPage() {
               metadataCorpus={metadataCorpus}
               availablePresets={discovery.presets}
               availableRerankerProviders={discovery.reranker_providers}
+              defaults={discovery.defaults}
               inspectMode={inspectMode}
               onInspectModeChange={setInspectMode}
             />
@@ -369,17 +456,20 @@ export default function ChatPage() {
             inflight={inflight}
             streaming={streaming}
             attachment={attachment}
+            addedDocumentNotice={addedDocumentNotice}
             sessionNotice={sessionNotice}
             removeError={removeError}
             poll={poll}
             handleSend={handleSend}
             handleKeyDown={handleKeyDown}
             handleRemoveAttachment={handleRemoveAttachment}
-            onUploadClick={() => setShowModal(true)}
+            onReplaceAttachment={handleReplaceActiveAttachment}
+            onUploadClick={handleOpenUploadModal}
             uploadButtonRef={uploadButtonRef}
             stopStreaming={stopStreaming}
             scopeIndicator={scopeIndicator}
             metadataFilterSummary={metadataFilterSummary}
+            isAdd={hasSessionDocument}
           />
         </div>
       </div>

@@ -13,6 +13,6 @@ router = APIRouter()
 async def list_retrieval_presets(
     request: Request, auth: AuthContext = Depends(require_auth)
 ):
-    """List loaded retrieval preset names and configured reranker identifiers."""
+    """List loaded retrieval preset names, configured rerankers, and effective defaults."""
     require_current_tenant(auth)
     return build_retrieval_preset_discovery()

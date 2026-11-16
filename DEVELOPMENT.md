@@ -688,7 +688,7 @@ The question file declares the chunk settings its labels assume:
 "chunk_settings": {"chunking_strategy": "fixed", "chunk_size": 1000, "chunk_overlap": 200}
 ```
 
-Those values must match the manifest's `CHUNKING_STRATEGY`, `CHUNK_SIZE`, and `CHUNK_OVERLAP`. A mismatch stops the run before metrics are computed. A query with `"scope": "tenant"` searches every document in the manifest and does not list those ids itself. `metadata_filter` on a row is stored and narrows that row's documents the same way chat does. `simulate_session` defaults to false, so a run does not inherit conversational history unless the fixture sets it.
+Those values must match the manifest's `CHUNKING_STRATEGY`, `CHUNK_SIZE`, and `CHUNK_OVERLAP`. A mismatch stops the run before metrics are computed. A query with `"scope": "tenant"` searches every document in the manifest and does not list those ids itself. `metadata_filter` on a row is stored and narrows that row's documents the same way chat does (in chat, session scope requires the anchor document to match the filter, whereas tenant scope searches all matching documents across the tenant without requiring the anchor document to match). `simulate_session` defaults to false, so a run does not inherit conversational history unless the fixture sets it.
 
 An arm file is a JSON object of retrieval overrides, for example `{"hybrid_enabled": true, "match_count": 8}`. There is no public HTTP retrieval endpoint.
 

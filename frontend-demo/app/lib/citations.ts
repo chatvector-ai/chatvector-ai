@@ -291,6 +291,12 @@ export function hasInspectableRetrievalData(data: RetrievalInspectorData): boole
       return true;
     }
     if (packedContextFromDebug(debug as Record<string, unknown>)) return true;
+    if (
+      Array.isArray(debug.eligible_document_ids) &&
+      debug.eligible_document_ids.length > 0
+    ) {
+      return true;
+    }
   }
   if (data.sources && data.sources.length > 0) return true;
   if (data.chunks !== undefined) return true;

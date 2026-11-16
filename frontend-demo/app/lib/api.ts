@@ -49,10 +49,76 @@ export type ChatCallOptions = {
   signal?: AbortSignal;
 };
 
+export type RetrievalDiscoveryDefaults = {
+  scope?: string;
+  match_count?: number;
+  history_aware_retrieval?: boolean;
+  retrieval_history_window?: number;
+  generation_history_window?: number;
+  hybrid_enabled?: boolean;
+  reranking_enabled?: boolean;
+  reranker_provider?: string;
+  query_transformation_enabled?: boolean;
+  query_transformation_strategy?: string;
+  max_context_chars?: number;
+};
+
 export type RetrievalDiscoveryResponse = {
   presets: string[];
   reranker_providers: RerankerProvider[];
+  defaults?: RetrievalDiscoveryDefaults;
 };
+
+export function parseRetrievalDiscoveryDefaults(
+  raw: unknown
+): RetrievalDiscoveryDefaults | undefined {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
+    return undefined;
+  }
+  const rec = raw as Record<string, unknown>;
+  const parsed: RetrievalDiscoveryDefaults = {};
+  if (typeof rec.scope === "string") parsed.scope = rec.scope;
+  if (typeof rec.match_count === "number" && !Number.isNaN(rec.match_count)) {
+    parsed.match_count = rec.match_count;
+  }
+  if (typeof rec.history_aware_retrieval === "boolean") {
+    parsed.history_aware_retrieval = rec.history_aware_retrieval;
+  }
+  if (
+    typeof rec.retrieval_history_window === "number" &&
+    !Number.isNaN(rec.retrieval_history_window)
+  ) {
+    parsed.retrieval_history_window = rec.retrieval_history_window;
+  }
+  if (
+    typeof rec.generation_history_window === "number" &&
+    !Number.isNaN(rec.generation_history_window)
+  ) {
+    parsed.generation_history_window = rec.generation_history_window;
+  }
+  if (typeof rec.hybrid_enabled === "boolean") {
+    parsed.hybrid_enabled = rec.hybrid_enabled;
+  }
+  if (typeof rec.reranking_enabled === "boolean") {
+    parsed.reranking_enabled = rec.reranking_enabled;
+  }
+  if (typeof rec.reranker_provider === "string") {
+    parsed.reranker_provider = rec.reranker_provider;
+  }
+  if (typeof rec.query_transformation_enabled === "boolean") {
+    parsed.query_transformation_enabled = rec.query_transformation_enabled;
+  }
+  if (typeof rec.query_transformation_strategy === "string") {
+    parsed.query_transformation_strategy = rec.query_transformation_strategy;
+  }
+  if (
+    typeof rec.max_context_chars === "number" &&
+    !Number.isNaN(rec.max_context_chars)
+  ) {
+    parsed.max_context_chars = rec.max_context_chars;
+  }
+  return Object.keys(parsed).length > 0 ? parsed : undefined;
+}
 
 export async function fetchRetrievalDiscovery(): Promise<RetrievalDiscoveryResponse> {
   try {
@@ -76,7 +142,12 @@ export async function fetchRetrievalDiscovery(): Promise<RetrievalDiscoveryRespo
     const presets = Array.isArray(rawPresetNames)
       ? rawPresetNames.filter((p): p is string => typeof p === "string")
       : [];
-    return { presets, reranker_providers: providers };
+    const defaults = parseRetrievalDiscoveryDefaults(data.defaults);
+    return {
+      presets,
+      reranker_providers: providers,
+      ...(defaults !== undefined ? { defaults } : {}),
+    };
   } catch {
     return { presets: [], reranker_providers: ["similarity"] };
   }
@@ -133,6 +204,9 @@ export type RetrievalDebugMetadata = {
   resolved_preset?: string | null;
   timing_ms?: Record<string, number>;
   reranker?: Record<string, unknown>;
+  eligible_document_ids?: string[];
+  eligible_document_count?: number;
+  truncated?: boolean;
   [key: string]: unknown;
 };
 
@@ -154,6 +228,7 @@ export type RetrievalInspectorData = {
   model?: string;
   latency_ms?: number;
   request_latency_ms?: number;
+  documentMap?: Record<string, string>;
 };
 
 export type Message = {
