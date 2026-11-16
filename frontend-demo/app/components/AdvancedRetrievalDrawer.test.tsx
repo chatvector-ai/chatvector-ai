@@ -313,8 +313,11 @@ describe("AdvancedRetrievalDrawer", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /under session scope, the filter applies only to the active document/i
+        /under session scope, the filter can only narrow the active document/i
       )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/to filter across the library, use tenant scope/i)
     ).toBeInTheDocument();
     expect(screen.queryByText(/active document \(/i)).not.toBeInTheDocument();
     expect(
@@ -335,6 +338,9 @@ describe("AdvancedRetrievalDrawer", () => {
 
     expect(
       screen.getByText(/active document \(handbook\.pdf\)/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/to filter across the library, use tenant scope/i)
     ).toBeInTheDocument();
   });
 

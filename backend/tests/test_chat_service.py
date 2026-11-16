@@ -1552,6 +1552,9 @@ async def test_chat_response_omits_retrieval_debug_by_default():
         )
 
     assert "retrieval_debug" not in result
+    assert "eligible_document_ids" not in result
+    assert "eligible_document_count" not in result
+    assert "truncated" not in result
 
 
 @pytest.mark.asyncio
@@ -1585,6 +1588,9 @@ async def test_chat_response_includes_retrieval_debug_when_opted_in():
     assert debug["effective_retrieval_query"] == transform_result.queries[0]
     assert "effective_config" in debug
     assert "timing_ms" in debug
+    assert debug["eligible_document_ids"] == ["doc-1"]
+    assert debug["eligible_document_count"] == 1
+    assert debug["truncated"] is False
 
 
 @pytest.mark.asyncio
@@ -1624,6 +1630,9 @@ async def test_chat_soft_error_includes_retrieval_debug_when_opted_in():
     assert debug["effective_retrieval_query"] == transform_result.queries[0]
     assert "effective_config" in debug
     assert "timing_ms" in debug
+    assert debug["eligible_document_ids"] == ["doc-1"]
+    assert debug["eligible_document_count"] == 1
+    assert debug["truncated"] is False
 
 
 @pytest.mark.asyncio
@@ -1666,6 +1675,9 @@ async def test_stream_complete_omits_retrieval_debug_by_default():
 
     _, complete_data = _parse_sse_event(events[-2])
     assert "retrieval_debug" not in complete_data
+    assert "eligible_document_ids" not in complete_data
+    assert "eligible_document_count" not in complete_data
+    assert "truncated" not in complete_data
 
 
 @pytest.mark.asyncio
@@ -1713,6 +1725,9 @@ async def test_stream_complete_includes_retrieval_debug_when_opted_in():
         assert debug[key] == value
     assert debug["effective_retrieval_query"] == transform_result.queries[0]
     assert "effective_config" in debug
+    assert debug["eligible_document_ids"] == ["doc-1"]
+    assert debug["eligible_document_count"] == 1
+    assert debug["truncated"] is False
 
 
 @pytest.mark.asyncio
@@ -1739,6 +1754,9 @@ async def test_batch_result_omits_retrieval_debug_by_default():
         )
 
     assert "retrieval_debug" not in results[0]
+    assert "eligible_document_ids" not in results[0]
+    assert "eligible_document_count" not in results[0]
+    assert "truncated" not in results[0]
 
 
 @pytest.mark.asyncio
@@ -1770,6 +1788,9 @@ async def test_batch_result_includes_retrieval_debug_when_opted_in():
         assert debug[key] == value
     assert debug["effective_retrieval_query"] == transform_result.queries[0]
     assert "effective_config" in debug
+    assert debug["eligible_document_ids"] == ["doc-a"]
+    assert debug["eligible_document_count"] == 1
+    assert debug["truncated"] is False
 
 
 @pytest.mark.asyncio
@@ -1807,6 +1828,63 @@ async def test_batch_soft_error_includes_retrieval_debug_when_opted_in():
         assert debug[key] == value
     assert debug["effective_retrieval_query"] == transform_result.queries[0]
     assert "effective_config" in debug
+    assert debug["eligible_document_ids"] == ["doc-a"]
+    assert debug["eligible_document_count"] == 1
+    assert debug["truncated"] is False
+
+
+def test_retrieval_result_to_debug_dict_eligible_document_ids_capping(monkeypatch):
+    """RetrievalResult.to_debug_dict truncates eligible_document_ids beyond cap."""
+    from core.config import config
+    from services.chat_service import RetrievalResult
+    from services.retrieval_config import resolve_retrieval_config, RetrievalProcessDefaults
+
+    retrieval = RetrievalResult(
+        chunks=[],
+        queries=["q"],
+        primary_query="q",
+        context="",
+        timing_ms={"search": 10},
+        transform_result=QueryTransformResult(queries=["q"], original_query="q"),
+        effective_config=resolve_retrieval_config({}, RetrievalProcessDefaults.from_process()),
+        eligible_document_ids=[f"doc-{i}" for i in range(150)],
+    )
+
+    # Default cap is 100
+    debug = retrieval.to_debug_dict()
+    assert len(debug["eligible_document_ids"]) == 100
+    assert debug["eligible_document_ids"] == [f"doc-{i}" for i in range(100)]
+    assert debug["eligible_document_count"] == 150
+    assert debug["truncated"] is True
+
+    # Custom monkeypatched cap
+    monkeypatch.setattr(config, "RETRIEVAL_DEBUG_MAX_ELIGIBLE_IDS", 3)
+    debug_capped = retrieval.to_debug_dict()
+    assert len(debug_capped["eligible_document_ids"]) == 3
+    assert debug_capped["eligible_document_ids"] == ["doc-0", "doc-1", "doc-2"]
+    assert debug_capped["eligible_document_count"] == 150
+    assert debug_capped["truncated"] is True
+
+
+def test_retrieval_result_to_debug_dict_empty_eligible_ids():
+    from services.chat_service import RetrievalResult
+    from services.retrieval_config import resolve_retrieval_config, RetrievalProcessDefaults
+
+    retrieval = RetrievalResult(
+        chunks=[],
+        queries=["q"],
+        primary_query="q",
+        context="",
+        timing_ms={"search": 10},
+        transform_result=QueryTransformResult(queries=["q"], original_query="q"),
+        effective_config=resolve_retrieval_config({}, RetrievalProcessDefaults.from_process()),
+        eligible_document_ids=[],
+    )
+
+    debug = retrieval.to_debug_dict()
+    assert debug["eligible_document_ids"] == []
+    assert debug["eligible_document_count"] == 0
+    assert debug["truncated"] is False
 
 
 @pytest.mark.asyncio

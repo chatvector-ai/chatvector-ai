@@ -48,6 +48,9 @@ vi.mock("../documentStore", () => ({
   saveUploadedDocument: vi.fn(),
   removeUploadedDocument: vi.fn(),
   getUploadedDocument: vi.fn(),
+  getStoredActiveDocumentId: vi.fn(),
+  setStoredActiveDocumentId: vi.fn(),
+  clearStoredActiveDocumentId: vi.fn(),
 }));
 
 const CITED_LINE = "handbook-v1.pdf · p.3-5 · chunk 2 · notes.txt · chunk 0";

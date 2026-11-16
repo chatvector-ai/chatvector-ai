@@ -3,10 +3,14 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import UploadModal from "./UploadModal";
 
-vi.mock("../lib/api", () => ({
-  uploadDocument: vi.fn(),
-  deleteDocument: vi.fn(),
-}));
+vi.mock("../lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/api")>();
+  return {
+    ...actual,
+    uploadDocument: vi.fn(),
+    deleteDocument: vi.fn(),
+  };
+});
 
 import { uploadDocument, deleteDocument } from "../lib/api";
 import { BackendApiError } from "../lib/apiErrors";
@@ -338,5 +342,156 @@ describe("UploadModal", () => {
     ).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
     expect(screen.queryByText(/Upload Successful/i)).not.toBeInTheDocument();
+  });
+
+  it("labels replacement action with the target file name, explains in-place re-indexing, and labels the dropzone", () => {
+    render(
+      <UploadModal
+        onClose={vi.fn()}
+        sessionId="sess-1"
+        replaceDocumentId="doc-harbor"
+        replaceFileName="harbor.pdf"
+        onUploadAccepted={vi.fn()}
+        attachment={null}
+      />
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Replace harbor.pdf" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "harbor.pdf will be replaced. Its content is re-indexed under the same document ID."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Replace harbor.pdf" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Choose a new file to replace harbor.pdf")
+    ).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("heading", { name: "Upload document" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("PDF, TXT, Markdown, HTML, and DOCX")
+    ).not.toBeInTheDocument();
+  });
+
+  it("falls back to attachment fileName when replaceFileName is not explicitly passed", () => {
+    render(
+      <UploadModal
+        onClose={vi.fn()}
+        sessionId="sess-1"
+        onUploadAccepted={vi.fn()}
+        attachment={{
+          documentId: "doc-notes",
+          fileName: "notes.txt",
+          status: "ready",
+        }}
+      />
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Replace notes.txt" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "notes.txt will be replaced. Its content is re-indexed under the same document ID."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Replace notes.txt" })
+    ).toBeInTheDocument();
+  });
+
+  it("keeps original Upload document copy when not replacing", () => {
+    render(
+      <UploadModal
+        onClose={vi.fn()}
+        onUploadAccepted={vi.fn()}
+        attachment={null}
+      />
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Upload document" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("PDF, TXT, Markdown, HTML, and DOCX")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Upload document — drop a file or press Enter to browse",
+      })
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/will be replaced/i)).not.toBeInTheDocument();
+  });
+
+  it("renders Add document heading and dropzone label when isAdd is true", () => {
+    render(
+      <UploadModal
+        onClose={vi.fn()}
+        isAdd={true}
+        sessionId="sess-1"
+        onUploadAccepted={vi.fn()}
+        attachment={{
+          documentId: "doc-notes",
+          fileName: "notes.txt",
+          status: "ready",
+        }}
+      />
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Add document" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("PDF, TXT, Markdown, HTML, and DOCX")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Add document — drop a file or press Enter to browse",
+      })
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/will be replaced/i)).not.toBeInTheDocument();
+  });
+
+  it("uploads with null replaceDocumentId and marks payload as isAdd when adding a document", async () => {
+    vi.mocked(uploadDocument).mockResolvedValue({
+      documentId: "doc-new",
+      statusEndpoint: "/documents/doc-new/status",
+      queuePosition: 1,
+    });
+    const onUploadAccepted = vi.fn();
+
+    render(
+      <UploadModal
+        onClose={vi.fn()}
+        isAdd={true}
+        sessionId="sess-1"
+        onUploadAccepted={onUploadAccepted}
+        attachment={{
+          documentId: "doc-old",
+          fileName: "notes.txt",
+          status: "ready",
+        }}
+      />
+    );
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["%PDF"], "second.pdf", { type: "application/pdf" });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await screen.findByText("second.pdf");
+    expect(uploadDocument).toHaveBeenCalledWith(file, "sess-1", null, undefined);
+    expect(onUploadAccepted).toHaveBeenCalledWith({
+      fileName: "second.pdf",
+      documentId: "doc-new",
+      statusEndpoint: "/documents/doc-new/status",
+      queuePosition: 1,
+      isAdd: true,
+    });
   });
 });

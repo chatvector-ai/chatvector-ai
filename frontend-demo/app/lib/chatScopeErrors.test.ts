@@ -16,6 +16,8 @@ describe("mapChatTurnError", () => {
 
     expect(mapped.message).toContain("notes.pdf");
     expect(mapped.message).toMatch(/session scope/i);
+    expect(mapped.message).toMatch(/under session scope, the filter can only narrow the active document/i);
+    expect(mapped.message).toMatch(/to filter across the library, use tenant scope/i);
     expect(mapped.message).toMatch(/clear or change the filter/i);
     expect(mapped.code).toBe("anchor_document_excluded_by_filter");
   });

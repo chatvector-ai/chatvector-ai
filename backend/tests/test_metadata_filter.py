@@ -392,6 +392,7 @@ async def test_chat_filter_narrows_searched_documents_but_keeps_anchor():
 
 @pytest.mark.asyncio
 async def test_chat_anchor_outside_filtered_scope_returns_structured_error():
+    """Under tenant scope, anchor exclusion is lifted; search succeeds over matching docs."""
     _register_docs("tenant-a", "doc-1", "doc-2")
     find_similar = AsyncMock(return_value=[])
     p1, p2, p3, p4 = _chat_patches(find_similar)
@@ -408,10 +409,106 @@ async def test_chat_anchor_outside_filtered_scope_returns_structured_error():
             retrieval_fields={"scope": "tenant", "metadata_filter": _FILTER},
         )
 
+    assert result["status"] == "ok"
+    assert result["doc_id"] == "doc-1"
+    assert {call.kwargs["doc_id"] for call in find_similar.await_args_list} == {"doc-2"}
+
+
+@pytest.mark.asyncio
+async def test_chat_tenant_scope_metadata_filter_eligible_document_ids_in_debug_payload():
+    """Under tenant scope with a filter excluding anchor, eligible_document_ids equals matching docs."""
+    _register_docs("tenant-a", "doc-1", "doc-2")
+    find_similar = AsyncMock(return_value=[])
+    p1, p2, p3, p4 = _chat_patches(find_similar)
+
+    with p1, p2, p3, p4, patch(
+        "services.chat_service.filter_document_ids_by_metadata",
+        new=AsyncMock(return_value=["doc-2"]),
+    ):
+        result = await answer_question_for_document(
+            question="Q?",
+            doc_id="doc-1",
+            auth=AuthContext(tenant_id="tenant-a"),
+            scope="tenant",
+            retrieval_fields={"scope": "tenant", "metadata_filter": _FILTER},
+            debug_retrieval=True,
+        )
+
+    assert result["status"] == "ok"
+    assert "retrieval_debug" in result
+    debug = result["retrieval_debug"]
+    assert debug["eligible_document_ids"] == ["doc-2"]
+    assert "doc-1" not in debug["eligible_document_ids"]
+    assert debug["eligible_document_count"] == 1
+    assert debug["truncated"] is False
+
+    # Debug retrieval disabled asserts absence of keys
+    with p1, p2, p3, p4, patch(
+        "services.chat_service.filter_document_ids_by_metadata",
+        new=AsyncMock(return_value=["doc-2"]),
+    ):
+        result_off = await answer_question_for_document(
+            question="Q?",
+            doc_id="doc-1",
+            auth=AuthContext(tenant_id="tenant-a"),
+            scope="tenant",
+            retrieval_fields={"scope": "tenant", "metadata_filter": _FILTER},
+            debug_retrieval=False,
+        )
+
+    assert "retrieval_debug" not in result_off
+    assert "eligible_document_ids" not in result_off
+    assert "eligible_document_count" not in result_off
+    assert "truncated" not in result_off
+
+
+@pytest.mark.asyncio
+async def test_chat_anchor_outside_filtered_scope_returns_structured_error_under_session_scope():
+    _register_docs("tenant-a", "doc-1", "doc-2")
+    find_similar = AsyncMock(return_value=[])
+    p1, p2, p3, p4 = _chat_patches(find_similar)
+
+    with p1, p2, p3, p4, patch(
+        "services.chat_service.filter_document_ids_by_metadata",
+        new=AsyncMock(return_value=["doc-2"]),
+    ):
+        result = await answer_question_for_document(
+            question="Q?",
+            doc_id="doc-1",
+            auth=AuthContext(tenant_id="tenant-a"),
+            scope="session",
+            retrieval_fields={"scope": "session", "metadata_filter": _FILTER},
+        )
+
     assert result["status"] == "error"
     assert result["doc_id"] == "doc-1"
     assert result["error"]["code"] == "anchor_document_excluded_by_filter"
     assert result["error"]["message"] == ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE
+    find_similar.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_chat_filter_matching_nothing_returns_no_documents_in_scope_under_tenant_scope():
+    _register_docs("tenant-a", "doc-1", "doc-2")
+    find_similar = AsyncMock(return_value=[])
+    p1, p2, p3, p4 = _chat_patches(find_similar)
+
+    with p1, p2, p3, p4, patch(
+        "services.chat_service.filter_document_ids_by_metadata",
+        new=AsyncMock(return_value=[]),
+    ):
+        result = await answer_question_for_document(
+            question="Q?",
+            doc_id="doc-1",
+            auth=AuthContext(tenant_id="tenant-a"),
+            scope="tenant",
+            retrieval_fields={"scope": "tenant", "metadata_filter": _FILTER},
+        )
+
+    assert result["status"] == "error"
+    assert result["doc_id"] == "doc-1"
+    assert result["error"]["code"] == "no_documents_in_scope"
+    assert result["error"]["message"] == "No documents available for retrieval in the requested scope."
     find_similar.assert_not_awaited()
 
 
@@ -492,6 +589,38 @@ async def test_stream_filter_narrows_documents():
 
 @pytest.mark.asyncio
 async def test_stream_anchor_outside_filtered_scope_emits_error_event():
+    """Under tenant scope, stream anchor exclusion is lifted and retrieval searches matching docs."""
+    _register_docs("tenant-a", "doc-1", "doc-2")
+    find_similar = AsyncMock(return_value=[])
+    p1, p2, p3, _ = _chat_patches(find_similar)
+
+    async def fake_stream(question, context):
+        yield "hi"
+
+    with p1, p2, p3, patch(
+        "services.chat_service.generate_answer_stream", new=fake_stream
+    ), patch(
+        "services.chat_service.filter_document_ids_by_metadata",
+        new=AsyncMock(return_value=["doc-2"]),
+    ), patch("services.providers.get_llm_provider", return_value=type("P", (), {"model_name": "m"})()):
+        events = [
+            event
+            async for event in answer_question_stream_for_document(
+                question="Q?",
+                doc_id="doc-1",
+                auth=AuthContext(tenant_id="tenant-a"),
+                scope="tenant",
+                retrieval_fields={"scope": "tenant", "metadata_filter": _FILTER},
+            )
+        ]
+
+    assert any(event.startswith("event: complete") for event in events)
+    assert not any(event.startswith("event: error") for event in events)
+    assert {call.kwargs["doc_id"] for call in find_similar.await_args_list} == {"doc-2"}
+
+
+@pytest.mark.asyncio
+async def test_stream_anchor_outside_filtered_scope_emits_error_event_under_session_scope():
     _register_docs("tenant-a", "doc-1", "doc-2")
     find_similar = AsyncMock(return_value=[])
     p1, p2, p3, p4 = _chat_patches(find_similar)
@@ -499,6 +628,35 @@ async def test_stream_anchor_outside_filtered_scope_emits_error_event():
     with p1, p2, p3, p4, patch(
         "services.chat_service.filter_document_ids_by_metadata",
         new=AsyncMock(return_value=["doc-2"]),
+    ):
+        events = [
+            event
+            async for event in answer_question_stream_for_document(
+                question="Q?",
+                doc_id="doc-1",
+                auth=AuthContext(tenant_id="tenant-a"),
+                scope="session",
+                retrieval_fields={"scope": "session", "metadata_filter": _FILTER},
+            )
+        ]
+
+    assert len(events) == 1
+    assert events[0].startswith("event: error")
+    stream_error = json.loads(events[0].split("data: ", 1)[1])
+    assert stream_error["code"] == "anchor_document_excluded_by_filter"
+    assert stream_error["message"] == ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE
+    find_similar.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stream_filter_matching_nothing_emits_no_documents_in_scope_under_tenant_scope():
+    _register_docs("tenant-a", "doc-1", "doc-2")
+    find_similar = AsyncMock(return_value=[])
+    p1, p2, p3, p4 = _chat_patches(find_similar)
+
+    with p1, p2, p3, p4, patch(
+        "services.chat_service.filter_document_ids_by_metadata",
+        new=AsyncMock(return_value=[]),
     ):
         events = [
             event
@@ -514,8 +672,8 @@ async def test_stream_anchor_outside_filtered_scope_emits_error_event():
     assert len(events) == 1
     assert events[0].startswith("event: error")
     stream_error = json.loads(events[0].split("data: ", 1)[1])
-    assert stream_error["code"] == "anchor_document_excluded_by_filter"
-    assert stream_error["message"] == ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE
+    assert stream_error["code"] == "no_documents_in_scope"
+    assert stream_error["message"] == "No documents available for retrieval in the requested scope."
     find_similar.assert_not_awaited()
 
 
@@ -553,8 +711,8 @@ async def test_batch_item_filter_narrows_documents_and_reports_empty_scope():
 
     assert results[0]["status"] == "ok"
     assert results[1]["status"] == "error"
-    assert results[1]["error"]["code"] == "anchor_document_excluded_by_filter"
-    assert results[1]["error"]["message"] == ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE
+    assert results[1]["error"]["code"] == "no_documents_in_scope"
+    assert results[1]["error"]["message"] == "No documents available for retrieval in the requested scope."
     assert {call.kwargs["doc_id"] for call in find_similar.await_args_list} == {"doc-1", "doc-3"}
 
 
@@ -572,9 +730,37 @@ async def test_batch_anchor_exclusion_matches_sync_error_code():
             question="Q?",
             doc_id="doc-1",
             auth=AuthContext(tenant_id="tenant-a"),
-            scope="tenant",
-            retrieval_fields={"scope": "tenant", "metadata_filter": _FILTER},
+            scope="session",
+            retrieval_fields={"scope": "session", "metadata_filter": _FILTER},
         )
+        batch = await answer_questions_for_documents_batch(
+            [
+                {
+                    "question": "Q?",
+                    "doc_ids": ["doc-1"],
+                    "retrieval_fields": {"scope": "session", "metadata_filter": _FILTER},
+                }
+            ],
+            auth=AuthContext(tenant_id="tenant-a"),
+            scope="session",
+        )
+
+    assert sync["error"]["code"] == "anchor_document_excluded_by_filter"
+    assert sync["error"]["message"] == ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE
+    assert batch[0]["error"]["code"] == sync["error"]["code"]
+    assert batch[0]["error"]["message"] == sync["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_batch_anchor_outside_filtered_scope_succeeds_under_tenant_scope():
+    _register_docs("tenant-a", "doc-1", "doc-2")
+    find_similar = AsyncMock(return_value=[])
+    p1, p2, p3, p4 = _chat_patches(find_similar)
+
+    with p1, p2, p3, p4, patch(
+        "services.chat_service.filter_document_ids_by_metadata",
+        new=AsyncMock(return_value=["doc-2"]),
+    ), patch("services.chat_service.get_embeddings", new=AsyncMock(return_value=[[0.1, 0.2]])):
         batch = await answer_questions_for_documents_batch(
             [
                 {
@@ -587,10 +773,8 @@ async def test_batch_anchor_exclusion_matches_sync_error_code():
             scope="tenant",
         )
 
-    assert sync["error"]["code"] == "anchor_document_excluded_by_filter"
-    assert sync["error"]["message"] == ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE
-    assert batch[0]["error"]["code"] == sync["error"]["code"]
-    assert batch[0]["error"]["message"] == sync["error"]["message"]
+    assert batch[0]["status"] == "ok"
+    assert {call.kwargs["doc_id"] for call in find_similar.await_args_list} == {"doc-2"}
 
 
 def test_retrieval_overrides_model_accepts_filter():
@@ -790,7 +974,7 @@ async def test_filter_excludes_non_matching_docs_from_scoped_retrieval(metadata_
     svc, tenant_a, tenant_b, docs, foreign = metadata_docs
     auth = AuthContext(tenant_id=tenant_a)
 
-    async def run(doc_id, retrieval_fields=None):
+    async def run(doc_id, retrieval_fields=None, scope="tenant"):
         find_similar = AsyncMock(return_value=[])
         p1, p2, p3, p4 = _chat_patches(find_similar)
         with p1, p2, p3, p4, patch(
@@ -804,8 +988,8 @@ async def test_filter_excludes_non_matching_docs_from_scoped_retrieval(metadata_
                 question="Q?",
                 doc_id=doc_id,
                 auth=auth,
-                scope="tenant",
-                retrieval_fields={"scope": "tenant", **(retrieval_fields or {})},
+                scope=scope,
+                retrieval_fields={"scope": scope, **(retrieval_fields or {})},
             )
         return result, {call.kwargs["doc_id"] for call in find_similar.await_args_list}
 
@@ -826,8 +1010,20 @@ async def test_filter_excludes_non_matching_docs_from_scoped_retrieval(metadata_
     result, searched = await run(docs["legal"], {"metadata_filter": {"year": 2026}})
     assert searched == {docs["legal"], docs["eng"]}
 
-    # Anchor must itself be inside the filtered scope.
+    # Tenant scope: anchor does not need to survive; matches other docs.
     result, searched = await run(docs["hr"], {"metadata_filter": {"department": "legal"}})
+    assert result["status"] == "ok"
+    assert searched == {docs["legal"]}
+
+    # Tenant scope: filter matching nothing in the tenant reports no_documents_in_scope.
+    result, searched = await run(docs["hr"], {"metadata_filter": {"department": "nonexistent"}})
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "no_documents_in_scope"
+    assert result["error"]["message"] == "No documents available for retrieval in the requested scope."
+    assert searched == set()
+
+    # Session scope: anchor must match the filter.
+    result, searched = await run(docs["hr"], {"metadata_filter": {"department": "legal"}}, scope="session")
     assert result["status"] == "error"
     assert result["error"]["code"] == "anchor_document_excluded_by_filter"
     assert result["error"]["message"] == ANCHOR_DOCUMENT_EXCLUDED_BY_FILTER_MESSAGE
