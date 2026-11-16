@@ -31,8 +31,8 @@ with ChatVectorClient(base_url="http://localhost:8000") as client:
         doc_id=ready.document_id,
         match_count=3,
     )
-
-print(answer.answer)
+    if answer.status == "ok":
+        print(answer.answer)
 ```
 
 ## Async client
