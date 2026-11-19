@@ -11,7 +11,9 @@ import {
   inspectorRerankerFields,
   inspectorSourceFields,
   inspectorTimingStageFields,
+  isHybridRetrieval,
   rankingScoreFieldLabel,
+  SCORE_SCALE_NOTE,
 } from "./citations";
 import type { ChatSource } from "./api";
 
@@ -107,8 +109,9 @@ describe("citations helpers", () => {
   });
 
   it("labels vector and hybrid RRF ranking scores on different scales", () => {
-    expect(rankingScoreFieldLabel("vector")).toBe("Vector similarity score");
-    expect(rankingScoreFieldLabel("hybrid_rrf")).toBe("Hybrid RRF score");
+    expect(rankingScoreFieldLabel("vector")).toBe("Vector similarity");
+    expect(rankingScoreFieldLabel("hybrid_rrf")).toBe("Rank score");
+    expect(rankingScoreFieldLabel("reranked")).toBe("Reranker score");
     expect(rankingScoreFieldLabel("vector")).not.toMatch(/confidence/i);
     expect(rankingScoreFieldLabel("hybrid_rrf")).not.toMatch(/confidence/i);
 
@@ -122,7 +125,7 @@ describe("citations helpers", () => {
       })
     ).toEqual(
       expect.arrayContaining([
-        { label: "Vector similarity score", value: "0.82" },
+        { label: "Vector similarity", value: "0.82" },
       ])
     );
 
@@ -136,7 +139,7 @@ describe("citations helpers", () => {
       })
     ).toEqual(
       expect.arrayContaining([
-        { label: "Hybrid RRF score", value: "0.02" },
+        { label: "Rank score", value: "0.02" },
       ])
     );
   });
@@ -155,7 +158,7 @@ describe("citations helpers", () => {
     ]);
   });
 
-  it("formats inspector component score fields when present", () => {
+  it("formats inspector component score fields when present with single rows per metric", () => {
     expect(
       inspectorSourceFields({
         file_name: "report.pdf",
@@ -173,13 +176,43 @@ describe("citations helpers", () => {
       { label: "File", value: "report.pdf" },
       { label: "Page", value: "2" },
       { label: "Chunk", value: "3" },
-      { label: "Reranked score", value: "0.77" },
+      { label: "Reranker score", value: "0.77" },
       { label: "Vector similarity", value: "0.55" },
       { label: "Full-text score", value: "0.42" },
-      { label: "RRF score", value: "0.03" },
-      { label: "Reranker score", value: "0.77" },
+      { label: "Rank score", value: "0.03" },
       { label: "Rerank order", value: "1" },
     ]);
+  });
+
+  it("deduplicates vector similarity when both score and vector_score are provided", () => {
+    const fields = inspectorSourceFields({
+      file_name: "report.pdf",
+      page_number: 1,
+      chunk_index: 0,
+      score: 0.82,
+      score_type: "vector",
+      vector_score: 0.82,
+    });
+    const vectorFields = fields.filter((f) => f.label === "Vector similarity");
+    expect(vectorFields).toHaveLength(1);
+    expect(vectorFields[0]?.value).toBe("0.82");
+    expect(fields.find((f) => f.label === "Vector similarity score")).toBeUndefined();
+  });
+
+  it("deduplicates rank score when both score and rrf_score are provided", () => {
+    const fields = inspectorSourceFields({
+      file_name: "report.pdf",
+      page_number: 1,
+      chunk_index: 0,
+      score: 0.02,
+      score_type: "hybrid_rrf",
+      rrf_score: 0.02,
+    });
+    const rankFields = fields.filter((f) => f.label === "Rank score");
+    expect(rankFields).toHaveLength(1);
+    expect(rankFields[0]?.value).toBe("0.02");
+    expect(fields.find((f) => f.label === "Hybrid RRF score")).toBeUndefined();
+    expect(fields.find((f) => f.label === "RRF score")).toBeUndefined();
   });
 
   it("omits component score fields when absent", () => {
@@ -195,7 +228,7 @@ describe("citations helpers", () => {
       { label: "File", value: "report.pdf" },
       { label: "Page", value: "1" },
       { label: "Chunk", value: "0" },
-      { label: "Vector similarity score", value: "0.82" },
+      { label: "Vector similarity", value: "0.82" },
     ]);
   });
 
@@ -334,5 +367,35 @@ describe("citations helpers", () => {
         { file_name: "report.pdf", page_number: 2, chunk_index: 1, score: 0.91 },
       ])
     ).toBe("notes.txt · chunk 0 · report.pdf · p.2 · chunk 1");
+  });
+
+  it("identifies hybrid retrieval from score_type, rrf_score, or effective_config", () => {
+    expect(
+      isHybridRetrieval([
+        { file_name: "a.pdf", score_type: "hybrid_rrf", score: 0.02 },
+      ])
+    ).toBe(true);
+
+    expect(
+      isHybridRetrieval([
+        { file_name: "a.pdf", rrf_score: 0.02 },
+      ])
+    ).toBe(true);
+
+    expect(
+      isHybridRetrieval([], {
+        effective_config: { hybrid_enabled: { value: true } },
+      })
+    ).toBe(true);
+
+    expect(
+      isHybridRetrieval([
+        { file_name: "a.pdf", score_type: "vector", score: 0.8 },
+      ])
+    ).toBe(false);
+
+    expect(SCORE_SCALE_NOTE).toMatch(/not directly comparable/i);
+    expect(SCORE_SCALE_NOTE).toMatch(/rank score/i);
+    expect(SCORE_SCALE_NOTE).toMatch(/vector similarity/i);
   });
 });

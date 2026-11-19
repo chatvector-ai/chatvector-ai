@@ -70,6 +70,34 @@ describe("SDK surface parity", () => {
     expect(discovery.rerankerProviders).toEqual(["similarity"]);
   });
 
+  it("listRetrievalPresets preserves defaults in _raw without mutating typed fields", async () => {
+    const defaults = {
+      scope: "session",
+      match_count: 5,
+      history_aware_retrieval: true,
+      retrieval_history_window: 6,
+      generation_history_window: 10,
+      hybrid_enabled: false,
+      reranking_enabled: false,
+      reranker_provider: "similarity",
+      query_transformation_enabled: false,
+      query_transformation_strategy: "rewrite",
+      max_context_chars: 8000,
+    };
+    const fetch = createFetchMock(
+      jsonResponse({
+        preset_names: ["eval_hybrid"],
+        reranker_providers: ["similarity"],
+        defaults,
+      }),
+    );
+    const client = makeClient(fetch);
+    const discovery = await client.listRetrievalPresets();
+    expect(discovery.presetNames).toEqual(["eval_hybrid"]);
+    expect(discovery.rerankerProviders).toEqual(["similarity"]);
+    expect(discovery._raw?.defaults).toEqual(defaults);
+  });
+
   it("getSessionHistory maps session history messages", async () => {
     const fetch = createFetchMock(
       jsonResponse({

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ChatSource, RetrievalInspectorData } from "../lib/api";
+import { getUploadedDocument } from "../lib/documentStore";
 import {
   deduplicatedSources,
   formatLatencySeconds,
@@ -12,12 +13,29 @@ import {
   inspectorScopeField,
   inspectorSourceFields,
   inspectorTimingStageFields,
+  isHybridRetrieval,
   packedContextFromDebug,
+  SCORE_SCALE_NOTE,
 } from "../lib/citations";
 
 type Props = {
   data: RetrievalInspectorData;
+  documentMap?: Record<string, string>;
 };
+
+function resolveDocumentName(
+  id: string,
+  documentMap?: Record<string, string>
+): string {
+  if (documentMap && documentMap[id]) {
+    return documentMap[id];
+  }
+  const uploaded = getUploadedDocument(id);
+  if (uploaded && uploaded.fileName) {
+    return uploaded.fileName;
+  }
+  return id.length > 8 ? id.slice(0, 8) : id;
+}
 
 function InspectorRow({ label, value }: { label: string; value: string }) {
   return (
@@ -48,7 +66,7 @@ function packedContextItemLabel(item: unknown, index: number): string {
   return `Item ${index + 1}`;
 }
 
-export default function RetrievalInspector({ data }: Props) {
+export default function RetrievalInspector({ data, documentMap }: Props) {
   const [isOpen, setIsOpen] = useState(false);
 
   if (!hasInspectableRetrievalData(data)) {
@@ -56,6 +74,19 @@ export default function RetrievalInspector({ data }: Props) {
   }
 
   const debug = data.retrieval_debug;
+  const eligibleIds = Array.isArray(debug?.eligible_document_ids)
+    ? (debug.eligible_document_ids as string[])
+    : undefined;
+  const eligibleCount =
+    typeof debug?.eligible_document_count === "number"
+      ? debug.eligible_document_count
+      : eligibleIds?.length ?? 0;
+  const isTruncated =
+    debug?.truncated === true ||
+    (typeof debug?.eligible_document_count === "number" &&
+      eligibleIds !== undefined &&
+      debug.eligible_document_count > eligibleIds.length);
+  const activeDocumentMap = documentMap ?? data.documentMap;
   const debugRecord = debug as Record<string, unknown> | undefined;
   const effectiveConfig =
     debug?.effective_config &&
@@ -90,6 +121,18 @@ export default function RetrievalInspector({ data }: Props) {
     typeof debug?.resolved_preset === "string" && debug.resolved_preset
       ? debug.resolved_preset
       : null;
+
+  const isHybrid =
+    isHybridRetrieval(sources, debugRecord) ||
+    Boolean(
+      packedContext?.some(
+        (item) =>
+          item != null &&
+          typeof item === "object" &&
+          ((item as ChatSource).score_type === "hybrid_rrf" ||
+            (item as ChatSource).rrf_score != null),
+      ),
+    );
 
   const hasQuerySection = Boolean(
     data.question ||
@@ -226,11 +269,60 @@ export default function RetrievalInspector({ data }: Props) {
           </section>
         )}
 
+        {eligibleIds && (
+          <section aria-label="Eligible documents">
+            <h4 className="mb-1.5 font-medium text-foreground">
+              Eligible documents ({eligibleCount})
+            </h4>
+            <ul className="space-y-1">
+              {eligibleIds.map((id) => {
+                const name = resolveDocumentName(id, activeDocumentMap);
+                const isContributed = sources.some(
+                  (s) =>
+                    (s as unknown as { document_id?: string }).document_id === id ||
+                    s.file_name === name
+                );
+                return (
+                  <li
+                    key={id}
+                    className="flex items-center justify-between gap-2 rounded bg-surface/60 px-2.5 py-1.5 text-xs"
+                  >
+                    <span className="truncate text-foreground" title={name}>
+                      {name}
+                    </span>
+                    {isContributed && (
+                      <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                        Contributed chunk
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {isTruncated && (
+              <p
+                className="mt-1.5 text-xs text-muted"
+                data-testid="eligible-documents-truncated"
+              >
+                Showing first {eligibleIds.length} of {eligibleCount} eligible documents (truncated).
+              </p>
+            )}
+          </section>
+        )}
+
         {sources.length > 0 && (
           <section aria-label="Chunks">
             <h4 className="mb-1.5 font-medium text-foreground">
               Chunks ({sources.length})
             </h4>
+            {isHybrid && (
+              <p
+                className="mb-2 text-xs text-muted"
+                data-testid="score-scale-note"
+              >
+                {SCORE_SCALE_NOTE}
+              </p>
+            )}
             <ul className="space-y-2">
               {sources.map((source, index) => (
                 <li
@@ -257,6 +349,14 @@ export default function RetrievalInspector({ data }: Props) {
             <h4 className="mb-1.5 font-medium text-foreground">
               Packed context ({packedContext.length})
             </h4>
+            {isHybrid && sources.length === 0 && (
+              <p
+                className="mb-2 text-xs text-muted"
+                data-testid="packed-score-scale-note"
+              >
+                {SCORE_SCALE_NOTE}
+              </p>
+            )}
             <ol className="list-decimal space-y-1 pl-4 text-foreground">
               {packedContext.map((item, index) => {
                 if (
