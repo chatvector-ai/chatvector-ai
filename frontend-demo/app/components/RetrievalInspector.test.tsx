@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import RetrievalInspector from "./RetrievalInspector";
 
@@ -111,6 +111,57 @@ describe("RetrievalInspector query section", () => {
     expect(screen.queryByText("Transformed queries")).not.toBeInTheDocument();
   });
 
+  it("hides transformed queries when query transformation is off or did not run", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          question: "what is the policy?",
+          retrieval_debug: {
+            original_query: "what is the policy?",
+            transformed_queries: ["what is the policy?"],
+            effective_config: {
+              query_transformation_enabled: { value: false, source: "env" },
+            },
+          },
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.getByText("Original")).toBeInTheDocument();
+    expect(screen.queryByText("Transformed queries")).not.toBeInTheDocument();
+  });
+
+  it("shows transformed queries when query transformation is on", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          question: "what is the policy?",
+          retrieval_debug: {
+            original_query: "what is the policy?",
+            transformed_queries: [
+              "what is the company policy?",
+              "policy renewal guidelines",
+            ],
+            transformation_strategy: "expand",
+            effective_config: {
+              query_transformation_enabled: { value: true, source: "request" },
+              query_transformation_strategy: { value: "expand", source: "request" },
+            },
+          },
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.getByText("Transformed queries")).toBeInTheDocument();
+    expect(screen.getByText("what is the company policy?")).toBeInTheDocument();
+    expect(screen.getByText("policy renewal guidelines")).toBeInTheDocument();
+    expect(screen.getByText("expand")).toBeInTheDocument();
+  });
+
   it("keeps the inspector inside a collapsed details element", () => {
     const { container } = render(
       <RetrievalInspector
@@ -183,7 +234,7 @@ describe("RetrievalInspector config and diagnostics", () => {
     expect(screen.getByText("tenant (env)")).toBeInTheDocument();
   });
 
-  it("labels vector and hybrid RRF sources with distinct scale labels", async () => {
+  it("labels vector and hybrid RRF sources with distinct scale labels and shows scale note", async () => {
     render(
       <RetrievalInspector
         data={{
@@ -209,10 +260,105 @@ describe("RetrievalInspector config and diagnostics", () => {
 
     await openInspector();
 
-    expect(screen.getByText("Vector similarity score")).toBeInTheDocument();
-    expect(screen.getByText("Hybrid RRF score")).toBeInTheDocument();
+    expect(screen.getByText("Vector similarity")).toBeInTheDocument();
+    expect(screen.getByText("Rank score")).toBeInTheDocument();
+    expect(screen.queryByText("Vector similarity score")).not.toBeInTheDocument();
+    expect(screen.queryByText("Hybrid RRF score")).not.toBeInTheDocument();
     expect(screen.queryByText(/^Score$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/confidence/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Rank score and vector similarity use different scales and are not directly comparable.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("renders exactly one row per metric for vector, hybrid, and reranked chunks without duplicates", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          sources: [
+            {
+              file_name: "vector_chunk.pdf",
+              page_number: 1,
+              chunk_index: 0,
+              score: 0.85,
+              score_type: "vector",
+              vector_score: 0.85,
+            },
+            {
+              file_name: "hybrid_chunk.pdf",
+              page_number: 2,
+              chunk_index: 1,
+              score: 0.02,
+              score_type: "hybrid_rrf",
+              rrf_score: 0.02,
+              vector_score: 0.75,
+              full_text_score: 1.5,
+            },
+            {
+              file_name: "reranked_chunk.pdf",
+              page_number: 3,
+              chunk_index: 2,
+              score: 0.95,
+              score_type: "reranked",
+              reranker_score: 0.95,
+              rrf_score: 0.02,
+              vector_score: 0.7,
+            },
+          ],
+        }}
+      />
+    );
+
+    await openInspector();
+
+    // Verify deprecated / duplicate labels do not appear anywhere
+    expect(screen.queryByText("Vector similarity score")).not.toBeInTheDocument();
+    expect(screen.queryByText("Hybrid RRF score")).not.toBeInTheDocument();
+    expect(screen.queryByText("RRF score")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reranked score")).not.toBeInTheDocument();
+
+    // Verify modern metric labels are rendered
+    expect(screen.getAllByText("Vector similarity")).toHaveLength(3);
+    expect(screen.getAllByText("Rank score")).toHaveLength(2);
+    expect(screen.getAllByText("Reranker score")).toHaveLength(1);
+    expect(screen.getAllByText("Full-text score")).toHaveLength(1);
+
+    // Scale note is shown
+    expect(
+      screen.getByText(
+        "Rank score and vector similarity use different scales and are not directly comparable.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("omits the scale note for pure vector search", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          sources: [
+            {
+              file_name: "vec.pdf",
+              page_number: 1,
+              chunk_index: 0,
+              score: 0.88,
+              score_type: "vector",
+              vector_score: 0.88,
+            },
+          ],
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.getByText("Vector similarity")).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Rank score and vector similarity use different scales and are not directly comparable.",
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it("omits rerank section when reranker is absent", async () => {
@@ -254,5 +400,96 @@ describe("RetrievalInspector config and diagnostics", () => {
     expect(screen.getByText("Ran")).toBeInTheDocument();
     expect(screen.getByText("Searched query")).toBeInTheDocument();
     expect(screen.getByText("Effective config")).toBeInTheDocument();
+  });
+});
+
+describe("RetrievalInspector eligible documents section", () => {
+  it("renders eligible documents with resolved filenames and marks contributing documents", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          question: "test question",
+          retrieval_debug: {
+            eligible_document_ids: ["doc-1", "doc-2"],
+            eligible_document_count: 2,
+          },
+          sources: [{ file_name: "handbook.pdf", chunk_index: 0 }],
+        }}
+        documentMap={{
+          "doc-1": "handbook.pdf",
+          "doc-2": "policy.pdf",
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.getByText("Eligible documents (2)")).toBeInTheDocument();
+    const section = screen.getByRole("region", { name: "Eligible documents" });
+    expect(within(section).getByText("handbook.pdf")).toBeInTheDocument();
+    expect(within(section).getByText("policy.pdf")).toBeInTheDocument();
+    expect(within(section).getByText("Contributed chunk")).toBeInTheDocument();
+    expect(screen.queryByText(/truncated/i)).not.toBeInTheDocument();
+  });
+
+  it("does not render eligible documents section when eligible_document_ids is absent", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          question: "test question",
+          retrieval_debug: {
+            original_query: "test",
+          },
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.queryByText(/Eligible documents/)).not.toBeInTheDocument();
+  });
+
+  it("shows short id when document id is unknown", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          question: "test question",
+          retrieval_debug: {
+            eligible_document_ids: ["12345678-90ab-cdef-1234-567890abcdef"],
+            eligible_document_count: 1,
+          },
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.getByText("Eligible documents (1)")).toBeInTheDocument();
+    expect(screen.getByText("12345678")).toBeInTheDocument();
+  });
+
+  it("renders a truncation note when truncated is true or count exceeds list length", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          question: "test question",
+          retrieval_debug: {
+            eligible_document_ids: ["doc-1", "doc-2"],
+            eligible_document_count: 10,
+            truncated: true,
+          },
+        }}
+        documentMap={{
+          "doc-1": "handbook.pdf",
+          "doc-2": "policy.pdf",
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.getByText("Eligible documents (10)")).toBeInTheDocument();
+    expect(screen.getByText(/truncated/i)).toBeInTheDocument();
+    expect(screen.getByText(/Showing first 2 of 10 eligible documents/i)).toBeInTheDocument();
   });
 });

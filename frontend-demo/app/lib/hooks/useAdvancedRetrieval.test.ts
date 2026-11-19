@@ -55,4 +55,29 @@ describe("useAdvancedRetrieval", () => {
 
     expect(second.result.current.state.explicit.hybridEnabled).toBe(true);
   });
+
+  it("manages historyAwareRetrieval: sets true, false, and removes on undefined", async () => {
+    const { result } = renderHook(() => useAdvancedRetrieval());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.state.explicit.historyAwareRetrieval).toBeUndefined();
+
+    act(() => {
+      result.current.setHistoryAwareRetrieval(true);
+    });
+    expect(result.current.state.explicit.historyAwareRetrieval).toBe(true);
+
+    act(() => {
+      result.current.setHistoryAwareRetrieval(false);
+    });
+    expect(result.current.state.explicit.historyAwareRetrieval).toBe(false);
+
+    act(() => {
+      result.current.setHistoryAwareRetrieval(undefined);
+    });
+    expect(result.current.state.explicit.historyAwareRetrieval).toBeUndefined();
+    expect("historyAwareRetrieval" in result.current.state.explicit).toBe(false);
+  });
 });

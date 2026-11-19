@@ -85,10 +85,106 @@ export type InspectorSourceField = {
 };
 
 const RANKING_SCORE_LABELS: Record<string, string> = {
-  vector: "Vector similarity score",
-  hybrid_rrf: "Hybrid RRF score",
-  reranked: "Reranked score",
+  vector: "Vector similarity",
+  hybrid_rrf: "Rank score",
+  reranked: "Reranker score",
 };
+
+export const SCORE_SCALE_NOTE =
+  "Rank score and vector similarity use different scales and are not directly comparable.";
+
+export function isHybridRetrieval(
+  sources?: ChatSource[],
+  debug?: Record<string, unknown> | null,
+): boolean {
+  if (
+    sources?.some(
+      (s) => s.score_type === "hybrid_rrf" || s.rrf_score != null,
+    )
+  ) {
+    return true;
+  }
+  const config = debug?.effective_config;
+  if (config && typeof config === "object" && !Array.isArray(config)) {
+    const entry = (config as Record<string, unknown>).hybrid_enabled;
+    if (
+      entry &&
+      typeof entry === "object" &&
+      (entry as { value?: unknown }).value === true
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function isQueryTransformationActive(
+  debug?: Record<string, unknown> | null,
+): boolean {
+  if (!debug) return false;
+
+  if (
+    typeof debug.transformation_strategy === "string" &&
+    debug.transformation_strategy.length > 0 &&
+    debug.transformation_strategy !== "none"
+  ) {
+    return true;
+  }
+
+  const config = debug.effective_config;
+  if (config && typeof config === "object" && !Array.isArray(config)) {
+    const enabledEntry = (config as Record<string, unknown>)
+      .query_transformation_enabled;
+    let isEnabled: boolean | undefined;
+    if (typeof enabledEntry === "boolean") {
+      isEnabled = enabledEntry;
+    } else if (
+      enabledEntry &&
+      typeof enabledEntry === "object" &&
+      !Array.isArray(enabledEntry) &&
+      "value" in enabledEntry
+    ) {
+      const val = (enabledEntry as { value?: unknown }).value;
+      if (typeof val === "boolean") {
+        isEnabled = val;
+      }
+    }
+
+    if (isEnabled !== undefined) {
+      if (!isEnabled) {
+        return false;
+      }
+      const strategyEntry = (config as Record<string, unknown>)
+        .query_transformation_strategy;
+      let strategyVal: string | undefined;
+      if (typeof strategyEntry === "string") {
+        strategyVal = strategyEntry;
+      } else if (
+        strategyEntry &&
+        typeof strategyEntry === "object" &&
+        !Array.isArray(strategyEntry) &&
+        "value" in strategyEntry
+      ) {
+        const s = (strategyEntry as { value?: unknown }).value;
+        if (typeof s === "string") {
+          strategyVal = s;
+        }
+      }
+      if (strategyVal === "none") {
+        return false;
+      }
+      return true;
+    }
+  }
+
+  const topLevelEnabled = (debug as Record<string, unknown>)
+    .query_transformation_enabled;
+  if (typeof topLevelEnabled === "boolean") {
+    return topLevelEnabled;
+  }
+
+  return false;
+}
 
 const TIMING_STAGE_ORDER = [
   "transform",
@@ -291,6 +387,12 @@ export function hasInspectableRetrievalData(data: RetrievalInspectorData): boole
       return true;
     }
     if (packedContextFromDebug(debug as Record<string, unknown>)) return true;
+    if (
+      Array.isArray(debug.eligible_document_ids) &&
+      debug.eligible_document_ids.length > 0
+    ) {
+      return true;
+    }
   }
   if (data.sources && data.sources.length > 0) return true;
   if (data.chunks !== undefined) return true;
@@ -320,32 +422,32 @@ export function inspectorSourceFields(source: ChatSource): InspectorSourceField[
   if (source.chunk_index != null) {
     fields.push({ label: "Chunk", value: String(source.chunk_index) });
   }
+
+  const seenLabels = new Set<string>();
+
+  function addScoreField(label: string, value: string) {
+    if (seenLabels.has(label)) return;
+    seenLabels.add(label);
+    fields.push({ label, value });
+  }
+
   if (source.score != null) {
-    fields.push({
-      label: rankingScoreFieldLabel(source.score_type),
-      value: source.score.toFixed(2),
-    });
+    addScoreField(
+      rankingScoreFieldLabel(source.score_type),
+      source.score.toFixed(2),
+    );
   }
   if (source.vector_score != null) {
-    fields.push({
-      label: "Vector similarity",
-      value: source.vector_score.toFixed(2),
-    });
+    addScoreField("Vector similarity", source.vector_score.toFixed(2));
   }
   if (source.full_text_score != null) {
-    fields.push({
-      label: "Full-text score",
-      value: source.full_text_score.toFixed(2),
-    });
+    addScoreField("Full-text score", source.full_text_score.toFixed(2));
   }
   if (source.rrf_score != null) {
-    fields.push({ label: "RRF score", value: source.rrf_score.toFixed(2) });
+    addScoreField("Rank score", source.rrf_score.toFixed(2));
   }
   if (source.reranker_score != null) {
-    fields.push({
-      label: "Reranker score",
-      value: source.reranker_score.toFixed(2),
-    });
+    addScoreField("Reranker score", source.reranker_score.toFixed(2));
   }
   if (source.rerank_order != null) {
     fields.push({ label: "Rerank order", value: String(source.rerank_order) });

@@ -78,8 +78,20 @@ export function useAdvancedRetrieval() {
   );
 
   const setHistoryAwareRetrieval = useCallback(
-    (historyAwareRetrieval: boolean) => patchExplicit({ historyAwareRetrieval }),
-    [patchExplicit]
+    (historyAwareRetrieval: boolean | undefined) => {
+      setState((prev) => {
+        const explicit = { ...prev.explicit };
+        if (historyAwareRetrieval === undefined) {
+          delete explicit.historyAwareRetrieval;
+        } else {
+          explicit.historyAwareRetrieval = historyAwareRetrieval;
+        }
+        const next: AdvancedRetrievalState = { explicit };
+        saveAdvancedRetrievalState(next);
+        return next;
+      });
+    },
+    []
   );
 
   const setRetrievalHistoryWindow = useCallback(

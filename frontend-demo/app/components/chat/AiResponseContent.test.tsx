@@ -24,7 +24,7 @@ function executableMarkup(container: HTMLElement) {
 describe("AiResponseContent", () => {
   it("shows anchor_document_excluded_by_filter using the API message", () => {
     const message =
-      "The requested document does not match metadata_filter. Under session scope, metadata_filter can only narrow the requested document.";
+      "The requested document does not match metadata_filter. Under session scope, metadata_filter can only narrow the requested document; to filter across documents, use tenant scope.";
     render(
       <AiResponseContent
         error={{ code: "anchor_document_excluded_by_filter", message }}
@@ -84,7 +84,8 @@ describe("AiResponseContent", () => {
     await user.click(screen.getByText("Retrieval inspector"));
 
     expect(screen.getByText("0.63")).toBeInTheDocument();
-    expect(screen.getByText("Vector similarity score")).toBeInTheDocument();
+    expect(screen.getByText("Vector similarity")).toBeInTheDocument();
+    expect(screen.queryByText("Vector similarity score")).not.toBeInTheDocument();
     expect(screen.queryByText(/confidence/i)).not.toBeInTheDocument();
   });
 
