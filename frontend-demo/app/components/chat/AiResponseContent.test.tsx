@@ -84,7 +84,8 @@ describe("AiResponseContent", () => {
     await user.click(screen.getByText("Retrieval inspector"));
 
     expect(screen.getByText("0.63")).toBeInTheDocument();
-    expect(screen.getByText("Vector similarity score")).toBeInTheDocument();
+    expect(screen.getByText("Vector similarity")).toBeInTheDocument();
+    expect(screen.queryByText("Vector similarity score")).not.toBeInTheDocument();
     expect(screen.queryByText(/confidence/i)).not.toBeInTheDocument();
   });
 

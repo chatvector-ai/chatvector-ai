@@ -183,7 +183,7 @@ describe("RetrievalInspector config and diagnostics", () => {
     expect(screen.getByText("tenant (env)")).toBeInTheDocument();
   });
 
-  it("labels vector and hybrid RRF sources with distinct scale labels", async () => {
+  it("labels vector and hybrid RRF sources with distinct scale labels and shows scale note", async () => {
     render(
       <RetrievalInspector
         data={{
@@ -209,10 +209,105 @@ describe("RetrievalInspector config and diagnostics", () => {
 
     await openInspector();
 
-    expect(screen.getByText("Vector similarity score")).toBeInTheDocument();
-    expect(screen.getByText("Hybrid RRF score")).toBeInTheDocument();
+    expect(screen.getByText("Vector similarity")).toBeInTheDocument();
+    expect(screen.getByText("Rank score")).toBeInTheDocument();
+    expect(screen.queryByText("Vector similarity score")).not.toBeInTheDocument();
+    expect(screen.queryByText("Hybrid RRF score")).not.toBeInTheDocument();
     expect(screen.queryByText(/^Score$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/confidence/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Rank score and vector similarity use different scales and are not directly comparable.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("renders exactly one row per metric for vector, hybrid, and reranked chunks without duplicates", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          sources: [
+            {
+              file_name: "vector_chunk.pdf",
+              page_number: 1,
+              chunk_index: 0,
+              score: 0.85,
+              score_type: "vector",
+              vector_score: 0.85,
+            },
+            {
+              file_name: "hybrid_chunk.pdf",
+              page_number: 2,
+              chunk_index: 1,
+              score: 0.02,
+              score_type: "hybrid_rrf",
+              rrf_score: 0.02,
+              vector_score: 0.75,
+              full_text_score: 1.5,
+            },
+            {
+              file_name: "reranked_chunk.pdf",
+              page_number: 3,
+              chunk_index: 2,
+              score: 0.95,
+              score_type: "reranked",
+              reranker_score: 0.95,
+              rrf_score: 0.02,
+              vector_score: 0.7,
+            },
+          ],
+        }}
+      />
+    );
+
+    await openInspector();
+
+    // Verify deprecated / duplicate labels do not appear anywhere
+    expect(screen.queryByText("Vector similarity score")).not.toBeInTheDocument();
+    expect(screen.queryByText("Hybrid RRF score")).not.toBeInTheDocument();
+    expect(screen.queryByText("RRF score")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reranked score")).not.toBeInTheDocument();
+
+    // Verify modern metric labels are rendered
+    expect(screen.getAllByText("Vector similarity")).toHaveLength(3);
+    expect(screen.getAllByText("Rank score")).toHaveLength(2);
+    expect(screen.getAllByText("Reranker score")).toHaveLength(1);
+    expect(screen.getAllByText("Full-text score")).toHaveLength(1);
+
+    // Scale note is shown
+    expect(
+      screen.getByText(
+        "Rank score and vector similarity use different scales and are not directly comparable.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("omits the scale note for pure vector search", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          sources: [
+            {
+              file_name: "vec.pdf",
+              page_number: 1,
+              chunk_index: 0,
+              score: 0.88,
+              score_type: "vector",
+              vector_score: 0.88,
+            },
+          ],
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.getByText("Vector similarity")).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Rank score and vector similarity use different scales and are not directly comparable.",
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it("omits rerank section when reranker is absent", async () => {

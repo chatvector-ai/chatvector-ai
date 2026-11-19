@@ -13,7 +13,9 @@ import {
   inspectorScopeField,
   inspectorSourceFields,
   inspectorTimingStageFields,
+  isHybridRetrieval,
   packedContextFromDebug,
+  SCORE_SCALE_NOTE,
 } from "../lib/citations";
 
 type Props = {
@@ -119,6 +121,18 @@ export default function RetrievalInspector({ data, documentMap }: Props) {
     typeof debug?.resolved_preset === "string" && debug.resolved_preset
       ? debug.resolved_preset
       : null;
+
+  const isHybrid =
+    isHybridRetrieval(sources, debugRecord) ||
+    Boolean(
+      packedContext?.some(
+        (item) =>
+          item != null &&
+          typeof item === "object" &&
+          ((item as ChatSource).score_type === "hybrid_rrf" ||
+            (item as ChatSource).rrf_score != null),
+      ),
+    );
 
   const hasQuerySection = Boolean(
     data.question ||
@@ -301,6 +315,14 @@ export default function RetrievalInspector({ data, documentMap }: Props) {
             <h4 className="mb-1.5 font-medium text-foreground">
               Chunks ({sources.length})
             </h4>
+            {isHybrid && (
+              <p
+                className="mb-2 text-xs text-muted"
+                data-testid="score-scale-note"
+              >
+                {SCORE_SCALE_NOTE}
+              </p>
+            )}
             <ul className="space-y-2">
               {sources.map((source, index) => (
                 <li
@@ -327,6 +349,14 @@ export default function RetrievalInspector({ data, documentMap }: Props) {
             <h4 className="mb-1.5 font-medium text-foreground">
               Packed context ({packedContext.length})
             </h4>
+            {isHybrid && sources.length === 0 && (
+              <p
+                className="mb-2 text-xs text-muted"
+                data-testid="packed-score-scale-note"
+              >
+                {SCORE_SCALE_NOTE}
+              </p>
+            )}
             <ol className="list-decimal space-y-1 pl-4 text-foreground">
               {packedContext.map((item, index) => {
                 if (
