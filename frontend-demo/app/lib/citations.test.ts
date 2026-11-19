@@ -12,6 +12,7 @@ import {
   inspectorSourceFields,
   inspectorTimingStageFields,
   isHybridRetrieval,
+  isQueryTransformationActive,
   rankingScoreFieldLabel,
   SCORE_SCALE_NOTE,
 } from "./citations";
@@ -397,5 +398,55 @@ describe("citations helpers", () => {
     expect(SCORE_SCALE_NOTE).toMatch(/not directly comparable/i);
     expect(SCORE_SCALE_NOTE).toMatch(/rank score/i);
     expect(SCORE_SCALE_NOTE).toMatch(/vector similarity/i);
+  });
+
+  it("identifies active query transformation from strategy or effective_config", () => {
+    expect(isQueryTransformationActive(null)).toBe(false);
+    expect(isQueryTransformationActive({})).toBe(false);
+
+    // Strategy present and not none
+    expect(
+      isQueryTransformationActive({ transformation_strategy: "rewrite" })
+    ).toBe(true);
+    expect(
+      isQueryTransformationActive({ transformation_strategy: "none" })
+    ).toBe(false);
+
+    // Effective config enabled
+    expect(
+      isQueryTransformationActive({
+        effective_config: {
+          query_transformation_enabled: { value: true },
+        },
+      })
+    ).toBe(true);
+
+    // Effective config disabled
+    expect(
+      isQueryTransformationActive({
+        effective_config: {
+          query_transformation_enabled: { value: false },
+        },
+      })
+    ).toBe(false);
+
+    // Boolean enabled
+    expect(
+      isQueryTransformationActive({
+        effective_config: {
+          query_transformation_enabled: true,
+        },
+      })
+    ).toBe(true);
+
+    // Enabled but strategy is none
+    expect(
+      isQueryTransformationActive({
+        effective_config: {
+          query_transformation_enabled: { value: true },
+          query_transformation_strategy: { value: "none" },
+        },
+      })
+    ).toBe(false);
   });
 });

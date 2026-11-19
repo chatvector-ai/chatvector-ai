@@ -118,6 +118,74 @@ export function isHybridRetrieval(
   return false;
 }
 
+export function isQueryTransformationActive(
+  debug?: Record<string, unknown> | null,
+): boolean {
+  if (!debug) return false;
+
+  if (
+    typeof debug.transformation_strategy === "string" &&
+    debug.transformation_strategy.length > 0 &&
+    debug.transformation_strategy !== "none"
+  ) {
+    return true;
+  }
+
+  const config = debug.effective_config;
+  if (config && typeof config === "object" && !Array.isArray(config)) {
+    const enabledEntry = (config as Record<string, unknown>)
+      .query_transformation_enabled;
+    let isEnabled: boolean | undefined;
+    if (typeof enabledEntry === "boolean") {
+      isEnabled = enabledEntry;
+    } else if (
+      enabledEntry &&
+      typeof enabledEntry === "object" &&
+      !Array.isArray(enabledEntry) &&
+      "value" in enabledEntry
+    ) {
+      const val = (enabledEntry as { value?: unknown }).value;
+      if (typeof val === "boolean") {
+        isEnabled = val;
+      }
+    }
+
+    if (isEnabled !== undefined) {
+      if (!isEnabled) {
+        return false;
+      }
+      const strategyEntry = (config as Record<string, unknown>)
+        .query_transformation_strategy;
+      let strategyVal: string | undefined;
+      if (typeof strategyEntry === "string") {
+        strategyVal = strategyEntry;
+      } else if (
+        strategyEntry &&
+        typeof strategyEntry === "object" &&
+        !Array.isArray(strategyEntry) &&
+        "value" in strategyEntry
+      ) {
+        const s = (strategyEntry as { value?: unknown }).value;
+        if (typeof s === "string") {
+          strategyVal = s;
+        }
+      }
+      if (strategyVal === "none") {
+        return false;
+      }
+      return true;
+    }
+  }
+
+  const topLevelEnabled = (debug as Record<string, unknown>)
+    .query_transformation_enabled;
+  if (typeof topLevelEnabled === "boolean") {
+    return topLevelEnabled;
+  }
+
+  return false;
+}
+
 const TIMING_STAGE_ORDER = [
   "transform",
   "embed",

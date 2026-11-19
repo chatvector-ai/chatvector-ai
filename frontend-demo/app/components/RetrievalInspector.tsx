@@ -14,6 +14,7 @@ import {
   inspectorSourceFields,
   inspectorTimingStageFields,
   isHybridRetrieval,
+  isQueryTransformationActive,
   packedContextFromDebug,
   SCORE_SCALE_NOTE,
 } from "../lib/citations";
@@ -134,11 +135,17 @@ export default function RetrievalInspector({ data, documentMap }: Props) {
       ),
     );
 
+  const showTransformedQueries = Boolean(
+    isQueryTransformationActive(debugRecord) &&
+      debug?.transformed_queries &&
+      debug.transformed_queries.length > 0,
+  );
+
   const hasQuerySection = Boolean(
     data.question ||
       debug?.original_query ||
       debug?.transformation_strategy ||
-      (debug?.transformed_queries && debug.transformed_queries.length > 0) ||
+      showTransformedQueries ||
       debug?.history_resolution_applied === true ||
       debug?.history_resolution_skipped_reason ||
       debug?.history_resolution_fallback_reason ||
@@ -214,8 +221,8 @@ export default function RetrievalInspector({ data, documentMap }: Props) {
                 />
               )}
             </dl>
-            {debug?.transformed_queries &&
-              debug.transformed_queries.length > 0 && (
+            {showTransformedQueries &&
+              debug?.transformed_queries && (
                 <div className="mt-2">
                   <p className="mb-1 text-muted">Transformed queries</p>
                   <ol className="list-decimal space-y-1 pl-4 text-foreground">

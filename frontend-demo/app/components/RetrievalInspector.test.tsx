@@ -111,6 +111,57 @@ describe("RetrievalInspector query section", () => {
     expect(screen.queryByText("Transformed queries")).not.toBeInTheDocument();
   });
 
+  it("hides transformed queries when query transformation is off or did not run", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          question: "what is the policy?",
+          retrieval_debug: {
+            original_query: "what is the policy?",
+            transformed_queries: ["what is the policy?"],
+            effective_config: {
+              query_transformation_enabled: { value: false, source: "env" },
+            },
+          },
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.getByText("Original")).toBeInTheDocument();
+    expect(screen.queryByText("Transformed queries")).not.toBeInTheDocument();
+  });
+
+  it("shows transformed queries when query transformation is on", async () => {
+    render(
+      <RetrievalInspector
+        data={{
+          question: "what is the policy?",
+          retrieval_debug: {
+            original_query: "what is the policy?",
+            transformed_queries: [
+              "what is the company policy?",
+              "policy renewal guidelines",
+            ],
+            transformation_strategy: "expand",
+            effective_config: {
+              query_transformation_enabled: { value: true, source: "request" },
+              query_transformation_strategy: { value: "expand", source: "request" },
+            },
+          },
+        }}
+      />
+    );
+
+    await openInspector();
+
+    expect(screen.getByText("Transformed queries")).toBeInTheDocument();
+    expect(screen.getByText("what is the company policy?")).toBeInTheDocument();
+    expect(screen.getByText("policy renewal guidelines")).toBeInTheDocument();
+    expect(screen.getByText("expand")).toBeInTheDocument();
+  });
+
   it("keeps the inspector inside a collapsed details element", () => {
     const { container } = render(
       <RetrievalInspector
